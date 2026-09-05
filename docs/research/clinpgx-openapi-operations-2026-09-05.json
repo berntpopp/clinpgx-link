@@ -1,0 +1,1868 @@
+{
+  "probe_date": "2026-09-05",
+  "source": "https://api.clinpgx.org/openapi.json",
+  "openapi": "3.0.1",
+  "info": {
+    "title": "ClinPGx REST API",
+    "description": "This is the RESTful API for accessing data stored in ClinPGx. All responses are in JSON format and can be retrieved as either JSON or <a href=\"http://www.w3.org/TR/json-ld/\">JSON-LD</a> linked data format.",
+    "termsOfService": "https://www.clinpgx.org/page/policies",
+    "contact": {
+      "name": "ClinPGx",
+      "url": "https://www.clinpgx.org",
+      "email": "api@clinpgx.org"
+    },
+    "version": "1.0"
+  },
+  "servers": [
+    {
+      "url": "https://api.clinpgx.org/v1"
+    }
+  ],
+  "operation_count": 34,
+  "operations": [
+    {
+      "method": "GET",
+      "path": "/data/pathway",
+      "summary": "Query Pathway objects",
+      "description": null,
+      "tags": [
+        "data"
+      ],
+      "parameters": [
+        {
+          "name": "name",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string"
+          },
+          "description": "the name of the Pathway"
+        },
+        {
+          "name": "accessionId",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string"
+          },
+          "description": "the ClinPGx identifier of the Pathway"
+        },
+        {
+          "name": "view",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string",
+            "enum": [
+              "min",
+              "base",
+              "max"
+            ]
+          },
+          "description": "How much data to retrieve on the object"
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Pathway"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/data/pathway/{id}",
+      "summary": "Retrieve Pathway object using the ClinPGx ID",
+      "description": null,
+      "tags": [
+        "data"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "description": "the Pathway's ClinPGx accession identifier"
+        },
+        {
+          "name": "view",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string",
+            "enum": [
+              "min",
+              "base",
+              "max"
+            ]
+          },
+          "description": "How much data to retrieve on the object"
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Pathway"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/data/gene",
+      "summary": "Query Gene objects",
+      "description": null,
+      "tags": [
+        "data"
+      ],
+      "parameters": [
+        {
+          "name": "accessionId",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string"
+          },
+          "description": "the ClinPGx identifier of the Gene"
+        },
+        {
+          "name": "symbol",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string"
+          },
+          "description": "the HGNC symbol for the gene"
+        },
+        {
+          "name": "view",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string",
+            "enum": [
+              "min",
+              "base",
+              "max"
+            ]
+          },
+          "description": "How much data to retrieve on the object"
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Gene"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/data/gene/{id}",
+      "summary": "Retrieve a Gene using the ClinPGx ID",
+      "description": null,
+      "tags": [
+        "data"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "description": "the Gene's ClinPGx accession identifier"
+        },
+        {
+          "name": "view",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string",
+            "enum": [
+              "min",
+              "base",
+              "max"
+            ]
+          },
+          "description": "How much data to retrieve on the object"
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Gene"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/data/gene/{id}/crossReferences",
+      "summary": "Retrieve the Cross References for a Gene using the ClinPGx ID",
+      "description": null,
+      "tags": [
+        "data"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "description": "the Gene's ClinPGx accession identifier"
+        },
+        {
+          "name": "view",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string",
+            "enum": [
+              "min",
+              "base",
+              "max"
+            ]
+          },
+          "description": "How much data to retrieve on the object"
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/CrossReference"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/data/gene/{id}/ontologyTerms",
+      "summary": "Retrieve the Ontology Terms for a Gene using the ClinPGx ID",
+      "description": null,
+      "tags": [
+        "data"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "description": "the Gene's ClinPGx accession identifier"
+        },
+        {
+          "name": "view",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string",
+            "enum": [
+              "min",
+              "base",
+              "max"
+            ]
+          },
+          "description": "How much data to retrieve on the object"
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/OntologyTerm"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/data/chemical",
+      "summary": "Query Chemical objects",
+      "description": null,
+      "tags": [
+        "data"
+      ],
+      "parameters": [
+        {
+          "name": "accessionId",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string"
+          },
+          "description": "the ClinPGx identifier of the Chemical"
+        },
+        {
+          "name": "name",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string"
+          },
+          "description": "the name of the Chemical"
+        },
+        {
+          "name": "view",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string",
+            "enum": [
+              "min",
+              "base",
+              "max"
+            ]
+          },
+          "description": "How much data to retrieve on the object"
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Chemical"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/data/chemical/{id}",
+      "summary": "Retrieve a Chemical using the ClinPGx ID",
+      "description": null,
+      "tags": [
+        "data"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "description": "the Chemical's ClinPGx accession identifier"
+        },
+        {
+          "name": "view",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string",
+            "enum": [
+              "min",
+              "base",
+              "max"
+            ]
+          },
+          "description": "How much data to retrieve on the object"
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Chemical"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/data/disease",
+      "summary": "Query Disease objects",
+      "description": null,
+      "tags": [
+        "data"
+      ],
+      "parameters": [
+        {
+          "name": "accessionId",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string"
+          },
+          "description": "the ClinPGx identifier of the Disease"
+        },
+        {
+          "name": "name",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string"
+          },
+          "description": "the name of the Disease"
+        },
+        {
+          "name": "view",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string",
+            "enum": [
+              "min",
+              "base",
+              "max"
+            ]
+          },
+          "description": "How much data to retrieve on the object"
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Disease"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/data/disease/{id}",
+      "summary": "Retrieve a Disease using the ClinPGx ID",
+      "description": null,
+      "tags": [
+        "data"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "description": "the Chemical's ClinPGx accession identifier"
+        },
+        {
+          "name": "view",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string",
+            "enum": [
+              "min",
+              "base",
+              "max"
+            ]
+          },
+          "description": "How much data to retrieve on the object"
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Disease"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/data/variant/",
+      "summary": "Query a Variant using the ClinPGx ID",
+      "description": null,
+      "tags": [
+        "data"
+      ],
+      "parameters": [
+        {
+          "name": "symbol",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string"
+          },
+          "description": "the Variant's symbol, often the dbSNP RSID"
+        },
+        {
+          "name": "view",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string",
+            "enum": [
+              "min",
+              "base",
+              "max"
+            ]
+          },
+          "description": "How much data to retrieve on the object"
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Variant"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/data/variant/{id}",
+      "summary": "Retrieve a Variant using the ClinPGx ID",
+      "description": null,
+      "tags": [
+        "data"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "description": "the Variant's ClinPGx accession identifier"
+        },
+        {
+          "name": "view",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string",
+            "enum": [
+              "min",
+              "base",
+              "max"
+            ]
+          },
+          "description": "How much data to retrieve on the object"
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Variant"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/data/literature",
+      "summary": "Query Literature objects",
+      "description": null,
+      "tags": [
+        "data"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string"
+          },
+          "description": "the ClinPGx identifier of the Literature"
+        },
+        {
+          "name": "resourceId",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string"
+          },
+          "description": "the ID for this Literature in the original resource."
+        },
+        {
+          "name": "type",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string"
+          },
+          "description": "the type of Literature to find"
+        },
+        {
+          "name": "view",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string",
+            "enum": [
+              "min",
+              "base",
+              "max"
+            ]
+          },
+          "description": "How much data to retrieve on the object"
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Literature"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/data/literature/{id}",
+      "summary": "Retrieve a Literature object using the ID",
+      "description": null,
+      "tags": [
+        "data"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "number"
+          },
+          "description": "The Literature's ID"
+        },
+        {
+          "name": "view",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string",
+            "enum": [
+              "min",
+              "base",
+              "max"
+            ]
+          },
+          "description": "How much data to retrieve on the object"
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Literature"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/data/guidelineAnnotation",
+      "summary": "Query GuidelineAnnotations",
+      "description": null,
+      "tags": [
+        "data"
+      ],
+      "parameters": [
+        {
+          "name": "source",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string",
+            "enum": [
+              "cpic",
+              "dpwg",
+              "pro"
+            ]
+          },
+          "description": "the source of the Guideline Annotation"
+        },
+        {
+          "name": "relatedChemicals.accessionId",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string"
+          },
+          "description": "the accession ID of a chemical associated with the Guideline Annotation"
+        },
+        {
+          "name": "relatedGenes.accessionId",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string"
+          },
+          "description": "the accession ID of a gene associated with the Guideline Annotation"
+        },
+        {
+          "name": "view",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string",
+            "enum": [
+              "min",
+              "base",
+              "max"
+            ]
+          },
+          "description": "How much data to retrieve on the object"
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GuidelineAnnotation"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/data/guidelineAnnotation/{id}",
+      "summary": "Retrieve a GuidelineAnnotation using the ClinPGx ID",
+      "description": null,
+      "tags": [
+        "data"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "description": "the Guideline Annotation's ClinPGx accession identifier"
+        },
+        {
+          "name": "view",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string",
+            "enum": [
+              "min",
+              "base",
+              "max"
+            ]
+          },
+          "description": "How much data to retrieve on the object"
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GuidelineAnnotation"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/data/label",
+      "summary": "Query DrugLabels",
+      "description": null,
+      "tags": [
+        "data"
+      ],
+      "parameters": [
+        {
+          "name": "source",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string",
+            "enum": [
+              "fda",
+              "ema",
+              "pmda",
+              "hcsc"
+            ]
+          },
+          "description": "the source of the Drug Label"
+        },
+        {
+          "name": "relatedChemicals.accessionId",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string"
+          },
+          "description": "the accession ID of a chemical associated with the Drug Label"
+        },
+        {
+          "name": "relatedChemicals.name",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string"
+          },
+          "description": "the name of a chemical associated with the Drug Label"
+        },
+        {
+          "name": "relatedGenes.accessionId",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string"
+          },
+          "description": "the accession ID of a gene associated with the Drug Label"
+        },
+        {
+          "name": "relatedGenes.symbol",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string"
+          },
+          "description": "the symbol of a gene associated with the Drug Label"
+        },
+        {
+          "name": "view",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string",
+            "enum": [
+              "min",
+              "base",
+              "max"
+            ]
+          },
+          "description": "How much data to retrieve on the object"
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LabelAnnotation"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/data/label/{id}",
+      "summary": "Retrieve a Drug Label using the ClinPGx ID",
+      "description": null,
+      "tags": [
+        "data"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "description": "the Drug Label's ClinPGx accession identifier"
+        },
+        {
+          "name": "view",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string",
+            "enum": [
+              "min",
+              "base",
+              "max"
+            ]
+          },
+          "description": "How much data to retrieve on the object"
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LabelAnnotation"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/data/summaryAnnotation",
+      "summary": "Query Clinical Annotations",
+      "description": null,
+      "tags": [
+        "data"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string"
+          },
+          "description": "the ClinPGx identifier of the Clinical Annotation"
+        },
+        {
+          "name": "relatedChemicals.accessionId",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string"
+          },
+          "description": "the accession ID of a chemical associated with the Clinical Annotation"
+        },
+        {
+          "name": "relatedChemicals.name",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string"
+          },
+          "description": "the name of a chemical associated with the Clinical Annotation"
+        },
+        {
+          "name": "location.genes.symbol",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string"
+          },
+          "description": "the symbol of the Gene to get Clinical Annotations for"
+        },
+        {
+          "name": "location.fingerprint",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string"
+          },
+          "description": "the fingerprint (most often RSID) of the Variant to get Clinical Annotations for"
+        },
+        {
+          "name": "levelOfEvidence.term",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string",
+            "enum": [
+              "1A",
+              "1B",
+              "2A",
+              "2B",
+              "3",
+              "4"
+            ]
+          },
+          "description": "the level of Clinical Annotations to retrieve"
+        },
+        {
+          "name": "view",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string",
+            "enum": [
+              "min",
+              "base",
+              "max"
+            ]
+          },
+          "description": "How much data to retrieve on the object"
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SummaryAnnotation"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/data/summaryAnnotation/{id}",
+      "summary": "Retrieve a Clinical Annotation using the ID",
+      "description": null,
+      "tags": [
+        "data"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "number"
+          },
+          "description": "The annotation's ID"
+        },
+        {
+          "name": "view",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string",
+            "enum": [
+              "min",
+              "base",
+              "max"
+            ]
+          },
+          "description": "How much data to retrieve on the object"
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SummaryAnnotation"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/data/variantAnnotation",
+      "summary": "Query VariantAnnotations",
+      "description": null,
+      "tags": [
+        "data"
+      ],
+      "parameters": [
+        {
+          "name": "location.genes.symbol",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string"
+          },
+          "description": "the symbol of the Gene to get variant annotations for"
+        },
+        {
+          "name": "location.fingerprint",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string"
+          },
+          "description": "the fingerprint (most often RSID) of the Variant to get variant annotations for"
+        },
+        {
+          "name": "view",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string",
+            "enum": [
+              "min",
+              "base",
+              "max"
+            ]
+          },
+          "description": "How much data to retrieve on the object"
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/VariantDrugAnnotation"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/data/variantAnnotation/{id}",
+      "summary": "Retrieve a VariantAnnotation using the ID",
+      "description": null,
+      "tags": [
+        "data"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "number"
+          },
+          "description": "The annotation's ID"
+        },
+        {
+          "name": "view",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string",
+            "enum": [
+              "min",
+              "base",
+              "max"
+            ]
+          },
+          "description": "How much data to retrieve on the object"
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VariantDrugAnnotation"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/data/vip/{id}",
+      "summary": "Retrieve a VIP annotation using the ID",
+      "description": null,
+      "tags": [
+        "data"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "number"
+          },
+          "description": "The annotation's ID"
+        },
+        {
+          "name": "view",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string",
+            "enum": [
+              "min",
+              "base",
+              "max"
+            ]
+          },
+          "description": "How much data to retrieve on the object"
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VipOverviewDisplay"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/data/ontologyTerm",
+      "summary": "Query Ontology Terms",
+      "description": null,
+      "tags": [
+        "data"
+      ],
+      "parameters": [
+        {
+          "name": "resource",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string",
+            "enum": [
+              "biomarkerStatus",
+              "alleleFunction",
+              "cpicLevelOfEvidence",
+              "cpicStatus",
+              "geneTestLevel",
+              "guidelineStrength",
+              "levelsOfEvidence"
+            ]
+          },
+          "description": "the ontology resource to get terms for"
+        },
+        {
+          "name": "view",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string",
+            "enum": [
+              "min",
+              "base",
+              "max"
+            ]
+          },
+          "description": "How much data to retrieve on the object"
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/OntologyTerm"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/data/dataAnnotation",
+      "summary": "Query Data Annotations",
+      "description": null,
+      "tags": [
+        "data"
+      ],
+      "parameters": [
+        {
+          "name": "targets.accessionId",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string"
+          },
+          "description": "the Accession ID for the object to find annotations for"
+        },
+        {
+          "name": "type",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string"
+          },
+          "description": "the type of annotation to return"
+        },
+        {
+          "name": "view",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string",
+            "enum": [
+              "min",
+              "base",
+              "max"
+            ]
+          },
+          "description": "How much data to retrieve on the object"
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/DataAnnotation"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/data/connection",
+      "summary": "Query connections (aka relationships) between two objects, referred to as 'object 1' and 'object2'",
+      "description": null,
+      "tags": [
+        "data"
+      ],
+      "parameters": [
+        {
+          "name": "object1Id",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string"
+          },
+          "description": "the ID of object 1 to find connections for"
+        },
+        {
+          "name": "object1Name",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string"
+          },
+          "description": "the name of object 1 to find connections for"
+        },
+        {
+          "name": "object1Type",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string"
+          },
+          "description": "the type of object 1 to find connections for"
+        },
+        {
+          "name": "object2Id",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string"
+          },
+          "description": "the ID of object 2 to find connections for"
+        },
+        {
+          "name": "object2Name",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string"
+          },
+          "description": "the name of object 2 to find connections for"
+        },
+        {
+          "name": "object2Type",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string"
+          },
+          "description": "the type of object 2 to find connections for"
+        },
+        {
+          "name": "view",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string",
+            "enum": [
+              "min",
+              "base",
+              "max"
+            ]
+          },
+          "description": "How much data to retrieve on the object"
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Connection"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/report/variantFrequency",
+      "summary": "Get all variant frequency data for a given variant fingerprint",
+      "description": null,
+      "tags": [
+        "report"
+      ],
+      "parameters": [
+        {
+          "name": "fp",
+          "in": "query",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "description": "a variant fingerprint to query (e.g. RSID)"
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FrequencyResult"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/report/stats",
+      "summary": "Get all the statistics for object counts in ClinPGx",
+      "description": null,
+      "tags": [
+        "report"
+      ],
+      "parameters": [],
+      "responses": {
+        "200": {
+          "description": "success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StatsResult"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/report/crossReference",
+      "summary": null,
+      "description": null,
+      "tags": [
+        "report"
+      ],
+      "parameters": [
+        {
+          "name": "type",
+          "in": "query",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "description": "the type of object to get cross references for"
+        },
+        {
+          "name": "accId",
+          "in": "query",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "description": "the ID of the object to get cross references for"
+        },
+        {
+          "name": "resource",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string"
+          },
+          "description": "the resource to get cross references from"
+        },
+        {
+          "name": "view",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string",
+            "enum": [
+              "min",
+              "base",
+              "max"
+            ]
+          },
+          "description": "How much data to retrieve on the object"
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/CrossReference"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/report/pair/{firstObjId}/{secondObjId}/{resultType}",
+      "summary": "Retrieve all <code>{type}</code> objects that connect <code>{id1}</code> and <code>{id2}</code>",
+      "description": null,
+      "tags": [
+        "report"
+      ],
+      "parameters": [
+        {
+          "name": "firstObjId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "description": "an object's unique identifier, either their PA# or numeric ID"
+        },
+        {
+          "name": "secondObjId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "description": "a different object's unique identifier, either their PA# or numeric ID"
+        },
+        {
+          "name": "resultType",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "enum": [
+              "variantAnnotation",
+              "summaryAnnotation",
+              "literatureAnnotation",
+              "multilinkAnnotation",
+              "pathway",
+              "guidelineAnnotation",
+              "label",
+              "vip",
+              "vipVariant"
+            ]
+          },
+          "description": "the type of objects that connect the two given IDs. this will also be the type of the returned object"
+        },
+        {
+          "name": "view",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string",
+            "enum": [
+              "min",
+              "base",
+              "max"
+            ]
+          },
+          "description": "How much data to retrieve on the object"
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "description": "the returned object schema depends on the requested <code>{type}</code>",
+                "items": {
+                  "type": "object",
+                  "properties": {},
+                  "description": "The model depends on the <code>resultType</code> parameter"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/report/connectedObjects/{id}/{type}",
+      "summary": "Query all objects connected to {id} of <code>{type}</code> and list all types of connections between them",
+      "description": null,
+      "tags": [
+        "report"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "description": "an object's unique identifier, either their PA# or numeric ID"
+        },
+        {
+          "name": "type",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "description": "the type of connected object to search for"
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "connectedObject": {
+                      "type": "object",
+                      "properties": {},
+                      "description": "the object that's connected to the given ID"
+                    },
+                    "connectionTypes": {
+                      "type": "array",
+                      "description": "the types of objects that connect the 'connectedObject' to the given ID",
+                      "items": {
+                        "type": "string",
+                        "description": "a type of object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/report/literatureId/{pmid}",
+      "summary": "Submit a PMID and find the Literature ID for it",
+      "description": null,
+      "tags": [
+        "report"
+      ],
+      "parameters": [
+        {
+          "name": "pmid",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "description": "the PMID to search for"
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "found PMID in a Literature ID, ID in response",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "number",
+                "format": "integer"
+              }
+            }
+          }
+        },
+        "204": {
+          "description": "PMID not stored, no Literature ID to report",
+          "content": {}
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/infobutton",
+      "summary": "ClinPGx implementation of InfoButton service",
+      "description": "See [infobutton documentation](/infobutton.html) for more details on the use of request parameters.",
+      "tags": [
+        "services"
+      ],
+      "parameters": [
+        {
+          "name": "mainSearchCriteria.v.c",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string"
+          },
+          "description": "The code/identifier for given code system"
+        },
+        {
+          "name": "mainSearchCriteria.v.cs",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string",
+            "default": "2.16.840.1.113883.6.88"
+          },
+          "description": "The code system for given identifier"
+        },
+        {
+          "name": "mainSearchCriteria.v.dn",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string"
+          },
+          "description": "The name of a chemical"
+        },
+        {
+          "name": "mainSearchCriteria.v.ot",
+          "in": "query",
+          "required": null,
+          "schema": {
+            "type": "string"
+          },
+          "description": "Text such as a drug name with specific form and/or dose"
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "A HTML document of ClinPGx data resulting from the query",
+          "content": {}
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/infobutton",
+      "summary": "ClinPGx implementation of InfoButton service",
+      "description": "See [infobutton documentation](/infobutton.html) for more details on the use of request parameters.",
+      "tags": [
+        "services"
+      ],
+      "parameters": [],
+      "responses": {
+        "200": {
+          "description": "A HTML document of ClinPGx data resulting from the query",
+          "content": {}
+        }
+      }
+    }
+  ]
+}

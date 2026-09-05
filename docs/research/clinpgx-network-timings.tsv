@@ -1,0 +1,46 @@
+mode	resource	run	http_status	dns_s	connect_s	ttfb_s	total_s	bytes	content_type_or_effective_url	new_connections
+new_connection	gene_cyp2c19_max	1	200	0.000477	0.056380	0.570707	0.572733	10040	application/json; charset=utf-8	1
+new_connection	chemical_clopidogrel_max	1	200	0.000552	0.023180	0.519894	0.520303	6325	application/json; charset=utf-8	1
+new_connection	variant_rs4244285_max	1	200	0.000547	0.018308	0.519859	0.520855	4199	application/json; charset=utf-8	1
+new_connection	summary_clopidogrel_cyp2c19_max	1	200	0.000636	0.017120	1.026904	1.139343	130283	application/json; charset=utf-8	1
+new_connection	guideline_clopidogrel_cyp2c19_max	1	200	0.000614	0.007118	0.434498	0.436808	20303	application/json; charset=utf-8	1
+new_connection	gene_cyp2c19_max	2	200	0.000576	0.006587	0.569463	0.570754	10040	application/json; charset=utf-8	1
+new_connection	chemical_clopidogrel_max	2	200	0.000666	0.053427	0.458982	0.460397	6325	application/json; charset=utf-8	1
+new_connection	variant_rs4244285_max	2	200	0.000606	0.012880	0.505841	0.506414	4199	application/json; charset=utf-8	1
+new_connection	summary_clopidogrel_cyp2c19_max	2	200	0.000588	0.014212	0.940529	1.160549	130283	application/json; charset=utf-8	1
+new_connection	guideline_clopidogrel_cyp2c19_max	2	200	0.001010	0.015921	0.430949	0.434074	20303	application/json; charset=utf-8	1
+new_connection	gene_cyp2c19_max	3	200	0.001033	0.013823	0.531023	0.532451	10040	application/json; charset=utf-8	1
+new_connection	chemical_clopidogrel_max	3	200	0.000773	0.006133	0.557341	0.557464	6325	application/json; charset=utf-8	1
+new_connection	variant_rs4244285_max	3	200	0.000727	0.021437	0.435834	0.436494	4199	application/json; charset=utf-8	1
+new_connection	summary_clopidogrel_cyp2c19_max	3	200	0.000737	0.016798	0.695943	0.876519	130283	application/json; charset=utf-8	1
+new_connection	guideline_clopidogrel_cyp2c19_max	3	200	0.001280	0.016796	0.446802	0.449327	20303	application/json; charset=utf-8	1
+persistent_http2	gene_cyp2c19_max	1	200	0.000572	0.062996	0.575075	0.575569	10040	application/json; charset=utf-8	1
+persistent_http2	chemical_clopidogrel_max	1	200	0.000000	0.000000	0.333230	0.335078	6325	application/json; charset=utf-8	0
+persistent_http2	variant_rs4244285_max	1	200	0.000000	0.000000	0.422736	0.423118	4199	application/json; charset=utf-8	0
+persistent_http2	summary_clopidogrel_cyp2c19_max	1	200	0.000000	0.000000	0.687757	0.865484	130283	application/json; charset=utf-8	0
+persistent_http2	guideline_clopidogrel_cyp2c19_max	1	200	0.000000	0.000000	0.364802	0.364946	20303	application/json; charset=utf-8	0
+persistent_http2	gene_cyp2c19_max	2	200	0.000000	0.000000	0.438410	0.439642	10040	application/json; charset=utf-8	0
+persistent_http2	chemical_clopidogrel_max	2	200	0.000000	0.000000	0.344131	0.344392	6325	application/json; charset=utf-8	0
+persistent_http2	variant_rs4244285_max	2	200	0.000000	0.000000	0.372837	0.373957	4199	application/json; charset=utf-8	0
+persistent_http2	summary_clopidogrel_cyp2c19_max	2	200	0.000000	0.000000	0.772898	0.889695	130283	application/json; charset=utf-8	0
+persistent_http2	guideline_clopidogrel_cyp2c19_max	2	200	0.000000	0.000000	0.351806	0.353321	20303	application/json; charset=utf-8	0
+persistent_http2	gene_cyp2c19_max	3	200	0.000000	0.000000	0.509832	0.510113	10040	application/json; charset=utf-8	0
+persistent_http2	chemical_clopidogrel_max	3	200	0.000000	0.000000	0.365877	0.366762	6325	application/json; charset=utf-8	0
+persistent_http2	variant_rs4244285_max	3	200	0.000000	0.000000	0.345892	0.346720	4199	application/json; charset=utf-8	0
+persistent_http2	summary_clopidogrel_cyp2c19_max	3	200	0.000000	0.000000	1.094379	1.154259	130283	application/json; charset=utf-8	0
+persistent_http2	guideline_clopidogrel_cyp2c19_max	3	200	0.000000	0.000000	0.348670	0.348790	20303	application/json; charset=utf-8	0
+redirect_download	genes.zip	1	200	0.031511	0.051852	1.006602	1.131456	2905541	https://s3.pgkb.org/data/genes.zip	2
+redirect_download	chemicals.zip	1	200	0.001086	0.094312	1.020998	1.075012	814225	https://s3.pgkb.org/data/chemicals.zip	2
+redirect_download	drugs.zip	1	200	0.001873	0.036457	0.919591	0.980858	678392	https://s3.pgkb.org/data/drugs.zip	2
+redirect_download	summaryAnnotations.zip	1	200	0.001355	0.054994	0.824521	0.917060	1236737	https://s3.pgkb.org/data/summaryAnnotations.zip	2
+redirect_download	guidelineAnnotations.json.zip	1	200	0.001209	0.110798	0.892674	0.962739	861200	https://s3.pgkb.org/data/guidelineAnnotations.json.zip	2
+redirect_download	genes.zip	2	200	0.001196	0.071367	0.387500	0.515709	2905541	https://s3.pgkb.org/data/genes.zip	2
+redirect_download	chemicals.zip	2	200	0.001160	0.030676	0.425613	0.490448	814225	https://s3.pgkb.org/data/chemicals.zip	2
+redirect_download	drugs.zip	2	200	0.001065	0.027654	0.359611	0.427930	678392	https://s3.pgkb.org/data/drugs.zip	2
+redirect_download	summaryAnnotations.zip	2	200	0.001280	0.033699	0.464353	0.530655	1236737	https://s3.pgkb.org/data/summaryAnnotations.zip	2
+redirect_download	guidelineAnnotations.json.zip	2	200	0.001184	0.062596	0.381341	0.452447	861200	https://s3.pgkb.org/data/guidelineAnnotations.json.zip	2
+redirect_download	genes.zip	3	200	0.001614	0.044021	0.401750	0.541460	2905541	https://s3.pgkb.org/data/genes.zip	2
+redirect_download	chemicals.zip	3	200	0.001201	0.025413	0.355224	0.420351	814225	https://s3.pgkb.org/data/chemicals.zip	2
+redirect_download	drugs.zip	3	200	0.001249	0.024448	0.369540	0.417385	678392	https://s3.pgkb.org/data/drugs.zip	2
+redirect_download	summaryAnnotations.zip	3	200	0.001319	0.026125	0.376430	0.454372	1236737	https://s3.pgkb.org/data/summaryAnnotations.zip	2
+redirect_download	guidelineAnnotations.json.zip	3	200	0.001176	0.089244	0.469337	0.580733	861200	https://s3.pgkb.org/data/guidelineAnnotations.json.zip	2

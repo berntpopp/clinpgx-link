@@ -1,0 +1,730 @@
+{
+  "probe_date": "2026-09-05",
+  "source": "https://api.clinpgx.org/v1/data/file/data/?view=min",
+  "documented_in_openapi": false,
+  "status": "success",
+  "file_count": 120,
+  "total_bytes": 81911941,
+  "files": [
+    {
+      "fileName": "CPIC.ClinVar.Submission.PA124.xlsx",
+      "lastModified": "2021-04-05T00:31:10-07:00",
+      "path": "data/CPIC.ClinVar.Submission.PA124.xlsx",
+      "size": 696955
+    },
+    {
+      "fileName": "PharmGKB.ClinVar.Submission.xlsx",
+      "lastModified": "2021-04-05T00:31:05-07:00",
+      "path": "data/PharmGKB.ClinVar.Submission.xlsx",
+      "size": 210069
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission.xlsx",
+      "lastModified": "2021-10-19T11:52:45-07:00",
+      "path": "data/PharmGKB_ClinVar_Submission.xlsx",
+      "size": 347983
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Haplotypes_2021-10-22.xlsx",
+      "lastModified": "2021-10-22T16:35:21-07:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Haplotypes_2021-10-22.xlsx",
+      "size": 351740
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2021-10-22.xlsx",
+      "lastModified": "2021-10-22T16:35:37-07:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2021-10-22.xlsx",
+      "size": 275511
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2021-11-05.xlsx",
+      "lastModified": "2021-11-05T00:32:04-07:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2021-11-05.xlsx",
+      "size": 275511
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2021-12-05.xlsx",
+      "lastModified": "2021-12-05T00:32:00-08:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2021-12-05.xlsx",
+      "size": 271576
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2022-01-05.xlsx",
+      "lastModified": "2022-01-05T13:29:38-08:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2022-01-05.xlsx",
+      "size": 229087
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2022-01-06.xlsx",
+      "lastModified": "2022-01-06T12:57:51-08:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2022-01-06.xlsx",
+      "size": 229087
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2022-02-05.xlsx",
+      "lastModified": "2022-02-05T00:32:00-08:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2022-02-05.xlsx",
+      "size": 224786
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2022-03-05.xlsx",
+      "lastModified": "2022-03-05T00:31:54-08:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2022-03-05.xlsx",
+      "size": 227305
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2022-03-06.xlsx",
+      "lastModified": "2022-03-06T20:51:57-08:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2022-03-06.xlsx",
+      "size": 227305
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2022-03-10.xlsx",
+      "lastModified": "2022-03-10T02:28:26-08:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2022-03-10.xlsx",
+      "size": 227305
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2022-04-05.xlsx",
+      "lastModified": "2022-04-05T00:32:06-07:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2022-04-05.xlsx",
+      "size": 227305
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2022-05-05.xlsx",
+      "lastModified": "2022-05-05T00:32:05-07:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2022-05-05.xlsx",
+      "size": 224294
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2022-06-05.xlsx",
+      "lastModified": "2022-06-05T00:32:01-07:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2022-06-05.xlsx",
+      "size": 224294
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2022-07-05.xlsx",
+      "lastModified": "2022-07-05T00:32:05-07:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2022-07-05.xlsx",
+      "size": 224294
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2022-08-05.xlsx",
+      "lastModified": "2022-08-05T00:32:05-07:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2022-08-05.xlsx",
+      "size": 224084
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2022-08-08.xlsx",
+      "lastModified": "2022-08-08T02:27:01-07:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2022-08-08.xlsx",
+      "size": 224084
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2022-09-05.xlsx",
+      "lastModified": "2022-09-05T00:32:03-07:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2022-09-05.xlsx",
+      "size": 224084
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2022-09-13.xlsx",
+      "lastModified": "2022-09-13T19:27:21-07:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2022-09-13.xlsx",
+      "size": 224084
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2022-10-05.xlsx",
+      "lastModified": "2022-10-05T00:32:02-07:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2022-10-05.xlsx",
+      "size": 224084
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2022-11-05.xlsx",
+      "lastModified": "2022-11-05T00:32:03-07:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2022-11-05.xlsx",
+      "size": 224084
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2022-12-05.xlsx",
+      "lastModified": "2022-12-05T00:32:01-08:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2022-12-05.xlsx",
+      "size": 224084
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2023-01-05.xlsx",
+      "lastModified": "2023-01-05T00:32:11-08:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2023-01-05.xlsx",
+      "size": 224177
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2023-02-05.xlsx",
+      "lastModified": "2023-02-05T00:32:15-08:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2023-02-05.xlsx",
+      "size": 224177
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2023-03-05.xlsx",
+      "lastModified": "2023-03-05T00:32:18-08:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2023-03-05.xlsx",
+      "size": 224177
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2023-04-05.xlsx",
+      "lastModified": "2023-04-05T11:46:07-07:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2023-04-05.xlsx",
+      "size": 224177
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2023-05-05.xlsx",
+      "lastModified": "2023-05-05T00:32:19-07:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2023-05-05.xlsx",
+      "size": 226618
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2023-06-05.xlsx",
+      "lastModified": "2023-06-05T00:32:20-07:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2023-06-05.xlsx",
+      "size": 225074
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2023-07-05.xlsx",
+      "lastModified": "2023-07-05T00:32:17-07:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2023-07-05.xlsx",
+      "size": 225074
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2023-08-05.xlsx",
+      "lastModified": "2023-08-05T00:31:13-07:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2023-08-05.xlsx",
+      "size": 225074
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2023-09-05.xlsx",
+      "lastModified": "2023-09-05T00:31:55-07:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2023-09-05.xlsx",
+      "size": 225074
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2023-10-05.xlsx",
+      "lastModified": "2023-10-05T00:32:05-07:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2023-10-05.xlsx",
+      "size": 225074
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2023-11-05.xlsx",
+      "lastModified": "2023-11-05T00:32:01-07:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2023-11-05.xlsx",
+      "size": 222153
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2023-12-05.xlsx",
+      "lastModified": "2023-12-05T00:32:04-08:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2023-12-05.xlsx",
+      "size": 213629
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2024-01-05.xlsx",
+      "lastModified": "2024-01-05T00:32:04-08:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2024-01-05.xlsx",
+      "size": 213629
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2024-02-05.xlsx",
+      "lastModified": "2024-02-05T00:32:17-08:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2024-02-05.xlsx",
+      "size": 213629
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2024-03-05.xlsx",
+      "lastModified": "2024-03-05T00:32:07-08:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2024-03-05.xlsx",
+      "size": 213629
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2024-04-05.xlsx",
+      "lastModified": "2024-04-05T00:28:12-07:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2024-04-05.xlsx",
+      "size": 213629
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2024-05-05.xlsx",
+      "lastModified": "2024-05-05T00:28:14-07:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2024-05-05.xlsx",
+      "size": 213629
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2024-06-05.xlsx",
+      "lastModified": "2024-06-05T00:31:45-07:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2024-06-05.xlsx",
+      "size": 213629
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2024-07-05.xlsx",
+      "lastModified": "2024-07-05T00:31:43-07:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2024-07-05.xlsx",
+      "size": 213629
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2024-08-05.xlsx",
+      "lastModified": "2024-08-05T00:31:50-07:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2024-08-05.xlsx",
+      "size": 213629
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2024-09-05.xlsx",
+      "lastModified": "2024-09-05T00:31:51-07:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2024-09-05.xlsx",
+      "size": 213629
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2024-10-05.xlsx",
+      "lastModified": "2024-10-05T00:30:26-07:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2024-10-05.xlsx",
+      "size": 213629
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2024-11-05.xlsx",
+      "lastModified": "2024-11-05T00:31:54-08:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2024-11-05.xlsx",
+      "size": 213629
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2024-12-05.xlsx",
+      "lastModified": "2024-12-05T00:31:50-08:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2024-12-05.xlsx",
+      "size": 213629
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2025-01-05.xlsx",
+      "lastModified": "2025-01-05T00:31:51-08:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2025-01-05.xlsx",
+      "size": 213629
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2025-02-05.xlsx",
+      "lastModified": "2025-02-05T00:31:55-08:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2025-02-05.xlsx",
+      "size": 213629
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2025-03-05.xlsx",
+      "lastModified": "2025-03-05T00:32:04-08:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2025-03-05.xlsx",
+      "size": 213629
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2025-04-05.xlsx",
+      "lastModified": "2025-04-05T00:32:10-07:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2025-04-05.xlsx",
+      "size": 213629
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2025-05-05.xlsx",
+      "lastModified": "2025-05-05T00:32:07-07:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2025-05-05.xlsx",
+      "size": 213629
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2025-06-05.xlsx",
+      "lastModified": "2025-06-05T00:32:07-07:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2025-06-05.xlsx",
+      "size": 213629
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2025-07-05.xlsx",
+      "lastModified": "2025-07-05T00:32:13-07:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2025-07-05.xlsx",
+      "size": 213629
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2025-08-05.xlsx",
+      "lastModified": "2025-08-05T00:31:19-07:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2025-08-05.xlsx",
+      "size": 213629
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2025-09-05.xlsx",
+      "lastModified": "2025-09-05T00:31:11-07:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2025-09-05.xlsx",
+      "size": 213629
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2025-10-05.xlsx",
+      "lastModified": "2025-10-05T00:31:05-07:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2025-10-05.xlsx",
+      "size": 213629
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2025-11-05.xlsx",
+      "lastModified": "2025-11-05T00:31:11-08:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2025-11-05.xlsx",
+      "size": 213629
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2025-12-05.xlsx",
+      "lastModified": "2025-12-05T00:31:11-08:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2025-12-05.xlsx",
+      "size": 213629
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2026-01-05.xlsx",
+      "lastModified": "2026-01-05T00:30:56-08:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2026-01-05.xlsx",
+      "size": 213629
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2026-02-05.xlsx",
+      "lastModified": "2026-02-05T00:31:03-08:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2026-02-05.xlsx",
+      "size": 213629
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2026-03-05.xlsx",
+      "lastModified": "2026-03-05T00:31:14-08:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2026-03-05.xlsx",
+      "size": 213629
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2026-04-05.xlsx",
+      "lastModified": "2026-04-05T00:26:48-07:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2026-04-05.xlsx",
+      "size": 213629
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2026-05-05.xlsx",
+      "lastModified": "2026-05-05T00:31:18-07:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2026-05-05.xlsx",
+      "size": 213629
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2026-06-05.xlsx",
+      "lastModified": "2026-06-05T00:31:20-07:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2026-06-05.xlsx",
+      "size": 213629
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2026-07-05.xlsx",
+      "lastModified": "2026-07-05T00:31:24-07:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2026-07-05.xlsx",
+      "size": 213629
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2026-08-05.xlsx",
+      "lastModified": "2026-08-05T00:31:26-07:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2026-08-05.xlsx",
+      "size": 213629
+    },
+    {
+      "fileName": "PharmGKB_ClinVar_Submission_Variants_2026-09-05.xlsx",
+      "lastModified": "2026-09-05T00:31:25-07:00",
+      "path": "data/PharmGKB_ClinVar_Submission_Variants_2026-09-05.xlsx",
+      "size": 213629
+    },
+    {
+      "fileName": "annotations.zip",
+      "lastModified": "2021-03-05T00:26:09-08:00",
+      "path": "data/annotations.zip",
+      "size": 5083064
+    },
+    {
+      "fileName": "atc.zip",
+      "lastModified": "2026-09-05T00:25:17-07:00",
+      "path": "data/atc.zip",
+      "size": 63677
+    },
+    {
+      "fileName": "automated_annotations.zip",
+      "lastModified": "2025-07-05T00:25:18-07:00",
+      "path": "data/automated_annotations.zip",
+      "size": 1881822
+    },
+    {
+      "fileName": "chemicals.zip",
+      "lastModified": "2026-09-05T00:31:19-07:00",
+      "path": "data/chemicals.zip",
+      "size": 814225
+    },
+    {
+      "fileName": "clinicalAnnotations.zip",
+      "lastModified": "2025-07-05T00:31:53-07:00",
+      "path": "data/clinicalAnnotations.zip",
+      "size": 1231768
+    },
+    {
+      "fileName": "clinicalAnnotations_LOE1-2.zip",
+      "lastModified": "2025-07-05T00:32:07-07:00",
+      "path": "data/clinicalAnnotations_LOE1-2.zip",
+      "size": 271314
+    },
+    {
+      "fileName": "clinicalVariants.zip",
+      "lastModified": "2026-09-05T00:31:23-07:00",
+      "path": "data/clinicalVariants.zip",
+      "size": 74404
+    },
+    {
+      "fileName": "clinical_annotations-public.zip",
+      "lastModified": "2021-09-05T02:04:48-07:00",
+      "path": "data/clinical_annotations-public.zip",
+      "size": 87914
+    },
+    {
+      "fileName": "clinpgx.annotations.bed",
+      "lastModified": "2026-09-05T00:26:49-07:00",
+      "path": "data/clinpgx.annotations.bed",
+      "size": 10713150
+    },
+    {
+      "fileName": "clinpgxAnnotatedPmids.zip",
+      "lastModified": "2026-09-05T00:25:12-07:00",
+      "path": "data/clinpgxAnnotatedPmids.zip",
+      "size": 70682
+    },
+    {
+      "fileName": "clinpgxHaplotypes.zip",
+      "lastModified": "2026-09-05T00:37:38-07:00",
+      "path": "data/clinpgxHaplotypes.zip",
+      "size": 19207
+    },
+    {
+      "fileName": "cpic.alleles.csv",
+      "lastModified": "2026-09-05T00:31:38-07:00",
+      "path": "data/cpic.alleles.csv",
+      "size": 26
+    },
+    {
+      "fileName": "cpic.alleles.json",
+      "lastModified": "2026-09-05T00:31:38-07:00",
+      "path": "data/cpic.alleles.json",
+      "size": 564830
+    },
+    {
+      "fileName": "cpic.drug.mapping.zip",
+      "lastModified": "2026-09-05T00:31:40-07:00",
+      "path": "data/cpic.drug.mapping.zip",
+      "size": 2617846
+    },
+    {
+      "fileName": "dosingGuidelines.extended.json.zip",
+      "lastModified": "2021-10-05T01:25:16-07:00",
+      "path": "data/dosingGuidelines.extended.json.zip",
+      "size": 1244136
+    },
+    {
+      "fileName": "dosingGuidelines.json.zip",
+      "lastModified": "2021-10-05T01:25:16-07:00",
+      "path": "data/dosingGuidelines.json.zip",
+      "size": 1059475
+    },
+    {
+      "fileName": "drugLabels.zip",
+      "lastModified": "2026-08-05T01:12:06-07:00",
+      "path": "data/drugLabels.zip",
+      "size": 59489
+    },
+    {
+      "fileName": "drugs.zip",
+      "lastModified": "2026-09-05T00:31:19-07:00",
+      "path": "data/drugs.zip",
+      "size": 678392
+    },
+    {
+      "fileName": "genecards.zip",
+      "lastModified": "2026-09-05T00:37:04-07:00",
+      "path": "data/genecards.zip",
+      "size": 450413
+    },
+    {
+      "fileName": "genes.zip",
+      "lastModified": "2026-09-05T00:37:36-07:00",
+      "path": "data/genes.zip",
+      "size": 2905541
+    },
+    {
+      "fileName": "guidelineAnnotations.extended.json.zip",
+      "lastModified": "2023-10-05T01:04:46-07:00",
+      "path": "data/guidelineAnnotations.extended.json.zip",
+      "size": 1146803
+    },
+    {
+      "fileName": "guidelineAnnotations.json.zip",
+      "lastModified": "2026-08-05T01:12:06-07:00",
+      "path": "data/guidelineAnnotations.json.zip",
+      "size": 861200
+    },
+    {
+      "fileName": "haplotypes.zip",
+      "lastModified": "2026-04-05T01:02:02-07:00",
+      "path": "data/haplotypes.zip",
+      "size": 571302
+    },
+    {
+      "fileName": "lexicon.zip",
+      "lastModified": "2026-09-05T00:37:51-07:00",
+      "path": "data/lexicon.zip",
+      "size": 1481706
+    },
+    {
+      "fileName": "occurrences.zip",
+      "lastModified": "2026-08-05T01:10:20-07:00",
+      "path": "data/occurrences.zip",
+      "size": 2904200
+    },
+    {
+      "fileName": "pathvisio.zip",
+      "lastModified": "2026-08-24T08:26:33-07:00",
+      "path": "data/pathvisio.zip",
+      "size": 355589
+    },
+    {
+      "fileName": "pathway-illustrator.zip",
+      "lastModified": "2026-08-24T08:26:33-07:00",
+      "path": "data/pathway-illustrator.zip",
+      "size": 414302
+    },
+    {
+      "fileName": "pathway-overview.zip",
+      "lastModified": "2019-09-05T00:50:42-07:00",
+      "path": "data/pathway-overview.zip",
+      "size": 24012
+    },
+    {
+      "fileName": "pathways-biopax.zip",
+      "lastModified": "2026-08-05T01:10:54-07:00",
+      "path": "data/pathways-biopax.zip",
+      "size": 634025
+    },
+    {
+      "fileName": "pathways-overview.zip",
+      "lastModified": "2026-08-05T01:10:54-07:00",
+      "path": "data/pathways-overview.zip",
+      "size": 703834
+    },
+    {
+      "fileName": "pathways-tsv.zip",
+      "lastModified": "2026-08-05T01:10:54-07:00",
+      "path": "data/pathways-tsv.zip",
+      "size": 204070
+    },
+    {
+      "fileName": "pathways.json.zip",
+      "lastModified": "2026-08-05T01:10:55-07:00",
+      "path": "data/pathways.json.zip",
+      "size": 1929507
+    },
+    {
+      "fileName": "pharmcat-shc.zip",
+      "lastModified": "2024-07-20T21:07:03-07:00",
+      "path": "data/pharmcat-shc.zip",
+      "size": 1813082
+    },
+    {
+      "fileName": "pharmcat.zip",
+      "lastModified": "2026-09-05T00:32:08-07:00",
+      "path": "data/pharmcat.zip",
+      "size": 2010280
+    },
+    {
+      "fileName": "pharmgkb.annotations.bed",
+      "lastModified": "2025-07-05T00:26:44-07:00",
+      "path": "data/pharmgkb.annotations.bed",
+      "size": 10417455
+    },
+    {
+      "fileName": "pharmgkb.gene.phenotypes.json",
+      "lastModified": "2021-10-05T00:55:48-07:00",
+      "path": "data/pharmgkb.gene.phenotypes.json",
+      "size": 34306
+    },
+    {
+      "fileName": "pharmgkbAnnotatedPmids.zip",
+      "lastModified": "2025-07-05T00:25:08-07:00",
+      "path": "data/pharmgkbAnnotatedPmids.zip",
+      "size": 64936
+    },
+    {
+      "fileName": "pharmgkb_haplotype_frequencies_AllOfUs.zip",
+      "lastModified": "2024-08-27T11:16:06-07:00",
+      "path": "data/pharmgkb_haplotype_frequencies_AllOfUs.zip",
+      "size": 58421
+    },
+    {
+      "fileName": "pharmgkb_haplotype_frequencies_UKBB.zip",
+      "lastModified": "2026-09-05T00:37:37-07:00",
+      "path": "data/pharmgkb_haplotype_frequencies_UKBB.zip",
+      "size": 29629
+    },
+    {
+      "fileName": "phenotypes.zip",
+      "lastModified": "2026-08-05T01:11:00-07:00",
+      "path": "data/phenotypes.zip",
+      "size": 187372
+    },
+    {
+      "fileName": "publications.tsv",
+      "lastModified": "2026-08-05T01:11:01-07:00",
+      "path": "data/publications.tsv",
+      "size": 102107
+    },
+    {
+      "fileName": "relationships.zip",
+      "lastModified": "2026-08-05T01:11:34-07:00",
+      "path": "data/relationships.zip",
+      "size": 2370578
+    },
+    {
+      "fileName": "rsid.zip",
+      "lastModified": "2026-08-05T01:11:59-07:00",
+      "path": "data/rsid.zip",
+      "size": 199502
+    },
+    {
+      "fileName": "summaryAnnotations.zip",
+      "lastModified": "2026-08-05T01:12:59-07:00",
+      "path": "data/summaryAnnotations.zip",
+      "size": 1236737
+    },
+    {
+      "fileName": "topPairs.json",
+      "lastModified": "2019-12-05T00:53:44-08:00",
+      "path": "data/topPairs.json",
+      "size": 15708
+    },
+    {
+      "fileName": "uniprot.zip",
+      "lastModified": "2026-08-05T01:13:00-07:00",
+      "path": "data/uniprot.zip",
+      "size": 164082
+    },
+    {
+      "fileName": "variant.clinical.summary.zip",
+      "lastModified": "2026-08-05T01:15:07-07:00",
+      "path": "data/variant.clinical.summary.zip",
+      "size": 662566
+    },
+    {
+      "fileName": "variantAnnotations.zip",
+      "lastModified": "2026-08-05T01:14:32-07:00",
+      "path": "data/variantAnnotations.zip",
+      "size": 4272899
+    },
+    {
+      "fileName": "variants.zip",
+      "lastModified": "2026-08-05T01:34:43-07:00",
+      "path": "data/variants.zip",
+      "size": 894788
+    },
+    {
+      "fileName": "vip.variants.zip",
+      "lastModified": "2018-08-05T00:51:49-07:00",
+      "path": "data/vip.variants.zip",
+      "size": 2260
+    },
+    {
+      "fileName": "vip.zip",
+      "lastModified": "2018-08-05T00:51:49-07:00",
+      "path": "data/vip.zip",
+      "size": 256078
+    }
+  ]
+}

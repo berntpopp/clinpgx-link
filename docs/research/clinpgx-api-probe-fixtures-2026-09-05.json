@@ -1,0 +1,503 @@
+{
+  "probe_date": "2026-09-05",
+  "notes": [
+    "Actual JSON responses use a JSend-like {data,status} envelope for most /data routes although OpenAPI success schemas show the entity directly.",
+    "Report routes are heterogeneous and can be raw object, raw array, wrapped data array, number/text, or 204."
+  ],
+  "gene_query_min": {
+    "data": [
+      {
+        "objCls": "Gene",
+        "id": "PA128",
+        "symbol": "CYP2D6",
+        "name": "cytochrome P450 family 2 subfamily D member 6"
+      }
+    ],
+    "status": "success"
+  },
+  "view_keysets": {
+    "gene": {
+      "min": [
+        "id",
+        "name",
+        "objCls",
+        "symbol"
+      ],
+      "base": [
+        "alleleFile",
+        "alleleFunctionSource",
+        "alleleType",
+        "amp",
+        "buildVersion",
+        "cbStart",
+        "cbStop",
+        "chr",
+        "chrStartPosB37",
+        "chrStartPosB38",
+        "chrStopPosB37",
+        "chrStopPosB38",
+        "cpicGene",
+        "hasNonStandardHaplotypes",
+        "hideHaplotypes",
+        "history",
+        "id",
+        "name",
+        "objCls",
+        "pharmVarGene",
+        "strand",
+        "symbol",
+        "vipCitation",
+        "vipId",
+        "vipSummary",
+        "vipTier"
+      ],
+      "max": [
+        "alleleFile",
+        "alleleFunctionSource",
+        "alleleType",
+        "altNames",
+        "amp",
+        "buildVersion",
+        "cbStart",
+        "cbStop",
+        "chr",
+        "chrStartPosB37",
+        "chrStartPosB38",
+        "chrStopPosB37",
+        "chrStopPosB38",
+        "cpicGene",
+        "crossReferences",
+        "hasNonStandardHaplotypes",
+        "hideHaplotypes",
+        "history",
+        "id",
+        "name",
+        "objCls",
+        "pharmVarGene",
+        "strand",
+        "symbol",
+        "terms",
+        "version",
+        "vipCitation",
+        "vipId",
+        "vipSummary",
+        "vipTier"
+      ]
+    },
+    "guideline_item": {
+      "min": [
+        "crossReferences",
+        "id",
+        "name",
+        "objCls"
+      ],
+      "base": [
+        "alternateDrugAvailable",
+        "cancerGenome",
+        "crossReferences",
+        "descriptiveVideoId",
+        "dosingInformation",
+        "hasTestingInfo",
+        "history",
+        "id",
+        "literature",
+        "name",
+        "objCls",
+        "otherPrescribingGuidance",
+        "pediatric",
+        "pediatricMarkdown",
+        "recommendation",
+        "relatedAlleles",
+        "relatedChemicals",
+        "relatedGenes",
+        "source",
+        "summaryMarkdown",
+        "textMarkdown"
+      ],
+      "max": [
+        "alternateDrugAvailable",
+        "cancerGenome",
+        "crossReferences",
+        "descriptiveVideoId",
+        "dosingInformation",
+        "hasTestingInfo",
+        "history",
+        "id",
+        "literature",
+        "name",
+        "objCls",
+        "otherPrescribingGuidance",
+        "pediatric",
+        "pediatricMarkdown",
+        "recommendation",
+        "relatedAlleles",
+        "relatedChemicals",
+        "relatedGenes",
+        "source",
+        "summaryMarkdown",
+        "terms",
+        "textMarkdown",
+        "version"
+      ]
+    },
+    "summary_item": {
+      "min": [
+        "accessionId",
+        "id",
+        "levelOfEvidence",
+        "location",
+        "name",
+        "relatedChemicals",
+        "relatedChemicalsLogic",
+        "relatedGuidelines",
+        "relatedLabels",
+        "types"
+      ],
+      "base": [
+        "accessionId",
+        "allelePhenotypes",
+        "conflictingVariantAnnotationIds",
+        "history",
+        "id",
+        "levelOfEvidence",
+        "location",
+        "name",
+        "objCls",
+        "overrideLevel",
+        "pediatric",
+        "relatedChemicals",
+        "relatedChemicalsLogic",
+        "relatedDiseases",
+        "relatedGuidelines",
+        "relatedLabels",
+        "relatedVariations",
+        "score",
+        "scoreDetails",
+        "types"
+      ],
+      "max": [
+        "accessionId",
+        "allelePhenotypes",
+        "conflictingVariantAnnotationIds",
+        "history",
+        "id",
+        "levelOfEvidence",
+        "location",
+        "name",
+        "objCls",
+        "overrideLevel",
+        "pediatric",
+        "relatedChemicals",
+        "relatedChemicalsLogic",
+        "relatedDiseases",
+        "relatedGuidelines",
+        "relatedLabels",
+        "relatedVariations",
+        "score",
+        "scoreDetails",
+        "types",
+        "variantAnnotations",
+        "version"
+      ]
+    },
+    "variant_annotation_item": {
+      "min": [
+        "accessionId",
+        "alleleGenotype",
+        "assayType",
+        "comparison",
+        "connWords1",
+        "description",
+        "drugsConnWord",
+        "formatVersion",
+        "id",
+        "isAssociated",
+        "isPlural",
+        "literature",
+        "location",
+        "metabolizers1",
+        "metabolizers2",
+        "objCls",
+        "objects",
+        "phenotypeCategories",
+        "polarity",
+        "score",
+        "scoreDetails",
+        "sentence",
+        "significance",
+        "studyParameters",
+        "useForCaScoring"
+      ],
+      "base": [
+        "accessionId",
+        "alleleGenotype",
+        "assayType",
+        "comparison",
+        "connWords1",
+        "description",
+        "drugsConnWord",
+        "formatVersion",
+        "history",
+        "id",
+        "isAssociated",
+        "isPlural",
+        "literature",
+        "location",
+        "metabolizers1",
+        "metabolizers2",
+        "objCls",
+        "objects",
+        "pediatric",
+        "phenotypeCategories",
+        "polarity",
+        "relatedChemicals",
+        "relatedVariations",
+        "score",
+        "scoreDetails",
+        "sentence",
+        "significance",
+        "studyParameters",
+        "useForCaScoring"
+      ],
+      "max": [
+        "accessionId",
+        "alleleGenotype",
+        "assayType",
+        "comparison",
+        "connWords1",
+        "description",
+        "drugsConnWord",
+        "formatVersion",
+        "history",
+        "id",
+        "isAssociated",
+        "isPlural",
+        "literature",
+        "location",
+        "metabolizers1",
+        "metabolizers2",
+        "objCls",
+        "objects",
+        "pediatric",
+        "phenotypeCategories",
+        "polarity",
+        "relatedChemicals",
+        "relatedVariations",
+        "score",
+        "scoreDetails",
+        "sentence",
+        "significance",
+        "studyParameters",
+        "useForCaScoring",
+        "version"
+      ]
+    }
+  },
+  "errors": {
+    "unfiltered_collection": {
+      "status": "fail",
+      "data": {
+        "errors": [
+          {
+            "message": "Missing criteria."
+          }
+        ]
+      }
+    },
+    "unknown_item": {
+      "status": "fail",
+      "data": {
+        "errors": [
+          {
+            "code": "notFound",
+            "message": "No Gene with ID 'PA_DOES_NOT_EXIST' found.",
+            "objectId": "PA_DOES_NOT_EXIST",
+            "objectType": "Gene"
+          }
+        ]
+      }
+    }
+  },
+  "json_ld_example": {
+    "data": {
+      "@id": "https://clinpgx.org/gene/PA124",
+      "@context": "https://api.clinpgx.org/jsonld/gene.jsonld",
+      "objCls": "Gene",
+      "id": "PA124",
+      "symbol": "CYP2C19",
+      "name": "cytochrome P450 family 2 subfamily C member 19"
+    },
+    "status": "success"
+  },
+  "statistics_snapshot": {
+    "allChemicals": {
+      "count": 5313
+    },
+    "allGenes": {
+      "count": 25047
+    },
+    "allStarAlleles": {
+      "count": 6029
+    },
+    "allVariants": {
+      "count": 10421
+    },
+    "annotatedChemicals": {
+      "count": 3400
+    },
+    "annotatedGenes": {
+      "count": 6123
+    },
+    "annotatedVariants": {
+      "count": 7543
+    },
+    "basicVarAnno": {
+      "count": 29714
+    },
+    "chemicalsWithClinicalAnnotations": {
+      "count": 661
+    },
+    "chemicalsWithVariantAndClinicalAnnotations": {
+      "count": 658
+    },
+    "clinAnns": {
+      "count": 5191
+    },
+    "clinAnns1A": {
+      "count": 314
+    },
+    "clinAnns1B": {
+      "count": 18
+    },
+    "clinAnns2A": {
+      "count": 46
+    },
+    "clinAnns2B": {
+      "count": 25
+    },
+    "clinAnns3": {
+      "count": 4478
+    },
+    "clinAnns4": {
+      "count": 310
+    },
+    "clinAnnsTop": {
+      "count": 403
+    },
+    "cpicAnns": {
+      "count": 78
+    },
+    "diseaseWithClinicalAnnotations": {
+      "count": 364
+    },
+    "diseaseWithVariantAndClinicalAnnotations": {
+      "count": 151
+    },
+    "diseasesWithVariantAnnotations": {
+      "count": 215
+    },
+    "dosing": {
+      "count": 219
+    },
+    "dpwgAnns": {
+      "count": 111
+    },
+    "drugDrugInteractions": {
+      "count": 4231
+    },
+    "drugGeneInteractions": {
+      "count": 2399
+    },
+    "drugsRelatedToGenes": {
+      "count": 1477
+    },
+    "drugsWithVariantAnnotations": {
+      "count": 874
+    },
+    "fdaLabels": {
+      "count": 533
+    },
+    "genesRelatedToChemicals": {
+      "count": 2230
+    },
+    "genesWithVariantAnnotations": {
+      "count": 2061
+    },
+    "haplotypeGenesWithClinicalAnnotations": {
+      "count": 35
+    },
+    "haplotypesWithClinicalAnnotations": {
+      "count": 458
+    },
+    "labels": {
+      "count": 1295
+    },
+    "labelsAll": {
+      "count": 1433
+    },
+    "lastTimeStatisticsCollected": "9/5/26",
+    "litAnn": {
+      "count": 14328
+    },
+    "litWithAnns": {
+      "count": 21158
+    },
+    "litWithVarAnns": {
+      "count": 9165
+    },
+    "miniDosingGuidelines": {
+      "count": 0
+    },
+    "pgkbPathways": {
+      "count": 285
+    },
+    "pgxmineAnnotations": {
+      "count": 20223
+    },
+    "pgxmineChemicals": {
+      "count": 495
+    },
+    "pgxmineChemicalsInPgkb": {
+      "count": 464
+    },
+    "pgxmineGenes": {
+      "count": 662
+    },
+    "pgxmineHaplotypes": {
+      "count": 337
+    },
+    "pgxmineHaplotypesInPgkb": {
+      "count": 157
+    },
+    "pgxminePublications": {
+      "count": 7586
+    },
+    "pgxmineVariants": {
+      "count": 2501
+    },
+    "pgxmineVariantsInPgkb": {
+      "count": 1238
+    },
+    "pub": {
+      "count": 149917
+    },
+    "rsidsWithClinicalAnnotations": {
+      "count": 2844
+    },
+    "rsidsWithVariantAndClinicalAnnotations": {
+      "count": 2844
+    },
+    "rsidsWithVariantAnnotations": {
+      "count": 7336
+    },
+    "vipGene": {
+      "count": 34
+    },
+    "vipHaplotype": {
+      "count": 0
+    },
+    "vipVariant": {
+      "count": 0
+    }
+  }
+}

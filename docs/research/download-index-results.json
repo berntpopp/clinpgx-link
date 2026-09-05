@@ -1,0 +1,422 @@
+{
+  "python": "3.12.9",
+  "sqlite": "3.50.3",
+  "method": "Disk SQLite, all TSV/CSV rows and full JSON documents; no network in this phase",
+  "archives": [
+    {
+      "file": "chemicals.zip",
+      "compressed_bytes": 814225,
+      "sha256": "434ff9bb8a5f61f66805a32ec73110f8ea76d77e9a4cf217952a8c99515ebd72",
+      "archive_created_marker": "Created on 09/05/2026 at 00:26:48 PDT.",
+      "parse_insert_fts_ms": 112.64,
+      "member_count": 5,
+      "indexed_records": 5313,
+      "indexed_members": 1,
+      "largest_field_chars": 148743
+    },
+    {
+      "file": "clinicalVariants.zip",
+      "compressed_bytes": 74404,
+      "sha256": "e266dc2280a5c044bd72a579bbc8929bbb3f2b9c816e5c7f93209fe24678e6ca",
+      "archive_created_marker": "Created on 09/05/2026 at 00:31:18 PDT.",
+      "parse_insert_fts_ms": 28.323,
+      "member_count": 4,
+      "indexed_records": 5191,
+      "indexed_members": 1,
+      "largest_field_chars": 447
+    },
+    {
+      "file": "drugLabels.zip",
+      "compressed_bytes": 59489,
+      "sha256": "281e7def4a7fff9880db545d8f03ea3bd3feb0ad59f100fd6d97d0a40a6a7f20",
+      "archive_created_marker": "Created on 08/05/2026 at 01:11:58 PDT.",
+      "parse_insert_fts_ms": 14.62,
+      "member_count": 5,
+      "indexed_records": 1671,
+      "indexed_members": 2,
+      "largest_field_chars": 11107
+    },
+    {
+      "file": "drugs.zip",
+      "compressed_bytes": 678392,
+      "sha256": "b072ff8584699576274b649d126756f047d2a940fde4810a4aba304bbf764f28",
+      "archive_created_marker": "Created on 09/05/2026 at 00:26:48 PDT.",
+      "parse_insert_fts_ms": 89.784,
+      "member_count": 5,
+      "indexed_records": 3763,
+      "indexed_members": 1,
+      "largest_field_chars": 148743
+    },
+    {
+      "file": "genes.zip",
+      "compressed_bytes": 2905541,
+      "sha256": "ac6ab0512f56fce47812a41adf47f43b551cb226df7b6ed0ca96d4ad2c566bcd",
+      "archive_created_marker": "Created on 09/05/2026 at 00:37:03 PDT.",
+      "parse_insert_fts_ms": 488.146,
+      "member_count": 5,
+      "indexed_records": 25041,
+      "indexed_members": 1,
+      "largest_field_chars": 1808
+    },
+    {
+      "file": "guidelineAnnotations.json.zip",
+      "compressed_bytes": 861200,
+      "sha256": "2e9ca588735a07917f11a330b04081946f751b2cf446e568fd19d77c36c88ecd",
+      "archive_created_marker": "Created on 08/05/2026 at 01:11:58 PDT.",
+      "parse_insert_fts_ms": 49.472,
+      "member_count": 222,
+      "indexed_records": 219,
+      "indexed_members": 219,
+      "largest_field_chars": 0
+    },
+    {
+      "file": "occurrences.zip",
+      "compressed_bytes": 2904200,
+      "sha256": "f07c1083abde47665d5c204fec09bb882a32f4d646833303b7fbc29b00dd4ce8",
+      "archive_created_marker": "Created on 08/05/2026 at 00:38:37 PDT.",
+      "parse_insert_fts_ms": 1090.357,
+      "member_count": 4,
+      "indexed_records": 146520,
+      "indexed_members": 1,
+      "largest_field_chars": 614
+    },
+    {
+      "file": "pathways-biopax.zip",
+      "compressed_bytes": 634025,
+      "sha256": "915e1710c0719e1788abf67d6381211fcf56ddbdacbd8c9279b1fdafdf8e7480",
+      "archive_created_marker": "Created on 08/05/2026 at 01:10:22 PDT.",
+      "parse_insert_fts_ms": 0.642,
+      "member_count": 145,
+      "indexed_records": 0,
+      "indexed_members": 0,
+      "largest_field_chars": 0
+    },
+    {
+      "file": "pathways-tsv.zip",
+      "compressed_bytes": 204070,
+      "sha256": "db9ee19fdf1c68d68b44e3d62928dd334f80d8e84c6c6384d13f89d77a4f9acb",
+      "archive_created_marker": "Created on 08/05/2026 at 01:10:22 PDT.",
+      "parse_insert_fts_ms": 34.256,
+      "member_count": 286,
+      "indexed_records": 3212,
+      "indexed_members": 280,
+      "largest_field_chars": 393
+    },
+    {
+      "file": "pathways.json.zip",
+      "compressed_bytes": 1929507,
+      "sha256": "95658b0089c4cd849593088e3ee183adccda43d62d57d2586723b5b73c131a63",
+      "archive_created_marker": "Created on 08/05/2026 at 01:10:22 PDT.",
+      "parse_insert_fts_ms": 316.549,
+      "member_count": 3,
+      "indexed_records": 1,
+      "indexed_members": 1,
+      "largest_field_chars": 0
+    },
+    {
+      "file": "phenotypes.zip",
+      "compressed_bytes": 187372,
+      "sha256": "b32baefac4049df54859e0709112de97014de5049fe1cea3104b2f4848db4628",
+      "archive_created_marker": "Created on 08/05/2026 at 01:10:54 PDT.",
+      "parse_insert_fts_ms": 27.539,
+      "member_count": 4,
+      "indexed_records": 1621,
+      "indexed_members": 1,
+      "largest_field_chars": 2424
+    },
+    {
+      "file": "relationships.zip",
+      "compressed_bytes": 2370578,
+      "sha256": "bf4a9503de4cde0817f1b92d2471b498f303b1f244c95388ce8e900a933a1412",
+      "archive_created_marker": "Created on 08/05/2026 at 01:11:00 PDT.",
+      "parse_insert_fts_ms": 1046.011,
+      "member_count": 4,
+      "indexed_records": 127786,
+      "indexed_members": 1,
+      "largest_field_chars": 3185
+    },
+    {
+      "file": "summaryAnnotations.zip",
+      "compressed_bytes": 1236737,
+      "sha256": "929ba092d22c53798fdb6cecf3cc2053e3bf478ed8efb4babb8c100cb47240e2",
+      "archive_created_marker": "Created on 08/05/2026 at 01:12:05 PDT.",
+      "parse_insert_fts_ms": 488.898,
+      "member_count": 7,
+      "indexed_records": 50899,
+      "indexed_members": 4,
+      "largest_field_chars": 1364
+    },
+    {
+      "file": "variantAnnotations.zip",
+      "compressed_bytes": 4272899,
+      "sha256": "6d2e29dbc7f108e98d94fa5931dbf338fb660c0ae2881bd73d33793c1ebde37e",
+      "archive_created_marker": "Created on 08/05/2026 at 01:12:59 PDT.",
+      "parse_insert_fts_ms": 992.784,
+      "member_count": 7,
+      "indexed_records": 65656,
+      "indexed_members": 4,
+      "largest_field_chars": 2402
+    },
+    {
+      "file": "variants.zip",
+      "compressed_bytes": 894788,
+      "sha256": "88fdbcacc3522d29e7a58ee331d7877d589bb40b37b4d47c70819fffb86bd7c2",
+      "archive_created_marker": "Created on 08/05/2026 at 01:15:07 PDT.",
+      "parse_insert_fts_ms": 160.199,
+      "member_count": 5,
+      "indexed_records": 7615,
+      "indexed_members": 1,
+      "largest_field_chars": 14168
+    }
+  ],
+  "queries": {
+    "gene_CYP2C19": {
+      "first_query_ms": 0.0851,
+      "warm_median_ms": 0.005,
+      "warm_p95_ms": 0.0062,
+      "repeats": 100,
+      "rows": 1,
+      "ids": [
+        "PA124"
+      ],
+      "payload_bytes": 1028,
+      "sample": [
+        [
+          "PA124",
+          {
+            "PharmGKB Accession Id": "PA124",
+            "NCBI Gene ID": "1557",
+            "HGNC ID": "HGNC:2621",
+            "Ensembl Id": "ENSG00000165841",
+            "Name": "cytochrome P450 family 2 subfamily C member 19",
+            "Symbol": "CYP2C19",
+            "Alternate Names": "cytochrome P450, family 2, subfamily C, polypeptide 19",
+            "Alternate Symbols": "CPCJ, CYP2C, P450IIC19",
+            "Is VIP": "Yes",
+            "Has Variant Annotation": "Yes",
+            "Cross-references": "Comparative Toxicogenomics Database:1557, Ensembl:ENSG00000165841, GenAtlas:CYP2C19, GeneCard:CYP2C19, HGNC:HGNC:2621, HumanCyc Gene:HS09293, ModBase:P33261, NCBI Gene:1557, OMIM:124020, OMIM:609535, PharmVar Gene:CYP2C19, RefSeq DNA:NG_008384, RefSeq DNA:NT_030059, RefSeq Protein:NP_000760, RefSeq RNA:NM_000769, UCSC Genome Browser:NM_000769, UniProtKB:P33261, URL:http://www.imm.ki.se/CYPalleles/cyp2c19.htm",
+            "Has CPIC Dosing Guideline": "Yes",
+            "Chromosome": "chr10",
+            "Chromosomal Start - GRCh37": "96522463",
+            "Chromosomal Stop - GRCh37": "96612671",
+            "Chromosomal Start - GRCh38": "94762681",
+            "Chromosomal Stop - GRCh38": "94853205"
+          }
+        ]
+      ],
+      "sql": "SELECT identity,payload FROM records WHERE dataset=? AND member=? AND label=?",
+      "parameters": [
+        "genes.zip",
+        "genes.tsv",
+        "CYP2C19"
+      ]
+    },
+    "chemical_clopidogrel": {
+      "first_query_ms": 0.0129,
+      "warm_median_ms": 0.0056,
+      "warm_p95_ms": 0.0089,
+      "repeats": 100,
+      "rows": 1,
+      "ids": [
+        "PA449053"
+      ],
+      "payload_bytes": 1863,
+      "sample": [
+        [
+          "PA449053",
+          {
+            "PharmGKB Accession Id": "PA449053",
+            "Name": "clopidogrel",
+            "Generic Names": "",
+            "Trade Names": "Clopidogrel [Ban:Inn], Clopidogrel sulfate, Plavix",
+            "Brand Mixtures": "",
+            "Type": "Prodrug",
+            "Cross-references": "ChEBI:CHEBI:37941, ChemSpider:54632, ClinicalTrials.gov:NCT00413608, ClinicalTrials.gov:NCT00799396, ClinicalTrials.gov:NCT01039480, ClinicalTrials.gov:NCT01097343, ClinicalTrials.gov:NCT01184300, ClinicalTrials.gov:NCT01341600, ClinicalTrials.gov:NCT01452139, ClinicalTrials.gov:NCT01452152, ClinicalTrials.gov:NCT01495845, ClinicalTrials.gov:NCT01503658, ClinicalTrials.gov:NCT01611545, ClinicalTrials.gov:NCT01815008, ClinicalTrials.gov:NCT01968499, ClinicalTrials.gov:NCT01990989, DrugBank:DB00758, KEGG Drug:D00769, NDC:63653-1171-6, PubChem Compound:60606, PubChem Substance:196885, PubChem Substance:46507295, URL:http://en.wikipedia.org/wiki/Clopidogrel",
+            "SMILES": "COC(=O)[C@H](C1=CC=CC=C1Cl)N2CCC3=C(C2)C=CS3",
+            "InChI": "InChI=1S/C16H16ClNO2S/c1-20-16(19)15(12-4-2-3-5-13(12)17)18-8-6-14-11(10-18)7-9-21-14/h2-5,7,9,15H,6,8,10H2,1H3/t15-/m0/s1",
+            "Dosing Guideline": "Yes",
+            "External Vocabulary": "ATC:B01AC04, MeSH:D000077144, NDF-RT:N0000022101, RxNorm:32968, UMLS:C0070166",
+            "Clinical Annotation Count": "51",
+            "Variant Annotation Count": "948",
+            "Pathway Count": "2",
+            "VIP Count": "n/a",
+            "Dosing Guideline Sources": "AHA, CPIC, DPWG, RNPGx",
+            "Top Clinical Annotation Level": "1A",
+            "Top FDA Label Testing Level": "Actionable PGx",
+            "Top Any Drug Label Testing Level": "Actionable PGx",
+            "Label Has Dosing Info": "Label Has Dosing Info",
+            "RxNorm Identifiers": "32968",
+            "ATC Identifiers": "B01AC04",
+            "PubChem Compound Identifiers": "60606",
+            "Top CPIC Pairs Level": "A",
+            "FDA Label has Prescribing Info": "Yes",
+            "In FDA PGx Association Sections": "Pharmacogenetic Associations for which the Data Support Therapeutic Management Recommendations"
+          }
+        ]
+      ],
+      "sql": "SELECT identity,payload FROM records WHERE dataset=? AND member=? AND label=?",
+      "parameters": [
+        "chemicals.zip",
+        "chemicals.tsv",
+        "clopidogrel"
+      ]
+    },
+    "variant_rs4244285": {
+      "first_query_ms": 0.0133,
+      "warm_median_ms": 0.0042,
+      "warm_p95_ms": 0.0047,
+      "repeats": 100,
+      "rows": 1,
+      "ids": [
+        "PA166154053"
+      ],
+      "payload_bytes": 762,
+      "sample": [
+        [
+          "PA166154053",
+          {
+            "Variant ID": "PA166154053",
+            "Variant Name": "rs4244285",
+            "Gene IDs": "PA124",
+            "Gene Symbols": "CYP2C19",
+            "Location": "NC_000010.11:94781859",
+            "Variant Annotation count": "889",
+            "Clinical Annotation count": "55",
+            "Level 1/2 Clinical Annotation count": "48",
+            "Guideline Annotation count": "0",
+            "Label Annotation count": "0",
+            "Synonyms": "17879456, NC_000010.10:g.96541616=, NP_000760.1:p.Pro227=, NM_000769.2:c.681G>A, CYP2C19*2, rs116940633, NC_000010.11:g.94781859=, NG_008384.3:g.24179=, NG_008384.2:g.24154G>A, 116940633, NC_000010.10:g.96541616G>C, rs17879456, rs60361278, NC_000010.11:g.94781859G>A, NG_008384.3:g.24179G>A, 4244285, NC_000010.11:g.94781859G>C, NG_008384.3:g.24179G>C, rs4244285, NC_000010.10:g.96541616G>A, NM_000769.1:c.681G>A, 60361278"
+          }
+        ]
+      ],
+      "sql": "SELECT identity,payload FROM records WHERE dataset=? AND member=? AND label=?",
+      "parameters": [
+        "variants.zip",
+        "variants.tsv",
+        "rs4244285"
+      ]
+    },
+    "summary_CYP2C19_clopidogrel": {
+      "first_query_ms": 2.9624,
+      "warm_median_ms": 2.6613,
+      "warm_p95_ms": 2.7669,
+      "repeats": 100,
+      "rows": 6,
+      "ids": [
+        "655386913",
+        "1043858794",
+        "1449169546",
+        "1451282340",
+        "1184753976",
+        "1451282440"
+      ],
+      "payload_bytes": 3220,
+      "sample": [
+        [
+          "655386913",
+          {
+            "Summary Annotation ID": "655386913",
+            "Variant/Haplotypes": "CYP2C19*1, CYP2C19*17",
+            "Gene": "CYP2C19",
+            "Level of Evidence": "3",
+            "Level Override": "",
+            "Level Modifiers": "Tier 1 VIP",
+            "Score": "6.0",
+            "Phenotype Category": "Toxicity",
+            "PMID Count": "15",
+            "Evidence Count": "16",
+            "Drug(s)": "clopidogrel",
+            "Phenotype(s)": "Acute coronary syndrome;Coronary Artery Disease;Hemorrhage;Myocardial Infarction",
+            "Latest History Date (YYYY-MM-DD)": "2021-03-24",
+            "URL": "https://www.clinpgx.org/clinicalAnnotation/655386913",
+            "Specialty Population": ""
+          }
+        ]
+      ],
+      "sql": "SELECT identity,payload FROM records WHERE dataset='summaryAnnotations.zip' AND member='summary_annotations.tsv' AND instr(';'||json_extract(payload,'$.Gene')||';',';CYP2C19;')>0 AND instr(';'||json_extract(payload,'$.\"Drug(s)\"')||';',';clopidogrel;')>0",
+      "parameters": []
+    },
+    "fts_CYP2C19_clopidogrel": {
+      "first_query_ms": 0.522,
+      "warm_median_ms": 0.2395,
+      "warm_p95_ms": 0.2656,
+      "repeats": 100,
+      "rows": 20,
+      "ids": [
+        "74",
+        "92",
+        "240",
+        "2883",
+        "3941",
+        "4152",
+        "97",
+        "145",
+        "495",
+        "623",
+        "665",
+        "69",
+        "PA166104962",
+        "PA166104943",
+        "PA166104960",
+        "PA166202501",
+        "PA166104995",
+        "PA166104948",
+        "PA166342701",
+        "PA166104978"
+      ],
+      "payload_bytes": 132035,
+      "sample": [
+        [
+          "74",
+          {
+            "variant": "CYP2C19*1, CYP2C19*2, CYP2C19*3, CYP2C19*17",
+            "gene": "CYP2C19",
+            "type": "Efficacy",
+            "level of evidence": "1A",
+            "chemicals": "clopidogrel",
+            "phenotypes": "Cardiovascular Disease"
+          }
+        ]
+      ],
+      "sql": "SELECT r.identity,r.payload FROM search JOIN records r ON r.rowid=search.rowid WHERE search MATCH ? LIMIT 20",
+      "parameters": [
+        "\"CYP2C19\" AND \"clopidogrel\""
+      ]
+    },
+    "relationships_CYP2C19_clopidogrel": {
+      "first_query_ms": 54.3844,
+      "warm_median_ms": 53.4137,
+      "warm_p95_ms": 55.4015,
+      "repeats": 100,
+      "rows": 1,
+      "ids": [
+        "PA124"
+      ],
+      "payload_bytes": 2633,
+      "sample": [
+        [
+          "PA124",
+          {
+            "Entity1_id": "PA124",
+            "Entity1_name": "CYP2C19",
+            "Entity1_type": "Gene",
+            "Entity2_id": "PA449053",
+            "Entity2_name": "clopidogrel",
+            "Entity2_type": "Chemical",
+            "Evidence": "GuidelineAnnotation,LabelAnnotation,Literature,MultilinkAnnotation,Pathway,SummaryAnnotation,VariantAnnotation",
+            "Association": "ambiguous",
+            "PK": "",
+            "PD": "PD",
+            "PMIDs": "12345678;16772608;17697139;17900275;18004210;18323861;18346178;18394438;18482659;18532997;18577829;18781853;19106083;19106084;19108880;19193675;19268736;19429918;19463375;19496924;19531897;19576320;19624462;19706858;19926050;19934793;20083681;20351750;20492469;20510210;20620727;20650435;20708365;20724801;20801494;20801498;20826260;20833683;20845077;20877456;20924183;20938371;20965456;20978260;20979470;21075428;21099121;21163112;21168310;21178986;21262992;21345843;21352268;21358751;21392617;21426546;21474982;21511217;21527445;21628721;21689142;21700758;21716271;21716274;21786436;21806387;21831410;21881565;21918510;21972404;22007612;22028352;22045970;22088980;22123356;22190063;22228204;22265638;22285300;22374717;22390861;22427735;22428615;22462746;22552318;22624833;22704413;22723959;22940005;22955794;22974728;22990067;23001453;23150151;23364775;23402725;23428009;23429358;23470885;23517020;23556336;23640828;23692149;23698643;23726091;23809542;23895809;23922007;23993903;24019397;24019752;24080325;24088578;24140730;24214141;24262617;24336898;24353446;24402637;24418943;24440142;24504666;24508947;24535487;24576527;24581091;24608794;24624918;24632932;24710841;24762860;24781308;24782221;24821368;24856643;24945780;24951432;24996381;25001882;25008027;25060201;25115434;25175362;25258374;25329996;25529343;25542807;25712182;25730082;25828136;25832119;25850030;25851472;25860557;25877345;25891840;25897911;25916518;25937796;26019129;26071277;26151596;26265231;26311225;26362473;26369612;26426352;26445541;26524713;26526111;26556524;26573281;26587656;26757134;26790469;26873108;26961113;27023676;27233747;27348249;27368038;27380588;27450232;27464309;27653892;27767438;27806998;27981573;28135763;28255319;28329746;28377187;28589365;28604225;28653333;28806186;28914344;29102571;29260275;29397568;29520080;29536505;29540324;29653637;29723426;30020015;30061570;30188374;30191759;30487649;30652301;31316169;32077582;32158254;32472697;32897581;33722066;34158603;34954768;35042400;35389962;36215918;36278153;36581799;36818341;36829258;36890711;36891827;37045504;37202608;37551775;37597219;37607302;37808344;37810546;38179710;38285330;38761068;38845014;38874073;38877696;39009080;39148087;39240730;39300676;39327966;39436079;39723111;40055373;40184070;40295977;40917024;40964718;41028360"
+          }
+        ]
+      ],
+      "sql": "SELECT identity,payload FROM records WHERE dataset='relationships.zip' AND json_extract(payload,'$.Entity1_id')='PA124' AND json_extract(payload,'$.Entity2_id')='PA449053'",
+      "parameters": []
+    }
+  },
+  "secondary_index_ms": 260.366,
+  "total_build_ms": 5200.844,
+  "db_bytes": 347369472,
+  "indexed_records": 444508
+}

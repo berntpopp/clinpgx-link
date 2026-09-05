@@ -1,0 +1,27 @@
+{
+  "measurement_date": "2026-09-05",
+  "measurement_start": null,
+  "measurement_end": null,
+  "timestamp_note": "Exact measurement start and end instants were not recorded. They are unknown and must not be inferred from server Date headers.",
+  "research_timezone": "Europe/Berlin",
+  "client_location": "not recorded",
+  "host": {
+    "os": "Ubuntu 26.04.1 LTS",
+    "kernel": "Linux 7.0.0-30-generic",
+    "architecture": "x86_64"
+  },
+  "client": {
+    "curl": "8.18.0",
+    "libcurl": "8.18.0",
+    "openssl": "3.6.2",
+    "nghttp2": "1.67.0"
+  },
+  "protocols": {
+    "new_connection": "One fresh curl process per request; 0.6 second sleep after each completed request.",
+    "persistent_http2": "One curl process and reusable HTTP/2 connection; request starts limited by --rate 1/s.",
+    "redirect_download": "One fresh curl process with --location per archive; API HTTP 303 followed to s3.pgkb.org; 0.6 second sleep after each completed request."
+  },
+  "published_rate_limit": "2 requests per second",
+  "raw_results": "clinpgx-network-timings.tsv",
+  "reproduction_script": "probe-clinpgx-network.sh"
+}

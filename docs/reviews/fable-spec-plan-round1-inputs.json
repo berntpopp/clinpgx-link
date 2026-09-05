@@ -1,0 +1,25 @@
+{
+  "review_date": "2026-09-05",
+  "requested_model": "fable",
+  "availability_probe_model": "claude-fable-5-1",
+  "review_kind": "adversarial_spec_and_plan",
+  "status": "failed_before_review",
+  "error": {
+    "api_error_status": 429,
+    "terminal_reason": "api_error",
+    "message": "You've hit your monthly spend limit · raise it at claude.ai/settings/usage?from=cc_cli_limit_message · your session limit resets 2pm (Europe/Berlin)",
+    "duration_api_ms": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "review_completed": false
+  },
+  "exec_session_id": 15839,
+  "permissions": "Read,Glob,Grep; no external MCPs; no writes",
+  "inputs": {
+    "docs/superpowers/specs/2026-09-05-clinpgx-link-design.md": "dfa319d78048ed717704acdd898955824db04e4e16c6b27b284bdf3fd51582d9",
+    "docs/superpowers/plans/2026-09-05-clinpgx-link.md": "02d47f00fde38198548085cdb50ebea06faa7405f23d3911997407cbfd4e510b",
+    "docs/research/api-vs-download-decision.md": "ceb38ed765407adad200c0cc4c352361fa5322b50beecd35a833c3eded3ee499",
+    "docs/research/clinpgx-sources.md": "33cef61a649fe2b1f4ae42b3b70a348066d0b1e9d539d8253a796d4578ac168e",
+    "docs/research/fleet.md": "909bfad93bcfb8d70feeb674e58fbd6b137939bbfb139652956702fa15322ac4"
+  }
+}
