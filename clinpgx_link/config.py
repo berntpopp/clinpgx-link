@@ -67,6 +67,8 @@ class Settings(BaseSettings):
     """Application settings loaded from ``CLINPGX_`` environment variables."""
 
     api_base_url: str = "https://api.clinpgx.org/v1"
+    cpic_api_base_url: str = "https://api.cpicpgx.org/v1"
+    cpic_allowed_origins: OriginTuple = ("https://api.cpicpgx.org",)
     api_allowed_origins: OriginTuple = (_DEFAULT_API_ORIGIN,)
     download_allowed_origins: OriginTuple = (_DEFAULT_API_ORIGIN, _DEFAULT_DOWNLOAD_ORIGIN)
     website_allowed_origins: OriginTuple = (_DEFAULT_API_ORIGIN,)
@@ -118,6 +120,7 @@ class Settings(BaseSettings):
 
     @field_validator(
         "api_allowed_origins",
+        "cpic_allowed_origins",
         "download_allowed_origins",
         "website_allowed_origins",
         "attachment_allowed_origins",
@@ -143,6 +146,7 @@ class Settings(BaseSettings):
 
     @field_validator(
         "api_allowed_origins",
+        "cpic_allowed_origins",
         "download_allowed_origins",
         "website_allowed_origins",
         "attachment_allowed_origins",
@@ -180,7 +184,7 @@ class Settings(BaseSettings):
             raise ValueError("runtime path must be lexically normalized")
         return Path(raw)
 
-    @field_validator("api_base_url")
+    @field_validator("api_base_url", "cpic_api_base_url")
     @classmethod
     def _validate_api_base_url(cls, value: str) -> str:
         parsed = urlsplit(value)
@@ -209,6 +213,9 @@ class Settings(BaseSettings):
         api_origin = f"https://{urlsplit(self.api_base_url).hostname}"
         if api_origin not in self.api_allowed_origins:
             raise ValueError("API base origin must be present in api_allowed_origins")
+        cpic_origin = f"https://{urlsplit(self.cpic_api_base_url).hostname}"
+        if cpic_origin not in self.cpic_allowed_origins:
+            raise ValueError("CPIC base origin must be present in cpic_allowed_origins")
         if self.request_deadline_seconds < self.request_timeout_seconds:
             raise ValueError("request deadline must be at least the per-request timeout")
         if self.max_archive_member_bytes > self.max_expanded_archive_bytes:
