@@ -183,7 +183,7 @@ async def test_required_dataset_tool_examples_match_their_schemas(tmp_path):
         async with Client(create_mcp(content_store=store)) as client:
             tools = {tool.name: tool for tool in await client.list_tools()}
         for tool_name in ("get_dataset", "search_dataset", "get_dataset_record"):
-            schema = tools[tool_name].inputSchema
+            schema = tools[tool_name].input_schema
             for field in schema["required"]:
                 examples = schema["properties"][field].get("examples")
                 assert examples, f"{tool_name}.{field} has no example"

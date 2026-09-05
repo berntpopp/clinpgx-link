@@ -72,7 +72,8 @@ async def test_worker_keeps_slot_after_cancellation_or_deadline(deadline):
                 assert result.structured_content["subtype"] == "execution_deadline"
                 assert result.structured_content["error_code"] == "upstream_unavailable"
             else:
-                await client.cancel(client.session._request_id - 1)
+                # MCP SDK 2 sends notifications/cancelled when the request task
+                # is abandoned, without exposing its internal request counter.
                 task.cancel()
                 with pytest.raises(asyncio.CancelledError):
                     await task

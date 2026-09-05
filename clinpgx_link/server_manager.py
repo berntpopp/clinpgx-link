@@ -15,7 +15,8 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from mcp.shared.version import SUPPORTED_PROTOCOL_VERSIONS
+from fastmcp.telemetry import suppress_fastmcp_telemetry
+from mcp.types.version import SUPPORTED_PROTOCOL_VERSIONS
 from starlette.datastructures import Headers
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
@@ -43,6 +44,8 @@ _MCP_CORS_HEADERS = [
     "accept",
     "content-type",
     "last-event-id",
+    "mcp-method",
+    "mcp-name",
     "mcp-protocol-version",
     "mcp-session-id",
     "x-request-id",
@@ -374,7 +377,8 @@ def create_app(runtime_settings: Settings | None = None) -> FastAPI:
                 scope, receive, send
             )
             return
-        await serve_with_disconnect(mcp_app, scope, receive, send)
+        with suppress_fastmcp_telemetry():
+            await serve_with_disconnect(mcp_app, scope, receive, send)
 
     app.add_middleware(
         CORSMiddleware,

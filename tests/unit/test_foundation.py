@@ -294,10 +294,11 @@ def test_stdlib_dependency_logs_never_render_request_or_exception_payloads() -> 
             transport=httpx.MockTransport(lambda _request: httpx.Response(200, json={}))
         ) as client:
             client.get("https://api.clinpgx.org/v1/data/gene", params={"symbol": sentinel})
-        try:
-            raise RuntimeError(sentinel)
-        except RuntimeError:
-            logging.getLogger("fastmcp.server").exception("unsafe dependency message %s", sentinel)
+        for logger_name in ("fastmcp.server", "httpx2", "httpcore2.connection"):
+            try:
+                raise RuntimeError(sentinel)
+            except RuntimeError:
+                logging.getLogger(logger_name).exception("unsafe dependency message %s", sentinel)
     finally:
         logging.getLogger().removeHandler(capture)
 

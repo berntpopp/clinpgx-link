@@ -6,7 +6,7 @@
 
 **Architecture:** Retain the existing repository, source adapters and MCP tools. Shared code-owned contracts govern discovery and recovery; selection precedes shaping; timing and admission live at the MCP boundary. Keep exact retained source bytes independently reachable.
 
-**Tech Stack:** Python 3.12+, uv, SQLite, FastMCP 3.x, MCP SDK 1.x, pytest, Ruff, strict mypy.
+**Tech Stack:** Python 3.12+, uv, SQLite, FastMCP 4.x, MCP SDK 2.x, pytest, Ruff, strict mypy. The 4.x/2.x stack is a 2026-09-06 user-directed amendment; other plan gates are unchanged.
 
 **Spec:** `docs/superpowers/specs/2026-09-05-mcp-ux-remediation-design.md`; the original source-access contract remains binding.
 

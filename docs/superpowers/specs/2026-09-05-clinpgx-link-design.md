@@ -51,12 +51,16 @@ without an index return actionable availability errors.
 ## Stack and layout
 
 - Python 3.12+, `uv`, frozen `uv.lock`, Hatchling packaging.
-- FastAPI, FastMCP 3.x, MCP SDK 1.x, Pydantic 2, pydantic-settings, httpx.
+- FastAPI, FastMCP 4.x, MCP SDK 2.x, Pydantic 2, pydantic-settings, httpx.
 - Typer/Rich CLI, structlog, asgi-correlation-id, SQLite/FTS5.
 - Ruff (including security rules), strict mypy, pytest/pytest-asyncio/respx.
 - Package `clinpgx_link/`, single entrypoint `clinpgx-link = clinpgx_link.cli:app`.
 - Modules remain below 600 nonblank/noncomment lines; separate domain and MCP planes.
 - HTTP only: unified FastAPI and MCP by default; REST-only mode for fleet parity.
+
+The FastMCP 4.x/MCP SDK 2.x stack supersedes the original 3.x/1.x stack
+assumption by explicit user direction on 2026-09-06; all other contracts remain
+unchanged.
 
 ## Upstream client and operation registry
 

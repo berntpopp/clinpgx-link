@@ -6,7 +6,7 @@
 
 **Architecture:** Download-backed SQLite discovery and search, plus explicit cached live API/website adapters for current details and export gaps. Separate domain services, MCP envelopes, source acquisition, and immutable data release operations.
 
-**Tech Stack:** Python 3.12+, uv/Hatchling, FastAPI, FastMCP 3.x, MCP SDK 1.x, Pydantic 2, httpx, SQLite/FTS5, Typer/Rich, structlog, asgi-correlation-id, zstandard, pytest, Ruff, strict mypy.
+**Tech Stack:** Python 3.12+, uv/Hatchling, FastAPI, FastMCP 4.x, MCP SDK 2.x, Pydantic 2, httpx, SQLite/FTS5, Typer/Rich, structlog, asgi-correlation-id, zstandard, pytest, Ruff, strict mypy. The 4.x/2.x stack is a 2026-09-06 user-directed amendment; other plan gates are unchanged.
 
 **Spec:** `docs/superpowers/specs/2026-09-05-clinpgx-link-design.md`.
 

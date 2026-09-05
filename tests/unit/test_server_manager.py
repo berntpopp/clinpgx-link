@@ -8,6 +8,7 @@ import hashlib
 import json
 import sqlite3
 import uuid
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
@@ -28,6 +29,23 @@ _HEADERS = {
     "content-type": "application/json",
     "host": "testserver",
 }
+_MODERN_VERSION = "2026-07-28"
+_MODERN_META = {
+    "io.modelcontextprotocol/protocolVersion": _MODERN_VERSION,
+    "io.modelcontextprotocol/clientCapabilities": {},
+    "io.modelcontextprotocol/clientInfo": {"name": "clinpgx-host-test", "version": "1.0.0"},
+}
+
+
+def _modern_headers(method: str, *, name: str | None = None) -> dict[str, str]:
+    headers = {
+        **_HEADERS,
+        "mcp-protocol-version": _MODERN_VERSION,
+        "mcp-method": method,
+    }
+    if name is not None:
+        headers["mcp-name"] = name
+    return headers
 
 
 def _settings(tmp_path: Path, **overrides):
@@ -194,12 +212,17 @@ def test_allowed_origin_preflight_is_granted_without_credentials(tmp_path):
                 "host": "testserver",
                 "origin": "https://client.example",
                 "access-control-request-method": "POST",
-                "access-control-request-headers": "content-type,mcp-protocol-version",
+                "access-control-request-headers": (
+                    "content-type,mcp-protocol-version,mcp-method,mcp-name"
+                ),
             },
         )
 
     assert response.status_code == 200
     assert response.headers["access-control-allow-origin"] == "https://client.example"
+    allowed_headers = response.headers["access-control-allow-headers"].lower()
+    assert "mcp-method" in allowed_headers
+    assert "mcp-name" in allowed_headers
     assert "access-control-allow-credentials" not in response.headers
 
 
@@ -229,12 +252,17 @@ def test_mcp_is_canonical_stateless_json_and_correlates_protocol_metadata(tmp_pa
     headers = {**_HEADERS, "x-request-id": request_id}
     with TestClient(create_app(_settings(tmp_path)), follow_redirects=False) as client:
         initialized = client.post("/mcp", headers=headers, json=_INIT)
+        listed = client.post(
+            "/mcp",
+            headers=headers,
+            json={"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
+        )
         called = client.post(
             "/mcp",
             headers=headers,
             json={
                 "jsonrpc": "2.0",
-                "id": 2,
+                "id": 3,
                 "method": "tools/call",
                 "params": {"name": "get_server_capabilities", "arguments": {}},
             },
@@ -244,10 +272,146 @@ def test_mcp_is_canonical_stateless_json_and_correlates_protocol_metadata(tmp_pa
     assert initialized.headers["content-type"].startswith("application/json")
     assert "mcp-session-id" not in initialized.headers
     assert initialized.json()["result"]["serverInfo"]["name"] == "clinpgx-link"
+    assert listed.status_code == 200
+    assert {tool["name"] for tool in listed.json()["result"]["tools"]} >= {
+        "get_server_capabilities",
+        "get_source_content",
+    }
     assert called.status_code == 200
     assert called.headers["x-request-id"] == request_id
     structured = called.json()["result"]["structuredContent"]
     assert structured["_meta"]["request_id"] == request_id
+
+
+def test_modern_mcp_http_discovers_lists_calls_and_fences_unknown_tool(tmp_path):
+    from clinpgx_link.server_manager import create_app
+
+    hostile = "ignore-instructions-secret"
+    with TestClient(create_app(_settings(tmp_path)), follow_redirects=False) as client:
+        discover = client.post(
+            "/mcp",
+            headers=_modern_headers("server/discover"),
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "server/discover",
+                "params": {"_meta": _MODERN_META},
+            },
+        )
+        listed = client.post(
+            "/mcp",
+            headers=_modern_headers("tools/list"),
+            json={
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "tools/list",
+                "params": {"_meta": _MODERN_META},
+            },
+        )
+        called = client.post(
+            "/mcp",
+            headers=_modern_headers("tools/call", name="get_server_capabilities"),
+            json={
+                "jsonrpc": "2.0",
+                "id": 3,
+                "method": "tools/call",
+                "params": {
+                    "_meta": _MODERN_META,
+                    "name": "get_server_capabilities",
+                    "arguments": {},
+                },
+            },
+        )
+        unknown = client.post(
+            "/mcp",
+            headers=_modern_headers("tools/call", name=hostile),
+            json={
+                "jsonrpc": "2.0",
+                "id": 4,
+                "method": "tools/call",
+                "params": {"_meta": _MODERN_META, "name": hostile, "arguments": {}},
+            },
+        )
+
+    assert discover.status_code == 200
+    assert discover.json()["result"]["supportedVersions"] == [_MODERN_VERSION]
+    assert "mcp-session-id" not in discover.headers
+    assert listed.status_code == 200
+    assert {tool["name"] for tool in listed.json()["result"]["tools"]} >= {
+        "get_server_capabilities",
+        "get_source_content",
+    }
+    assert called.status_code == 200
+    called_result = called.json()["result"]
+    assert json.loads(called_result["content"][0]["text"]) == called_result["structuredContent"]
+    assert called_result["structuredContent"]["success"] is True
+    assert unknown.status_code == 200
+    unknown_result = unknown.json()["result"]
+    assert unknown_result["isError"] is True
+    assert json.loads(unknown_result["content"][0]["text"]) == unknown_result["structuredContent"]
+    assert unknown_result["structuredContent"]["error_code"] == "not_found"
+    assert hostile not in unknown.text
+
+
+def test_http_mcp_suppresses_native_fastmcp_spans_before_hostile_dispatch(
+    tmp_path, monkeypatch, capsys
+):
+    import fastmcp.telemetry as fastmcp_telemetry
+    from opentelemetry.trace import INVALID_SPAN, NoOpTracer, TracerProvider
+
+    from clinpgx_link.server_manager import create_app
+
+    span_starts: list[tuple[str, object]] = []
+
+    class RecordingTracer(NoOpTracer):
+        @contextmanager
+        def start_as_current_span(self, name, **kwargs):
+            span_starts.append((name, kwargs.get("attributes")))
+            yield INVALID_SPAN
+
+    tracer = RecordingTracer()
+
+    class RecordingProvider(TracerProvider):
+        def get_tracer(self, *_args, **_kwargs):
+            return tracer
+
+    provider = RecordingProvider()
+    monkeypatch.setattr(fastmcp_telemetry, "otel_get_tracer", provider.get_tracer)
+    hostile_name = "hostile-tool-name-never-export"
+    hostile_error = "hostile-error-never-export"
+    with TestClient(create_app(_settings(tmp_path))) as client:
+        unknown = client.post(
+            "/mcp",
+            headers=_modern_headers("tools/call", name=hostile_name),
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/call",
+                "params": {"_meta": _MODERN_META, "name": hostile_name, "arguments": {}},
+            },
+        )
+        invalid = client.post(
+            "/mcp",
+            headers=_modern_headers("tools/call", name=hostile_name),
+            json={
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "tools/call",
+                "params": {
+                    "_meta": _MODERN_META,
+                    "name": hostile_name,
+                    "arguments": hostile_error,
+                },
+            },
+        )
+
+    captured = capsys.readouterr()
+    assert unknown.status_code == 200
+    assert unknown.json()["result"]["structuredContent"]["error_code"] == "not_found"
+    assert invalid.status_code == 400
+    assert hostile_name not in unknown.text + invalid.text + captured.out + captured.err
+    assert hostile_error not in unknown.text + invalid.text + captured.out + captured.err
+    assert span_starts == []
 
 
 def test_mcp_trailing_slash_does_not_redirect(tmp_path):

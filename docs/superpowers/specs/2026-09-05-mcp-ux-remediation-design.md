@@ -36,8 +36,9 @@ Alternatives considered:
 
 ## Global invariants
 
-- Python 3.12+, locked uv dependencies, FastMCP 3.x, MCP SDK 1.x; no dependency
-  upgrade is required by this design.
+- Python 3.12+, locked uv dependencies, FastMCP 4.x, MCP SDK 2.x. This
+  user-directed 2026-09-06 stack amendment supersedes the original no-upgrade
+  assumption without changing the remaining design contracts.
 - Preserve read-only research scope; no patient-specific inference or treatment.
 - Preserve the six public error codes and exact TextContent/structuredContent
   mirroring, including errors. Output schemas remain optional.
