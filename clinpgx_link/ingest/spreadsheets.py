@@ -153,6 +153,28 @@ def _range_bounds(reference: str, *, context: str) -> tuple[int, int, int, int]:
 _WORKSHEET_TAG = re.compile(
     rb"<(?:[A-Za-z_][A-Za-z0-9_.-]*:)?(dimension|row|c|mergeCell)\b([^<>]*)/?>"
 )
+_XML_DECLARATION = re.compile(r"^\s*<\?xml\b([^?]*)\?>", re.IGNORECASE)
+_XML_ENCODING = re.compile(r"(?:^|\s)encoding\s*=\s*(['\"])(.*?)\1", re.IGNORECASE)
+
+
+def _canonical_xml_bytes(raw: bytes) -> bytes:
+    """Admit only UTF-8 XML so byte-level safety scans cannot be encoding-obscured."""
+    if b"\x00" in raw:
+        raise DataValidationError("Spreadsheet XML uses an unsupported encoding")
+    try:
+        text = raw.decode("utf-8-sig")
+    except UnicodeDecodeError as exc:
+        raise DataValidationError("Spreadsheet XML uses an unsupported encoding") from exc
+    declaration = _XML_DECLARATION.match(text)
+    if declaration is not None:
+        encoding = _XML_ENCODING.search(declaration.group(1))
+        if encoding is not None and encoding.group(2).casefold() not in {"utf-8", "utf8"}:
+            raise DataValidationError("Spreadsheet XML uses an unsupported encoding")
+    canonical = text.encode("utf-8")
+    upper = canonical.upper()
+    if b"<!DOCTYPE" in upper or b"<!ENTITY" in upper:
+        raise DataValidationError("Spreadsheet XML contains a forbidden declaration")
+    return canonical
 
 
 def _xml_attribute(attributes: bytes, name: bytes) -> str:
@@ -267,10 +289,7 @@ def _xml_parts(package: zipfile.ZipFile, limits: SpreadsheetLimits) -> Iterator[
                 raise DataValidationError(
                     "Spreadsheet XML part exceeds its byte limit", subtype="resource_limit"
                 )
-            body = _read_part(package, info)
-            upper = body.upper()
-            if b"<!DOCTYPE" in upper or b"<!ENTITY" in upper:
-                raise DataValidationError("Spreadsheet XML contains a forbidden declaration")
+            body = _canonical_xml_bytes(_read_part(package, info))
             if name.startswith("xl/worksheets/"):
                 sheet_count += 1
                 if sheet_count > limits.max_sheets:

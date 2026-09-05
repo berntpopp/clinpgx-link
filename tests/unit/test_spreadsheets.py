@@ -34,6 +34,11 @@ def _must_not_open(*_args, **_kwargs):
     raise AssertionError("unsafe OOXML reached openpyxl")
 
 
+def _utf16_xml(body: bytes, transform=lambda value: value) -> bytes:
+    text = transform(body.decode("utf-8"))
+    return ('<?xml version="1.0" encoding="UTF-16"?>' + text).encode("utf-16")
+
+
 def test_nested_expansion_limit_is_checked_before_openpyxl(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -97,4 +102,60 @@ def test_giant_merge_area_is_rejected_before_openpyxl(monkeypatch: pytest.Monkey
     raw = _replace_part(_workbook_bytes(), "xl/worksheets/sheet1.xml", add_merge)
     monkeypatch.setattr(spreadsheets, "load_workbook", _must_not_open)
     with pytest.raises(DataValidationError, match="merge"):
+        spreadsheets.parse_spreadsheet(io.BytesIO(raw))
+
+
+def test_utf16_worksheet_cannot_bypass_dimension_admission(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Catch alternate XML encoding hiding a grid larger than the materialization cap."""
+    from clinpgx_link.exceptions import DataValidationError
+    from clinpgx_link.ingest import spreadsheets
+
+    raw = _replace_part(
+        _workbook_bytes(), "xl/worksheets/sheet1.xml", lambda body: _utf16_xml(body)
+    )
+    monkeypatch.setattr(spreadsheets, "load_workbook", _must_not_open)
+    with pytest.raises(DataValidationError):
+        spreadsheets.parse_spreadsheet(
+            io.BytesIO(raw), limits=spreadsheets.SpreadsheetLimits.for_tests(max_cells=1)
+        )
+
+
+def test_utf16_worksheet_cannot_hide_giant_merge(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Catch alternate XML encoding hiding merged-coordinate expansion."""
+    from clinpgx_link.exceptions import DataValidationError
+    from clinpgx_link.ingest import spreadsheets
+
+    def encoded(body: bytes) -> bytes:
+        return _utf16_xml(
+            body,
+            lambda text: text.replace(
+                "</worksheet>",
+                '<mergeCells count="1"><mergeCell ref="A1:XFD1048576"/></mergeCells>'
+                "</worksheet>",
+            ),
+        )
+
+    raw = _replace_part(_workbook_bytes(), "xl/worksheets/sheet1.xml", encoded)
+    monkeypatch.setattr(spreadsheets, "load_workbook", _must_not_open)
+    with pytest.raises(DataValidationError):
+        spreadsheets.parse_spreadsheet(io.BytesIO(raw))
+
+
+def test_utf16_worksheet_cannot_hide_doctype(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Catch alternate XML encoding hiding an entity declaration from admission."""
+    from clinpgx_link.exceptions import DataValidationError
+    from clinpgx_link.ingest import spreadsheets
+
+    raw = _replace_part(
+        _workbook_bytes(),
+        "xl/worksheets/sheet1.xml",
+        lambda body: _utf16_xml(
+            body,
+            lambda text: '<!DOCTYPE worksheet [<!ENTITY x "boom">]>' + text,
+        ),
+    )
+    monkeypatch.setattr(spreadsheets, "load_workbook", _must_not_open)
+    with pytest.raises(DataValidationError):
         spreadsheets.parse_spreadsheet(io.BytesIO(raw))
