@@ -292,9 +292,7 @@ def test_stdlib_dependency_logs_never_render_request_or_exception_payloads() -> 
         try:
             raise RuntimeError(sentinel)
         except RuntimeError:
-            logging.getLogger("fastmcp.server").exception(
-                "unsafe dependency message %s", sentinel
-            )
+            logging.getLogger("fastmcp.server").exception("unsafe dependency message %s", sentinel)
     finally:
         logging.getLogger().removeHandler(capture)
 
