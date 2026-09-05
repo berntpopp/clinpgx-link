@@ -58,7 +58,8 @@ def _decode_json(raw: bytes) -> Any:
     return value
 
 
-def _select(value: Any, pointer: str) -> Any:
+def select_value(value: Any, pointer: str) -> Any:
+    """Select a bounded RFC 6901 path from an already decoded JSON value."""
     if not pointer:
         return value
     if (
@@ -250,7 +251,7 @@ def read_content(
         raise DataValidationError("Source content cannot be decoded.") from exc
     if pointer and not is_json:
         raise _invalid("pointer", "Pointers require a JSON source representation.")
-    value = _select(value, pointer)
+    value = select_value(value, pointer)
     if representation == "structure":
         descriptor = _describe(value)
         if isinstance(value, (dict, list)):

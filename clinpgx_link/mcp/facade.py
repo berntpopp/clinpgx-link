@@ -13,14 +13,17 @@ from fastmcp.tools.base import ToolResult
 from pydantic import Field
 
 from clinpgx_link import __version__
+from clinpgx_link.api.website import WebsiteClient
 from clinpgx_link.content.reader import read_content
 from clinpgx_link.content.store import ContentStore, StoredContent
 from clinpgx_link.exceptions import ClinPGxError
+from clinpgx_link.mcp.data_tools import register_data_tools
 from clinpgx_link.mcp.envelope import error_result, success_result
 from clinpgx_link.mcp.middleware import BoundaryGuard
 from clinpgx_link.mcp.schema_tools import register_schema_tool
 from clinpgx_link.mcp.untrusted_content import UntrustedText, enforce_limits, fence_text
 from clinpgx_link.models import SourceInfo
+from clinpgx_link.services.api import ApiService
 
 ResponseMode = Literal["minimal", "compact", "standard", "full"]
 _ANNOTATIONS = {
@@ -54,7 +57,12 @@ def _content_payload(payload: dict[str, Any], source: SourceInfo, reference: str
     return output
 
 
-def create_mcp(*, content_store: ContentStore) -> FastMCP:
+def create_mcp(
+    *,
+    content_store: ContentStore,
+    api_service: ApiService | None = None,
+    website_client: WebsiteClient | None = None,
+) -> FastMCP:
     """Create the MCP boundary with caller-owned source-content lifetime."""
     server = FastMCP(
         "clinpgx-link",
@@ -65,6 +73,7 @@ def create_mcp(*, content_store: ContentStore) -> FastMCP:
     )
     server.add_middleware(BoundaryGuard(server))
     register_schema_tool(server, content_store)
+    register_data_tools(server, content_store, api_service, website_client)
 
     @server.tool(annotations=_ANNOTATIONS, tags={"metadata"}, output_schema=None)
     async def get_server_capabilities(
