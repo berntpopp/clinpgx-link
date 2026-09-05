@@ -130,6 +130,7 @@ def error_result(
     *,
     content_ref: str | None = None,
     recovery: RecoveryPlan | None = None,
+    recovery_pointer: str | None = None,
 ) -> ToolResult:
     """Do not reflect exception text, foreign exception names or caller values."""
     code = error.error_code if error.error_code in _MESSAGES else "internal"
@@ -160,7 +161,20 @@ def error_result(
         except ClinPGxError:
             pass
     if content_ref and recoverable_ref:
-        arguments = {"content_ref": content_ref, "pointer": "", "representation": "base64"}
+        structure_pointer = recovery_pointer is not None and (
+            recovery_pointer == ""
+            or (
+                recovery_pointer.startswith("/")
+                and len(recovery_pointer) <= 4096
+                and recovery_pointer.count("/") <= 128
+                and re.search(r"~(?![01])", recovery_pointer) is None
+            )
+        )
+        arguments = {
+            "content_ref": content_ref,
+            "pointer": recovery_pointer if structure_pointer else "",
+            "representation": "structure" if structure_pointer else "base64",
+        }
         result["recovery_action"] = "read_original_bytes"
         result["fallback_tool"] = "get_source_content"
         result["fallback_args"] = arguments

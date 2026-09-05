@@ -499,7 +499,11 @@ def register_dataset_record_tools(
                     else:
                         raise
         except ClinPGxError as exc:
-            return error_result(exc)
+            return error_result(
+                exc,
+                content_ref=getattr(exc, "content_ref", None),
+                recovery_pointer=getattr(exc, "recovery_pointer", None),
+            )
         except Exception:
             return error_result(ClinPGxError("Dataset search failed."))
 
@@ -615,7 +619,11 @@ def register_dataset_record_tools(
                     elapsed_ms=(time.monotonic() - began) * 1000,
                 )
         except ClinPGxError as exc:
-            return error_result(exc)
+            return error_result(
+                exc,
+                content_ref=getattr(exc, "content_ref", None),
+                recovery_pointer=getattr(exc, "recovery_pointer", None),
+            )
         except Exception:
             return error_result(ClinPGxError("Dataset record retrieval failed."))
 

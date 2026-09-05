@@ -393,6 +393,7 @@ async def test_local_search_and_detail_defer_first_row_that_exceeds_wire_fence_b
                     "entity_type": "gene",
                     "filters": {"id": "PA124"},
                     "source": "download",
+                    "response_mode": "full",
                 },
             )
             search_row = search.structured_content["results"][0]
@@ -408,6 +409,7 @@ async def test_local_search_and_detail_defer_first_row_that_exceeds_wire_fence_b
                     "record_id": "PA124",
                     "source": "download",
                     "pointer": "/fields/F0",
+                    "response_mode": "full",
                 },
             )
             row = detail.structured_content["result"]
@@ -473,6 +475,92 @@ async def test_api_and_website_detail_preserve_pointer_and_source_honesty(tmp_pa
             assert unsupported.structured_content["error_code"] == "invalid_input"
             assert paths == ["/v1/data/gene/PA124", "/v1/site/gene/PA124"]
     finally:
+        await upstream.close()
+
+
+@pytest.mark.asyncio
+async def test_get_record_live_and_download_share_ordered_pointer_selection(tmp_path):
+    calls = []
+
+    def handle(request):
+        calls.append(request.url.path)
+        return httpx.Response(
+            200,
+            json={
+                "status": "success",
+                "data": {"id": "PA124", "symbol": "CYP2C19", "nullable": None},
+            },
+        )
+
+    repository, _ = _repository(tmp_path)
+    store = ContentStore(tmp_path / "content.sqlite")
+    upstream = ClinPGxClient(
+        Settings(_env_file=None, cache_root=tmp_path),
+        httpx.AsyncClient(transport=httpx.MockTransport(handle)),
+        store,
+    )
+    try:
+        async with Client(
+            _server(store, repository=repository, api=ApiService(upstream))
+        ) as client:
+            live = await client.call_tool(
+                "get_record",
+                {
+                    "entity_type": "gene",
+                    "record_id": "PA124",
+                    "pointers": ["/symbol", "/missing", "/nullable"],
+                },
+            )
+            local = await client.call_tool(
+                "get_record",
+                {
+                    "entity_type": "gene",
+                    "record_id": "PA124",
+                    "source": "download",
+                    "pointers": ["/fields/Symbol", "/fields/Name"],
+                },
+            )
+            local_container = await client.call_tool(
+                "get_record",
+                {
+                    "entity_type": "gene",
+                    "record_id": "PA124",
+                    "source": "download",
+                    "pointers": ["/fields"],
+                },
+                raise_on_error=False,
+            )
+
+        live_result = live.structured_content["result"]
+        assert [item["status"] for item in live_result["selections"]] == [
+            "value",
+            "absent",
+            "value",
+        ]
+        assert live_result["selections"][0]["original_locator"]["pointer"]["text"] == (
+            "/data/symbol"
+        )
+        assert calls == ["/v1/data/gene/PA124"]
+        local_result = local.structured_content["result"]
+        assert [item["pointer"]["text"] for item in local_result["selections"]] == [
+            "/fields/Symbol",
+            "/fields/Name",
+        ]
+        assert all(
+            item["original_locator"]["kind"] == "tabular_cell"
+            for item in local_result["selections"]
+        )
+        assert local_result["content_ref"].startswith("asset:")
+        assert local_result["normalized_record_ref"].startswith("content:")
+        assert "fields" not in local_result
+        assert local_container.is_error
+        assert local_container.structured_content["fallback_tool"] == "get_source_content"
+        assert local_container.structured_content["fallback_args"]["pointer"] == ""
+        assert local_container.structured_content["fallback_args"]["representation"] == (
+            "structure"
+        )
+    finally:
+        repository.close()
         await upstream.close()
 
 

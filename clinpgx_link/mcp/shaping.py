@@ -11,22 +11,24 @@ import hashlib
 import json
 import re
 from dataclasses import asdict
-from typing import Any
+from typing import Any, Literal
 
 from fastmcp.tools.base import ToolResult
 
 from clinpgx_link.content.store import ContentStore
-from clinpgx_link.exceptions import DataValidationError, InvalidInputError
+from clinpgx_link.exceptions import DataValidationError, InvalidInputError, ResponseTooLargeError
 from clinpgx_link.mcp.envelope import success_result
 from clinpgx_link.mcp.pagination import CursorCodec
 from clinpgx_link.mcp.untrusted_content import fence_text
 from clinpgx_link.models import SourceInfo, SourceResponse
 
+ResponseMode = Literal["minimal", "compact", "standard", "full"]
+
 
 def _json(value: Any) -> bytes:
     try:
         return json.dumps(
-            value, ensure_ascii=False, separators=(",", ":"), allow_nan=False
+            value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False
         ).encode()
     except (ValueError, TypeError, UnicodeError, RecursionError) as exc:
         raise DataValidationError("Adapter result is not finite UTF-8 JSON.") from exc
@@ -87,8 +89,26 @@ class SourcePresenter:
             raise DataValidationError("Original source identity changed.")
         return response, position.offset, position.identity
 
-    def _row(self, value: Any, response: SourceResponse, index: int | None) -> dict[str, Any]:
-        raw = _json(value)
+    def _row(
+        self,
+        value: Any,
+        response: SourceResponse,
+        index: int | None,
+        response_mode: ResponseMode,
+        profile: str | None,
+        *,
+        force_defer: bool = False,
+    ) -> dict[str, Any]:
+        # Import lazily because adapter selection reuses source_pointer from this module.
+        from clinpgx_link.mcp.adapter_selection import (
+            adapter_profile_known,
+            adapter_projection_is_unprofiled,
+            project_adapter_value,
+        )
+
+        projected = project_adapter_value(value, profile, response_mode)
+        unprofiled = adapter_projection_is_unprofiled(projected)
+        raw = _json(value if unprofiled else projected)
         reference = response.details["content_ref"]
         pointer = source_pointer(
             response.details.get("source_pointer"), f"/{index}" if index is not None else ""
@@ -103,6 +123,7 @@ class SourcePresenter:
             "row_index": index,
             "representation": "adapter_value_json",
             "derived": True,
+            "response_mode": response_mode,
         }
         if isinstance(value, dict):
             record_id = value.get("id", value.get("record_id"))
@@ -114,7 +135,19 @@ class SourcePresenter:
             "CC0-1.0",
         }:
             row["source_details"] = {"license": {"spdx": license_info["spdx"]}}
-        if len(raw) <= 12000:
+        if unprofiled:
+            row.update(
+                record_profile_status="unprofiled",
+                deferred_content=True,
+                recovery_action="read_original_source_structure",
+                fallback_tool="get_source_content",
+                fallback_args={
+                    "content_ref": reference,
+                    "representation": "structure" if pointer is not None else "base64",
+                    "pointer": pointer if pointer is not None else "",
+                },
+            )
+        elif not force_defer and len(raw) <= 12000:
             row["data"] = fence_text(raw.decode(), source=response.source, record_id=reference)
         else:
             row.update(
@@ -127,6 +160,8 @@ class SourcePresenter:
                     "pointer": pointer if pointer is not None else "",
                 },
             )
+        if profile is not None and adapter_profile_known(profile):
+            row["source_profile"] = profile
         return row
 
     def present(
@@ -137,6 +172,8 @@ class SourcePresenter:
         limit: int = 20,
         offset: int = 0,
         state_ref: str | None = None,
+        response_mode: ResponseMode = "compact",
+        profile: str | None = None,
     ) -> ToolResult:
         if type(limit) is not int or not 1 <= limit <= 100 or type(offset) is not int or offset < 0:
             raise InvalidInputError("Invalid source page bounds.")
@@ -144,7 +181,7 @@ class SourcePresenter:
             if offset:
                 raise InvalidInputError("A scalar result has no row continuation.", field="offset")
             return success_result(
-                self._row(response.value, response, None),
+                self._bounded_row(response.value, response, None, response_mode, profile),
                 source=response.source,
                 content_ref=response.details["content_ref"],
             )
@@ -154,38 +191,80 @@ class SourcePresenter:
         rows: list[dict[str, Any]] = []
         fence_count = len(response.source.warnings)
         for index in range(offset, min(offset + limit, total)):
-            row = self._row(response.value[index], response, index)
+            row = self._bounded_row(response.value[index], response, index, response_mode, profile)
             row_fences = int("data" in row) + int(isinstance(row["source_pointer"], dict))
             if rows and (len(_json([*rows, row])) > 70000 or fence_count + row_fences > 120):
                 break
             rows.append(row)
             fence_count += row_fences
-        stop = offset + len(rows)
-        next_cursor = None
-        if stop < total:
-            state_ref = state_ref or self._retain(response)
-            deadline = min(
-                self.store.get(response.details["content_ref"]).expires_at,
-                self.store.get(state_ref).expires_at,
-            )
-            next_cursor = self.cursors.encode(
-                selectors,
-                identity=state_ref,
-                offset=stop,
-                expires_at=deadline,
-            )
-        return success_result(
-            rows,
-            source=response.source,
-            collection=True,
-            content_ref=response.details["content_ref"],
-            pagination={
-                "offset": offset,
-                "returned": len(rows),
-                "total": total,
-                "total_scope": "retained_response",
-                "upstream_completeness": "unknown",
-                "has_more": next_cursor is not None,
-                "next_cursor": next_cursor,
-            },
+        while True:
+            stop = offset + len(rows)
+            next_cursor = None
+            if stop < total:
+                state_ref = state_ref or self._retain(response)
+                deadline = min(
+                    self.store.get(response.details["content_ref"]).expires_at,
+                    self.store.get(state_ref).expires_at,
+                )
+                next_cursor = self.cursors.encode(
+                    selectors,
+                    identity=state_ref,
+                    offset=stop,
+                    expires_at=deadline,
+                )
+            try:
+                return success_result(
+                    rows,
+                    source=response.source,
+                    collection=True,
+                    content_ref=response.details["content_ref"],
+                    pagination={
+                        "offset": offset,
+                        "returned": len(rows),
+                        "total": total,
+                        "total_scope": "retained_response",
+                        "upstream_completeness": "unknown",
+                        "has_more": next_cursor is not None,
+                        "next_cursor": next_cursor,
+                    },
+                )
+            except ResponseTooLargeError:
+                if len(rows) > 1:
+                    rows.pop()
+                    continue
+                if rows and "data" in rows[0]:
+                    rows[0] = self._bounded_row(
+                        response.value[offset],
+                        response,
+                        offset,
+                        response_mode,
+                        profile,
+                        force_defer=True,
+                    )
+                    continue
+                raise
+
+    def _bounded_row(
+        self,
+        value: Any,
+        response: SourceResponse,
+        index: int | None,
+        response_mode: ResponseMode,
+        profile: str | None,
+        *,
+        force_defer: bool = False,
+    ) -> dict[str, Any]:
+        row = self._row(
+            value,
+            response,
+            index,
+            response_mode,
+            profile,
+            force_defer=force_defer,
         )
+        if len(_json(row)) <= 70_000:
+            return row
+        deferred = self._row(value, response, index, response_mode, profile, force_defer=True)
+        if len(_json(deferred)) > 70_000:
+            raise ResponseTooLargeError("The source row exceeds its bounded descriptor size.")
+        return deferred

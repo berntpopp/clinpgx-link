@@ -90,6 +90,20 @@ class ResponseTooLargeError(InvalidInputError):
     default_subtype = "response_too_large"
 
 
+class RecoverableSelectionError(InvalidInputError):
+    """A selection failure with a server-validated retained JSON alternative."""
+
+    def __init__(self, *, content_ref: str, subtype: str | None) -> None:
+        super().__init__(
+            "Scalar selection requires a scalar source value.",
+            field="pointers",
+            hint="Inspect the retained JSON structure and select scalar children.",
+            subtype=subtype,
+        )
+        self.content_ref = content_ref
+        self.recovery_pointer = ""
+
+
 __all__ = [
     "ERROR_CODES",
     "AmbiguousQueryError",
@@ -99,6 +113,7 @@ __all__ = [
     "InvalidInputError",
     "NotFoundError",
     "RateLimitedError",
+    "RecoverableSelectionError",
     "ResponseTooLargeError",
     "UpstreamUnavailableError",
 ]

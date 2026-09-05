@@ -19,73 +19,32 @@ from clinpgx_link.exceptions import (
     ClinPGxError,
     InvalidInputError,
     NotFoundError,
+    ResponseTooLargeError,
     UpstreamUnavailableError,
 )
 from clinpgx_link.mcp import recovery as recovery_help
-from clinpgx_link.mcp.envelope import error_result
+from clinpgx_link.mcp.adapter_selection import adapter_profile, render_adapter_selections
+from clinpgx_link.mcp.envelope import error_result, success_result
 from clinpgx_link.mcp.pagination import CursorCodec
 from clinpgx_link.mcp.record_shaping import (
     local_collection_result,
     local_singleton_result,
     snapshot_id,
 )
+from clinpgx_link.mcp.record_types import (
+    DetailEntity,
+    ObjectType,
+    ResponseMode,
+    ResultType,
+    SearchEntity,
+    View,
+)
 from clinpgx_link.mcp.search_contracts import FILTER_DESCRIPTION, resolve_search_route
+from clinpgx_link.mcp.selection import finite_json_bytes, validate_pointers
 from clinpgx_link.mcp.shaping import SourcePresenter, source_pointer
 from clinpgx_link.models import SourceResponse
 from clinpgx_link.services.api import ApiService
 
-SearchEntity = Literal[
-    "allele",
-    "annotation_id",
-    "chemical",
-    "connection",
-    "data_annotation",
-    "disease",
-    "gene",
-    "guideline_annotation",
-    "label",
-    "literature",
-    "ontology_term",
-    "pathway",
-    "summary_annotation",
-    "variant",
-    "variant_annotation",
-]
-DetailEntity = Literal[
-    "allele",
-    "annotation_id",
-    "chemical",
-    "disease",
-    "gene",
-    "guideline",
-    "guideline_annotation",
-    "haplotype",
-    "label",
-    "literature",
-    "pathway",
-    "summary_annotation",
-    "variant",
-    "variant_annotation",
-    "vip",
-]
-ResultType = Literal[
-    "allele",
-    "evidence",
-    "guideline_annotation",
-    "label",
-    "literature",
-    "literature_annotation",
-    "multilink_annotation",
-    "pathway",
-    "relationship",
-    "summary_annotation",
-    "variant_annotation",
-    "vip",
-    "vip_variant",
-]
-ObjectType = Literal["Gene", "Chemical", "Disease", "Variant"]
-View = Literal["min", "base", "max"]
-ResponseMode = Literal["minimal", "compact", "standard", "full"]
 SearchEntityArg = Annotated[
     SearchEntity,
     Field(description="Entity family to search in the selected source.", examples=["gene"]),
@@ -147,6 +106,14 @@ PointerArg = Annotated[
         examples=["/symbol"],
     ),
 ]
+PointersArg = Annotated[
+    list[str] | None,
+    Field(
+        max_length=12,
+        description="Ordered scalar RFC 6901 pointers; mutually exclusive with pointer.",
+        examples=[["/id", "/name"]],
+    ),
+]
 ModeArg = Annotated[
     ResponseMode,
     Field(
@@ -186,6 +153,20 @@ def register_record_tools(
     """Register stable entity tools even when one or more sources are absent."""
     presenter = SourcePresenter(store)
     cursors = CursorCodec(clock=store.now)
+
+    def selected_live_result(
+        response: SourceResponse, selected_pointers: tuple[str, ...]
+    ) -> ToolResult:
+        selected = render_adapter_selections(response, selected_pointers, store)
+        if len(finite_json_bytes(selected)) > 70_000:
+            raise ResponseTooLargeError(
+                "The selected source row exceeds its bounded descriptor size."
+            )
+        return success_result(
+            selected,
+            source=response.source,
+            content_ref=response.details["content_ref"],
+        )
 
     @server.tool(annotations=_ANNOTATIONS, tags={"entity", "search"}, output_schema=None)
     async def search_records(
@@ -257,6 +238,8 @@ def register_record_tools(
                     limit=limit,
                     offset=offset,
                     state_ref=state_ref,
+                    response_mode=response_mode,
+                    profile=adapter_profile("", family=entity_type),
                 )
             local_snapshot = await asyncio.to_thread(snapshot_id, repository)
             if entity_type not in recovery_help.LOCAL_ENTITIES:
@@ -291,6 +274,7 @@ def register_record_tools(
                 cursors=cursors,
                 offset=offset,
                 began=began,
+                response_mode=response_mode,
             )
         except ClinPGxError as exc:
             return error_result(
@@ -314,6 +298,7 @@ def register_record_tools(
         ] = "api",
         view: ViewArg = "max",
         pointer: PointerArg = "",
+        pointers: PointersArg = None,
         response_mode: ModeArg = "compact",
     ) -> ToolResult:
         """Get one exact entity without changing the requested source."""
@@ -321,6 +306,7 @@ def register_record_tools(
         response: SourceResponse | None = None
         recovery: recovery_help.RecoveryPlan | None = None
         try:
+            selected_pointers = validate_pointers(pointers, pointer=pointer)
             if (
                 source == "api"
                 and entity_type == "variant"
@@ -339,6 +325,8 @@ def register_record_tools(
                         entity_type, record_id, source, view
                     )
                 response = await api.get(entity_type, record_id, view)
+                if selected_pointers is not None:
+                    return selected_live_result(response, selected_pointers)
                 return await asyncio.to_thread(
                     presenter.present,
                     _select(response, pointer),
@@ -350,6 +338,8 @@ def register_record_tools(
                         "view": view,
                         "pointer": pointer,
                     },
+                    response_mode=response_mode,
+                    profile=None if pointer else adapter_profile("", family=entity_type),
                 )
             if source == "website":
                 operation = recovery_help.WEBSITE_GET.get(entity_type)
@@ -368,6 +358,8 @@ def register_record_tools(
                     {"id": record_id},
                     {"view": view} if entity_type == "guideline" else {},
                 )
+                if selected_pointers is not None:
+                    return selected_live_result(response, selected_pointers)
                 return await asyncio.to_thread(
                     presenter.present,
                     _select(response, pointer),
@@ -379,6 +371,8 @@ def register_record_tools(
                         "view": view,
                         "pointer": pointer,
                     },
+                    response_mode=response_mode,
+                    profile=None if pointer else adapter_profile("", family=entity_type),
                 )
             local_snapshot = await asyncio.to_thread(snapshot_id, repository)
             if entity_type not in recovery_help.LOCAL_ENTITIES:
@@ -417,14 +411,25 @@ def register_record_tools(
                 pointer=pointer,
                 response_mode=response_mode,
                 began=began,
+                repository=repository,
+                pointers=selected_pointers,
             )
         except ClinPGxError as exc:
             if isinstance(exc, NotFoundError):
                 recovery = recovery_help.not_found_plan(entity_type, record_id, source, view)
+            recovery_pointer = getattr(exc, "recovery_pointer", None)
+            content_ref = getattr(exc, "content_ref", None)
+            if response is not None and exc.subtype == "scalar_selection_required":
+                base = response.details.get("source_pointer")
+                if recovery_pointer is None:
+                    recovery_pointer = base if isinstance(base, str) else None
             return error_result(
                 exc,
-                content_ref=response.details.get("content_ref") if response else None,
+                content_ref=(
+                    content_ref or (response.details.get("content_ref") if response else None)
+                ),
                 recovery=recovery,
+                recovery_pointer=recovery_pointer,
             )
         except Exception:
             return error_result(ClinPGxError("Entity retrieval failed."))
@@ -551,6 +556,12 @@ def register_record_tools(
                     limit=limit,
                     offset=offset,
                     state_ref=state_ref,
+                    response_mode=response_mode,
+                    profile=(
+                        "connected_object"
+                        if other_id is None and result_type == "relationship"
+                        else adapter_profile("", family=result_type)
+                    ),
                 )
             local_snapshot = await asyncio.to_thread(snapshot_id, repository)
             if cursor is not None:
@@ -580,6 +591,7 @@ def register_record_tools(
                 cursors=cursors,
                 offset=offset,
                 began=began,
+                response_mode=response_mode,
             )
         except ClinPGxError as exc:
             return error_result(

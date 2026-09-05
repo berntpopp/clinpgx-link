@@ -36,7 +36,7 @@ def test_declarations_are_single_code_owned_authority() -> None:
     from clinpgx_link.data.record_profiles import RECORD_PROFILES, profile_for_row
     from clinpgx_link.mcp.dataset_record_fields import trusted_fields_for_row
 
-    assert len(RECORD_PROFILES) == 7
+    assert len(RECORD_PROFILES) == 9
     profile = profile_for_row("data/pharmcat.zip", "phenotypes.json", "/0/diplotypes/1")
     assert profile is not None
     assert profile.profile_id == "pharmcat.diplotype.v1"
@@ -57,6 +57,66 @@ def test_declarations_are_single_code_owned_authority() -> None:
         }
     ) == frozenset((*profile.required_fields, *profile.optional_fields))
     assert profile_for_row("data/pharmcat.zip", "phenotypes.json", "/0/namedAlleles/0") is None
+
+
+@pytest.mark.asyncio
+async def test_current_haplotype_members_share_active_profile_and_selection(tmp_path: Path) -> None:
+    from clinpgx_link.content.store import ContentStore
+    from clinpgx_link.data.repository import DatasetRepository
+    from clinpgx_link.ingest.builder import build_snapshot
+    from clinpgx_link.mcp.facade import create_mcp
+
+    inputs = tmp_path / "inputs"
+    inputs.mkdir()
+    body = (FIXTURES / "clinpgx_haplotypes.tsv").read_bytes()
+    path = inputs / "clinpgxHaplotypes.zip"
+    _archive(
+        path,
+        {
+            "clinpgxHaplotypes_named_alleles.tsv": body,
+            "clinpgxHaplotypes_star_alleles.tsv": body,
+        },
+    )
+    built = build_snapshot([_source(path)], tmp_path / "candidates", RELEASE_TAG)
+    receipt = _receipt(built.database)
+    assert receipt["gate_status"] == "passing"
+    assert [item["member"] for item in receipt["profiles"]] == [
+        "clinpgxHaplotypes_named_alleles.tsv",
+        "clinpgxHaplotypes_star_alleles.tsv",
+    ]
+    assert {item["status"] for item in receipt["profiles"]} == {"active"}
+
+    repository = DatasetRepository(built.database)
+    store = ContentStore(tmp_path / "content.sqlite")
+    try:
+        async with Client(create_mcp(content_store=store, repository=repository)) as client:
+            for member in (
+                "clinpgxHaplotypes_named_alleles.tsv",
+                "clinpgxHaplotypes_star_alleles.tsv",
+            ):
+                row = repository.search("data/clinpgxHaplotypes.zip", member=member, limit=1).value[
+                    0
+                ]
+                call = await client.call_tool(
+                    "get_dataset_record",
+                    {
+                        "record_id": row["record_id"],
+                        "include_fields": ["Accession ID", "Gene", "Allele Name"],
+                    },
+                )
+                result = call.structured_content["result"]
+                assert [item["status"] for item in result["selections"]] == [
+                    "value",
+                    "value",
+                    "value",
+                ]
+                assert all(
+                    item["original_locator"]["content_ref"] == result["content_ref"]
+                    for item in result["selections"]
+                )
+    finally:
+        repository.close()
+        store.close()
 
 
 def test_pharmcat_candidate_receipt_is_active_and_bound_to_retained_bytes(tmp_path: Path) -> None:

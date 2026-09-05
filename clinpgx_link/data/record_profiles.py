@@ -97,6 +97,30 @@ def _modes(
     )
 
 
+_HAPLOTYPE_FIELDS = (
+    _field(
+        "Accession ID",
+        "ClinPGx allele accession.",
+        "Stable source identity.",
+        required=True,
+    ),
+    _field("Gene", "Source gene symbol.", "Stable shape subject.", required=True),
+    _field("Allele Name", "Source allele name.", "Stable shape subject.", required=True),
+    _field("HGVS", "Source HGVS expression.", "Common variant evidence."),
+    _field(
+        "Structural Variation",
+        "Source structural-variation description.",
+        "Common variant evidence.",
+    ),
+    _field("AMP Level", "Source AMP level.", "Evidence qualification context."),
+)
+_HAPLOTYPE_MODES = _modes(
+    ("Accession ID", "Gene", "Allele Name"),
+    ("Accession ID", "Gene", "Allele Name", "HGVS", "Structural Variation"),
+    ("Accession ID", "Gene", "Allele Name", "HGVS", "Structural Variation", "AMP Level"),
+)
+
+
 RECORD_PROFILES: tuple[RecordProfile, ...] = (
     RecordProfile(
         "clinpgx.genes.v1",
@@ -371,35 +395,28 @@ RECORD_PROFILES: tuple[RecordProfile, ...] = (
         ),
         "ClinPGx relationship rows with published endpoint direction.",
     ),
-    RecordProfile(
-        "clinpgx.haplotype.v1",
-        "data/clinpgxHaplotypes.zip",
-        "clinpgx_haplotypes.tsv",
-        "tabular_row",
-        ShapeSelector("tabular"),
-        (
-            _field(
-                "Accession ID",
-                "ClinPGx allele accession.",
-                "Stable source identity.",
-                required=True,
+    *(
+        RecordProfile(
+            profile_id,
+            "data/clinpgxHaplotypes.zip",
+            member,
+            "tabular_row",
+            ShapeSelector("tabular"),
+            _HAPLOTYPE_FIELDS,
+            _HAPLOTYPE_MODES,
+            "ClinPGx haplotype and named-allele rows.",
+        )
+        for profile_id, member in (
+            ("clinpgx.haplotype.v1", "clinpgx_haplotypes.tsv"),
+            (
+                "clinpgx.haplotype.named_alleles.v1",
+                "clinpgxHaplotypes_named_alleles.tsv",
             ),
-            _field("Gene", "Source gene symbol.", "Stable shape subject.", required=True),
-            _field("Allele Name", "Source allele name.", "Stable shape subject.", required=True),
-            _field("HGVS", "Source HGVS expression.", "Common variant evidence."),
-            _field(
-                "Structural Variation",
-                "Source structural-variation description.",
-                "Common variant evidence.",
+            (
+                "clinpgx.haplotype.star_alleles.v1",
+                "clinpgxHaplotypes_star_alleles.tsv",
             ),
-            _field("AMP Level", "Source AMP level.", "Evidence qualification context."),
-        ),
-        _modes(
-            ("Accession ID", "Gene", "Allele Name"),
-            ("Accession ID", "Gene", "Allele Name", "HGVS", "Structural Variation"),
-            ("Accession ID", "Gene", "Allele Name", "HGVS", "Structural Variation", "AMP Level"),
-        ),
-        "ClinPGx haplotype and named-allele rows.",
+        )
     ),
     RecordProfile(
         "pharmcat.diplotype.v1",

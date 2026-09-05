@@ -12,10 +12,53 @@ from clinpgx_link.content.store import ContentStore
 from clinpgx_link.data.repository import DatasetRepository
 from clinpgx_link.mcp.facade import create_mcp
 from clinpgx_link.models import SourceResponse
-from tests.unit.test_builder import FIXTURES
+from tests.unit.test_builder import FIXTURES, RELEASE_TAG, _archive, _source
 from tests.unit.test_mcp_dataset_records import _record_server
 from tests.unit.test_record_profiles import _pharmcat_candidate
 from tests.unit.test_repository import _repository
+
+
+@pytest.mark.asyncio
+async def test_memberless_mixed_shape_search_rejects_fields_unsupported_by_any_row(
+    tmp_path,
+):
+    """A compatible first row must not hide a later row's incompatible profile."""
+    from clinpgx_link.ingest.builder import build_snapshot
+
+    inputs = tmp_path / "inputs"
+    inputs.mkdir()
+    archive = inputs / "summaryAnnotations.zip"
+    _archive(
+        archive,
+        {
+            "summary_ann_evidence.tsv": (FIXTURES / "summary_ann_evidence.tsv").read_bytes(),
+            "summary_annotations.tsv": (FIXTURES / "summary_annotations.tsv").read_bytes(),
+        },
+    )
+    built = build_snapshot([_source(archive)], tmp_path / "candidate", RELEASE_TAG)
+    repository = DatasetRepository(built.database)
+    store = ContentStore(tmp_path / "content.sqlite")
+    try:
+        raw = repository.search("data/summaryAnnotations.zip", limit=100).value
+        assert raw[0]["member"] == "summary_ann_evidence.tsv"
+        assert any(row["member"] == "summary_annotations.tsv" for row in raw)
+        async with Client(_record_server(repository, store)) as client:
+            call = await client.call_tool(
+                "search_dataset",
+                {
+                    "dataset_id": "data/summaryAnnotations.zip",
+                    "include_fields": ["Evidence ID"],
+                    "limit": 100,
+                },
+                raise_on_error=False,
+            )
+        assert call.is_error
+        assert call.structured_content["error_code"] == "invalid_input"
+        assert call.structured_content["subtype"] == "field_selection_unsupported"
+        assert "results" not in call.structured_content
+    finally:
+        repository.close()
+        store.close()
 
 
 @pytest.mark.asyncio

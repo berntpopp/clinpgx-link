@@ -98,6 +98,15 @@ def test_presenter_single_scalar_and_unknown_keys_are_fenced(source_store):
     assert json.loads(envelope["result"]["data"]["text"]) == original.value
 
 
+def test_presenter_keeps_scalar_null_distinct_from_unprofiled_shape(source_store):
+    from clinpgx_link.mcp.shaping import SourcePresenter
+
+    original = response(source_store, None)
+    envelope = SourcePresenter(source_store).present(original, selectors={}).structured_content
+    assert json.loads(envelope["result"]["data"]["text"]) is None
+    assert "record_profile_status" not in envelope["result"]
+
+
 def test_empty_collection_preserves_original_reference_and_executable_recovery(source_store):
     from clinpgx_link.mcp.shaping import SourcePresenter
 

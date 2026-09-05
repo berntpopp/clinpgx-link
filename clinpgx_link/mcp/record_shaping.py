@@ -10,6 +10,11 @@ from fastmcp.tools.base import ToolResult
 from clinpgx_link.content.store import ContentStore
 from clinpgx_link.data.repository import DatasetRepository
 from clinpgx_link.exceptions import ResponseTooLargeError, UpstreamUnavailableError
+from clinpgx_link.mcp.dataset_record_selection import (
+    ResponseMode,
+    pointer_selected_row,
+    profiled_row,
+)
 from clinpgx_link.mcp.dataset_record_tools import (
     select_dataset_record_value,
     shape_dataset_row,
@@ -38,6 +43,7 @@ def local_collection_result(
     cursors: CursorCodec,
     offset: int,
     began: float,
+    response_mode: ResponseMode,
 ) -> ToolResult:
     """Shape a local page and retry the actual envelope with recoverable fields."""
     inputs = [
@@ -51,11 +57,15 @@ def local_collection_result(
     total = int(response.details["total_count"])
     while True:
         rows = [
-            shape_dataset_row(
+            profiled_row(
                 row,
                 response,
                 snapshot,
                 store,
+                repository,
+                response_mode,
+                None,
+                shape_dataset_row,
                 asset_response=asset,
                 force_defer_fields=force_defer,
             )
@@ -95,19 +105,35 @@ def local_singleton_result(
     snapshot: str,
     store: ContentStore,
     pointer: str,
-    response_mode: str,
+    response_mode: ResponseMode,
     began: float,
+    repository: DatasetRepository,
+    pointers: tuple[str, ...] | None,
 ) -> ToolResult:
     """Present one local row, retaining pointer selection across overflow fallback."""
     force_defer = False
     while True:
-        result = shape_dataset_row(
-            response.value,
-            response,
-            snapshot,
-            store,
-            force_defer_fields=force_defer,
-        )
+        if pointers is None:
+            result = profiled_row(
+                response.value,
+                response,
+                snapshot,
+                store,
+                repository,
+                response_mode,
+                None,
+                shape_dataset_row,
+                force_defer_fields=force_defer,
+            )
+        else:
+            result = pointer_selected_row(
+                response.value,
+                response,
+                snapshot,
+                store,
+                pointers,
+                shape_dataset_row,
+            )
         result["snapshot_id"] = snapshot
         result["response_mode"] = response_mode
         if pointer:

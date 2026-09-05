@@ -14,8 +14,13 @@ values but are deliberately reduced test fixtures, not complete upstream artifac
   records;
 - `pharmcat_phenotypes.json`: `pharmcat.zip` → `phenotypes.json`, reduced to one gene
   and representative nested diplotype/function rows;
-- `clinpgx_haplotypes.tsv`: `clinpgxHaplotypes.zip` → `clinpgx_haplotypes.tsv`, reduced
-  to two representative rows with the actual six-column header.
+- `clinpgx_haplotypes.tsv`: reduced legacy-name fixture for the haplotype profile's
+  six-column shape. Captured current-source evidence on 2026-09-05 records
+  `/tmp/clinpgx_archives/clinpgxHaplotypes.zip` with SHA-256
+  `3f0cea6d5de126c751a6c11e389ec165d17ce4107911e7e48e8c96b89bbe52de`; its
+  `clinpgxHaplotypes_named_alleles.tsv` and
+  `clinpgxHaplotypes_star_alleles.tsv` members both have the exact headers
+  `Accession ID,Gene,Allele Name,HGVS,Structural Variation,AMP Level`.
 
 The source archives reported creation/registry dates independently; tests must never
 derive one global publication date from these excerpts. Upstream ClinPGx/PharmGKB

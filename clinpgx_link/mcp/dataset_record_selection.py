@@ -10,7 +10,7 @@ from typing import Any, Literal
 from clinpgx_link.content.reader import select_value
 from clinpgx_link.content.store import ContentStore
 from clinpgx_link.data.repository import DatasetRepository
-from clinpgx_link.exceptions import InvalidInputError
+from clinpgx_link.exceptions import InvalidInputError, RecoverableSelectionError
 from clinpgx_link.mcp.dataset_record_fields import (
     profiled_selected_nested_value_is_safe,
     trusted_fields_for_row,
@@ -282,7 +282,12 @@ def render_pointer_selections(
     """Render scalar-kernel results without exposing user pointers as arguments."""
     record_id = str(row["record_id"])
     normalized_ref = _retain_json(store, row, source, record_id)
-    resolved = resolve_scalars(row, pointers)
+    try:
+        resolved = resolve_scalars(row, pointers)
+    except InvalidInputError as exc:
+        if exc.subtype != "scalar_selection_required":
+            raise
+        raise RecoverableSelectionError(content_ref=normalized_ref, subtype=exc.subtype) from exc
     selections: list[dict[str, Any]] = []
     for item in resolved:
         locator = original_locator(row, item.pointer, member_ref)

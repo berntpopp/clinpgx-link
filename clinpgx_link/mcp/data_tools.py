@@ -13,8 +13,10 @@ from pydantic import Field
 from clinpgx_link.api.website import WebsiteClient
 from clinpgx_link.content.reader import select_value
 from clinpgx_link.content.store import ContentStore
-from clinpgx_link.exceptions import ClinPGxError, UpstreamUnavailableError
-from clinpgx_link.mcp.envelope import error_result
+from clinpgx_link.exceptions import ClinPGxError, InvalidInputError, UpstreamUnavailableError
+from clinpgx_link.mcp.adapter_selection import adapter_profile, render_adapter_selections
+from clinpgx_link.mcp.envelope import error_result, success_result
+from clinpgx_link.mcp.selection import finite_json_bytes, validate_pointers
 from clinpgx_link.mcp.shaping import SourcePresenter, source_pointer
 from clinpgx_link.models import SourceResponse
 from clinpgx_link.services.api import ApiService
@@ -39,9 +41,18 @@ def register_data_tools(
         limit: int,
         offset: int,
         cursor: str | None,
+        pointers: list[str] | None,
+        response_mode: Mode,
+        profile: str | None,
     ) -> ToolResult:
         response = None
         try:
+            selected_pointers = validate_pointers(
+                pointers,
+                pointer=str(selectors["pointer"]),
+                cursor=cursor,
+                offset=offset,
+            )
             state_ref = None
             if cursor:
                 response, offset, state_ref = await asyncio.to_thread(
@@ -49,6 +60,19 @@ def register_data_tools(
                 )
             else:
                 response = await fetch()
+                if selected_pointers is not None:
+                    selected = render_adapter_selections(response, selected_pointers, store)
+                    if len(finite_json_bytes(selected)) > 70_000:
+                        from clinpgx_link.exceptions import ResponseTooLargeError
+
+                        raise ResponseTooLargeError(
+                            "The selected source row exceeds its bounded descriptor size."
+                        )
+                    return success_result(
+                        selected,
+                        source=response.source,
+                        content_ref=response.details["content_ref"],
+                    )
                 response = SourceResponse(
                     select_value(response.value, selectors["pointer"]),
                     response.source,
@@ -64,10 +88,18 @@ def register_data_tools(
                 limit=limit,
                 offset=offset,
                 state_ref=state_ref,
+                response_mode=response_mode,
+                profile=None if selectors["pointer"] else profile,
             )
         except ClinPGxError as exc:
+            recovery_pointer = None
+            if response is not None and exc.subtype == "scalar_selection_required":
+                base = response.details.get("source_pointer")
+                recovery_pointer = base if isinstance(base, str) else None
             return error_result(
-                exc, content_ref=response.details.get("content_ref") if response else None
+                exc,
+                content_ref=response.details.get("content_ref") if response else None,
+                recovery_pointer=recovery_pointer,
             )
         except Exception:
             return error_result(ClinPGxError("Source retrieval failed."))
@@ -98,6 +130,10 @@ def register_data_tools(
         pointer: Annotated[
             str, Field(max_length=4096, description="RFC 6901 pointer in decoded source data.")
         ] = "",
+        pointers: Annotated[
+            list[str] | None,
+            Field(max_length=12, description="Ordered scalar RFC 6901 pointers for JSON data."),
+        ] = None,
         limit: Annotated[int, Field(ge=1, le=100, description="Maximum returned rows.")] = 20,
         offset: Annotated[
             int, Field(ge=0, description="Offset in this retained response, not upstream corpus.")
@@ -131,7 +167,29 @@ def register_data_tools(
             "representation": representation,
             "pointer": pointer,
         }
-        return await run(fetch, selectors, limit, offset, cursor)
+        if pointers is not None and representation in {"html", "text"}:
+            try:
+                validate_pointers(pointers, pointer=pointer, cursor=cursor, offset=offset)
+            except ClinPGxError as exc:
+                return error_result(exc)
+            else:
+                return error_result(
+                    InvalidInputError(
+                        "Scalar selection requires a verified JSON representation.",
+                        field="pointers",
+                        subtype="json_selection_required",
+                    )
+                )
+        return await run(
+            fetch,
+            selectors,
+            limit,
+            offset,
+            cursor,
+            pointers,
+            response_mode,
+            adapter_profile(operation),
+        )
 
     @server.tool(annotations=_ANNOTATIONS, tags={"source"}, output_schema=None)
     async def get_website_data(
@@ -152,6 +210,10 @@ def register_data_tools(
         pointer: Annotated[
             str, Field(max_length=4096, description="RFC 6901 pointer in decoded source data.")
         ] = "",
+        pointers: Annotated[
+            list[str] | None,
+            Field(max_length=12, description="Ordered scalar RFC 6901 pointers for JSON data."),
+        ] = None,
         limit: Annotated[int, Field(ge=1, le=100, description="Maximum returned rows.")] = 20,
         offset: Annotated[
             int, Field(ge=0, description="Offset in this retained response, not upstream corpus.")
@@ -177,4 +239,13 @@ def register_data_tools(
             "query_parameters": query_parameters or {},
             "pointer": pointer,
         }
-        return await run(fetch, selectors, limit, offset, cursor)
+        return await run(
+            fetch,
+            selectors,
+            limit,
+            offset,
+            cursor,
+            pointers,
+            response_mode,
+            adapter_profile(operation),
+        )
