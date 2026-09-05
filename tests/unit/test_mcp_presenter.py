@@ -56,6 +56,7 @@ def test_large_first_row_defers_but_always_advances_and_retains_exact_bytes(sour
     from clinpgx_link.mcp.shaping import SourcePresenter
 
     original = response(source_store, [{"id": "PA1", "text": "é" * 148743}, {"id": "PA2"}])
+    original.details["source_pointer"] = "/data"
     result = (
         SourcePresenter(source_store).present(original, selectors={}, limit=1).structured_content
     )
@@ -63,6 +64,8 @@ def test_large_first_row_defers_but_always_advances_and_retains_exact_bytes(sour
     assert row["deferred_content"] is True
     assert row["id"] == "PA1"
     assert row["content_ref"] == original.details["content_ref"]
+    assert row["source_pointer"]["text"] == "/data/0"
+    assert row["fallback_args"]["pointer"] == "/data/0"
     assert result["_meta"]["pagination"]["returned"] == 1
     assert result["_meta"]["pagination"]["has_more"] is True
     assert len(json.dumps(result).encode()) < 100000
@@ -132,3 +135,15 @@ def test_cursor_expiry_is_bounded_by_older_original_content(tmp_path):
         assert caught.value.subtype == "cursor_expired"
     finally:
         store.close()
+
+
+def test_pointer_fences_count_toward_whole_page_budget(source_store):
+    from clinpgx_link.mcp.shaping import SourcePresenter
+
+    original = response(source_store, [{"id": f"PA{i}"} for i in range(100)])
+    original.details["source_pointer"] = "/data"
+    result = (
+        SourcePresenter(source_store).present(original, selectors={}, limit=100).structured_content
+    )
+    assert 0 < len(result["results"]) < 100
+    assert result["_meta"]["pagination"]["has_more"] is True

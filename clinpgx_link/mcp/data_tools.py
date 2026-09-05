@@ -15,7 +15,7 @@ from clinpgx_link.content.reader import select_value
 from clinpgx_link.content.store import ContentStore
 from clinpgx_link.exceptions import ClinPGxError, UpstreamUnavailableError
 from clinpgx_link.mcp.envelope import error_result
-from clinpgx_link.mcp.shaping import SourcePresenter
+from clinpgx_link.mcp.shaping import SourcePresenter, source_pointer
 from clinpgx_link.models import SourceResponse
 from clinpgx_link.services.api import ApiService
 
@@ -53,6 +53,9 @@ def register_data_tools(
                     select_value(response.value, selectors["pointer"]),
                     response.source,
                     dict(response.details),
+                )
+                response.details["source_pointer"] = source_pointer(
+                    response.details.get("source_pointer"), selectors["pointer"]
                 )
             return await asyncio.to_thread(
                 presenter.present,

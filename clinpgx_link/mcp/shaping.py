@@ -32,6 +32,21 @@ def _json(value: Any) -> bytes:
         raise DataValidationError("Adapter result is not finite UTF-8 JSON.") from exc
 
 
+def source_pointer(base: Any, suffix: str) -> str | None:
+    """Compose original-body paths without advertising an unusable selector."""
+    if not isinstance(base, str):
+        return None
+    pointer = base + suffix
+    if (
+        (pointer and not pointer.startswith("/"))
+        or len(pointer) > 4096
+        or pointer.count("/") > 128
+        or re.search(r"~(?![01])", pointer)
+    ):
+        return None
+    return pointer
+
+
 class SourcePresenter:
     def __init__(self, store: ContentStore) -> None:
         self.store = store
@@ -75,9 +90,16 @@ class SourcePresenter:
     def _row(self, value: Any, response: SourceResponse, index: int | None) -> dict[str, Any]:
         raw = _json(value)
         reference = response.details["content_ref"]
+        pointer = source_pointer(
+            response.details.get("source_pointer"), f"/{index}" if index is not None else ""
+        )
         row: dict[str, Any] = {
             "content_ref": reference,
-            "source_pointer": "",
+            "source_pointer": (
+                fence_text(pointer, source=response.source, record_id=reference)
+                if pointer
+                else pointer
+            ),
             "row_index": index,
             "representation": "adapter_value_json",
             "derived": True,
@@ -99,7 +121,11 @@ class SourcePresenter:
                 deferred_content=True,
                 recovery_action="read_original_source_structure",
                 fallback_tool="get_source_content",
-                fallback_args={"content_ref": reference, "representation": "structure"},
+                fallback_args={
+                    "content_ref": reference,
+                    "representation": "structure" if pointer is not None else "base64",
+                    "pointer": pointer if pointer is not None else "",
+                },
             )
         return row
 
@@ -126,13 +152,14 @@ class SourcePresenter:
         if offset > total:
             raise InvalidInputError("Offset exceeds returned source set.", field="offset")
         rows: list[dict[str, Any]] = []
+        fence_count = len(response.source.warnings)
         for index in range(offset, min(offset + limit, total)):
             row = self._row(response.value[index], response, index)
-            if rows and (
-                len(_json([*rows, row])) > 70000 or len(rows) + len(response.source.warnings) >= 120
-            ):
+            row_fences = int("data" in row) + int(isinstance(row["source_pointer"], dict))
+            if rows and (len(_json([*rows, row])) > 70000 or fence_count + row_fences > 120):
                 break
             rows.append(row)
+            fence_count += row_fences
         stop = offset + len(rows)
         next_cursor = None
         if stop < total:

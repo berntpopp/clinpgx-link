@@ -24,6 +24,7 @@ from clinpgx_link.api.website import WebsiteClient
 from clinpgx_link.config import Settings
 from clinpgx_link.config import settings as default_settings
 from clinpgx_link.content.store import ContentStore
+from clinpgx_link.data.catalog import is_canonical_release_tag
 from clinpgx_link.data.repository import DatasetRepository
 from clinpgx_link.logging_config import (
     bind_request_id,
@@ -35,7 +36,6 @@ from clinpgx_link.mcp.facade import create_mcp
 from clinpgx_link.services.api import ApiService
 
 _SNAPSHOT_ID = re.compile(r"sha256:[0-9a-f]{64}\Z")
-_RELEASE_TAG = re.compile(r"data-clinpgx-(?:core|extended)-[0-9a-f]{16}\Z")
 _MCP_CORS_HEADERS = [
     "accept",
     "content-type",
@@ -212,7 +212,7 @@ def _snapshot_status(runtime_settings: Settings) -> dict[str, Any] | None:
         release_tag = status.get("release_tag")
         if not isinstance(identity, str) or _SNAPSHOT_ID.fullmatch(identity) is None:
             return None
-        if not isinstance(release_tag, str) or _RELEASE_TAG.fullmatch(release_tag) is None:
+        if not is_canonical_release_tag(release_tag):
             return None
         if not isinstance(datasets, list) or not datasets:
             return None
