@@ -7,11 +7,20 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from clinpgx_link.exceptions import InvalidInputError
+from clinpgx_link.mcp.search_contracts import (
+    CANONICAL_FILTERS,
+    LOCAL_SEARCH_ENTITIES,
+    api_filter_choices,
+    api_filters,
+    supports_accession_shortcut,
+    supports_api_search,
+)
 
 RecoveryKind = Literal[
     "invalid_search_filters",
     "record_not_found",
     "unsupported_detail_source",
+    "unsupported_api_filters",
     "unsupported_related_mode",
     "unsupported_search_source",
     "variant_symbol_requires_search",
@@ -21,6 +30,7 @@ _KINDS = frozenset(
         "invalid_search_filters",
         "record_not_found",
         "unsupported_detail_source",
+        "unsupported_api_filters",
         "unsupported_related_mode",
         "unsupported_search_source",
         "variant_symbol_requires_search",
@@ -70,10 +80,7 @@ _RESULT_TYPES = frozenset(
     }
 )
 _OBJECT_TYPES = frozenset({"Gene", "Chemical", "Disease", "Variant"})
-_FILTERS = ["annotation_id", "chemical", "gene", "id", "name", "source", "variant"]
-LOCAL_ENTITIES = frozenset(
-    {"allele", "annotation_id", "chemical", "disease", "gene", "literature", "variant"}
-)
+LOCAL_ENTITIES = LOCAL_SEARCH_ENTITIES
 WEBSITE_GET = {
     "allele": "GET /site/allele/{id}",
     "gene": "GET /site/gene/{id}",
@@ -95,31 +102,6 @@ API_RESULT = {
     "vip": "vip",
     "vip_variant": "vipVariant",
 }
-_API_FILTER_MAPPING: dict[str, dict[str, str]] = {
-    "pathway": {"id": "accessionId"},
-    "gene": {"id": "accessionId", "gene": "symbol"},
-    "chemical": {"id": "accessionId", "chemical": "name"},
-    "disease": {"id": "accessionId"},
-    "variant": {"variant": "symbol"},
-    "literature": {"id": "id"},
-    "guideline_annotation": {"source": "source"},
-    "label": {
-        "source": "source",
-        "gene": "relatedGenes.symbol",
-        "chemical": "relatedChemicals.name",
-    },
-    "summary_annotation": {
-        "id": "id",
-        "annotation_id": "id",
-        "gene": "location.genes.symbol",
-        "chemical": "relatedChemicals.name",
-        "variant": "location.fingerprint",
-    },
-    "variant_annotation": {
-        "gene": "location.genes.symbol",
-        "variant": "location.fingerprint",
-    },
-}
 _API_DETAIL = frozenset(
     {
         "chemical",
@@ -140,23 +122,11 @@ _WEBSITE_DETAIL = frozenset(
 _DOWNLOAD_DETAIL = frozenset(
     {"allele", "annotation_id", "chemical", "disease", "gene", "literature", "variant"}
 )
-_API_ID_SEARCH = frozenset(
-    {"chemical", "disease", "gene", "literature", "pathway", "summary_annotation"}
-)
-_API_SEARCH = frozenset(_API_FILTER_MAPPING)
-
-
-def api_filters(entity_type: str, filters: dict[str, str]) -> dict[str, str] | None:
-    """Translate canonical filters only when the API semantics are equivalent."""
-    declared = _API_FILTER_MAPPING.get(entity_type)
-    if declared is None or not filters or not set(filters) <= set(declared):
-        return None
-    return {declared[key]: value for key, value in filters.items()}
 
 
 def validate_filters(filters: dict[str, str]) -> None:
     for key, value in filters.items():
-        if key not in _FILTERS:
+        if key not in CANONICAL_FILTERS:
             raise InvalidInputError("Unknown canonical entity filter.", field="filters")
         if not isinstance(value, str) or not value:
             raise InvalidInputError("Entity filters must be nonempty strings.", field=key)
@@ -196,6 +166,7 @@ class RecoveryPlan:
             "invalid_search_filters": (self.entity_type, self.source),
             "record_not_found": (self.entity_type, self.record_id, self.source),
             "unsupported_detail_source": (self.entity_type, self.record_id, self.source),
+            "unsupported_api_filters": (self.entity_type, self.source),
             "unsupported_related_mode": (
                 self.record_id,
                 self.result_type,
@@ -263,6 +234,22 @@ def unsupported_search_plan(entity_type: str, source: str, view: str) -> Recover
     return RecoveryPlan(
         "unsupported_search_source", entity_type=entity_type, source=source, view=view
     )
+
+
+def unsupported_api_filters_plan(entity_type: str, source: str, view: str) -> RecoveryPlan:
+    return RecoveryPlan(
+        "unsupported_api_filters", entity_type=entity_type, source=source, view=view
+    )
+
+
+def search_contract_plan(
+    entity_type: str, source: str, view: str, subtype: str | None
+) -> RecoveryPlan | None:
+    if subtype == "unsupported_api_filters":
+        return unsupported_api_filters_plan(entity_type, source, view)
+    if subtype == "unsupported_search_source":
+        return unsupported_search_plan(entity_type, source, view)
+    return None
 
 
 def related_mode_plan(
@@ -353,7 +340,12 @@ def recovery_payload(plan: RecoveryPlan) -> dict[str, Any]:
             "The requested source returned no exact detail record; discovery is a separate "
             "operation and does not prove absence from other sources."
         )
-        if source == "api" and entity in _API_ID_SEARCH:
+        if (
+            source == "api"
+            and isinstance(record_id, str)
+            and re.fullmatch(r"PA[0-9]+", record_id) is not None
+            and supports_accession_shortcut(str(entity))
+        ):
             commands.append(
                 _command(
                     "search_records",
@@ -392,31 +384,24 @@ def recovery_payload(plan: RecoveryPlan) -> dict[str, Any]:
             )
     elif plan.kind == "invalid_search_filters":
         limitation = "One or more filter names are outside the canonical entity-search contract."
-        choices["filters"] = _FILTERS
-        if source in {"auto", "download"} and entity in _DOWNLOAD_DETAIL:
-            commands.append(
-                _command(
-                    "search_records", {"entity_type": entity, "source": "download", "limit": 20}
-                )
-            )
-        else:
-            commands.append(_command("get_server_capabilities", {}))
+        choices["filters"] = list(CANONICAL_FILTERS)
+        commands.append(_command("get_server_capabilities", {}))
+    elif plan.kind == "unsupported_api_filters":
+        limitation = (
+            "The API route for this entity does not accept one or more supplied canonical "
+            "filters; this is not an absence claim about source records."
+        )
+        choices["filters"] = api_filter_choices(str(entity))
+        commands.append(_command("get_server_capabilities", {}))
     elif plan.kind == "unsupported_search_source":
         limitation = "This entity and source do not have a compatible search contract."
         choices["source"] = [
             item
             for item in ("api", "download")
-            if (item == "api" and entity in _API_SEARCH)
+            if (item == "api" and supports_api_search(str(entity)))
             or (item == "download" and entity in _DOWNLOAD_DETAIL)
         ]
-        if entity in _DOWNLOAD_DETAIL:
-            commands.append(
-                _command(
-                    "search_records", {"entity_type": entity, "source": "download", "limit": 20}
-                )
-            )
-        else:
-            commands.append(_command("get_server_capabilities", {}))
+        commands.append(_command("get_server_capabilities", {}))
     else:
         limitation = (
             "Connected-object mode omits other_id and uses relationship; pair mode requires "
@@ -437,13 +422,45 @@ def recovery_payload(plan: RecoveryPlan) -> dict[str, Any]:
         )
     if not commands:
         commands.append(_command("get_server_capabilities", {}))
-    return {
+    payload = {
         "action": plan.kind,
         "limitation": limitation,
         "context": context,
         "valid_choices": choices,
         "next_commands": commands,
     }
+    if plan.kind == "unsupported_api_filters" and entity == "guideline_annotation":
+        payload["resolution_workflow"] = [
+            {
+                "tool": "search_records",
+                "arguments_template": {
+                    "entity_type": "gene",
+                    "filters": {"gene": "{gene}"},
+                    "source": "api",
+                },
+            },
+            {
+                "tool": "search_records",
+                "arguments_template": {
+                    "entity_type": "chemical",
+                    "filters": {"chemical": "{chemical}"},
+                    "source": "api",
+                },
+            },
+            {
+                "tool": "get_related_records",
+                "arguments_template": {
+                    "record_id": "{returned_gene_id}",
+                    "other_id": "{returned_chemical_id}",
+                    "entity_type": "Gene",
+                    "other_type": "Chemical",
+                    "result_type": "guideline_annotation",
+                    "source": "api",
+                    "view": plan.view,
+                },
+            },
+        ]
+    return payload
 
 
 __all__ = [
@@ -458,6 +475,8 @@ __all__ = [
     "recovery_payload",
     "related_mode_plan",
     "safe_identifier",
+    "search_contract_plan",
+    "unsupported_api_filters_plan",
     "unsupported_detail_plan",
     "unsupported_search_plan",
     "validate_filters",

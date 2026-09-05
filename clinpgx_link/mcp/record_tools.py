@@ -29,6 +29,7 @@ from clinpgx_link.mcp.record_shaping import (
     local_singleton_result,
     snapshot_id,
 )
+from clinpgx_link.mcp.search_contracts import FILTER_DESCRIPTION, resolve_search_route
 from clinpgx_link.mcp.shaping import SourcePresenter, source_pointer
 from clinpgx_link.models import SourceResponse
 from clinpgx_link.services.api import ApiService
@@ -120,7 +121,7 @@ QueryArg = Annotated[
 FilterArg = Annotated[
     dict[str, str] | None,
     Field(
-        description="ANDed canonical exact filters: id, name, gene, chemical, variant, source, annotation_id.",
+        description=FILTER_DESCRIPTION,
         examples=[{"gene": "CYP2C19", "chemical": "clopidogrel"}],
     ),
 ]
@@ -204,7 +205,7 @@ def register_record_tools(
         cursor: CursorArg = None,
         response_mode: ModeArg = "compact",
     ) -> ToolResult:
-        """Search exact live fields or broad installed entity memberships."""
+        """Search exact live fields or installed dataset memberships."""
         began = time.monotonic()
         response: SourceResponse | None = None
         recovery: recovery_help.RecoveryPlan | None = None
@@ -219,14 +220,15 @@ def register_record_tools(
                 )
             if cursor is not None and offset:
                 raise InvalidInputError("Cursor and offset cannot be combined.", field="offset")
-            translated = (
-                None
-                if query is not None
-                else recovery_help.api_filters(entity_type, selected_filters)
-            )
-            selected_source = source
-            if source == "auto":
-                selected_source = "api" if translated is not None else "download"
+            try:
+                selected_source, translated = resolve_search_route(
+                    entity_type, source, query, selected_filters
+                )
+            except InvalidInputError as exc:
+                recovery = recovery_help.search_contract_plan(
+                    entity_type, source, view, exc.subtype
+                )
+                raise
             selectors = {
                 "tool": "search_records",
                 "entity_type": entity_type,
@@ -237,12 +239,7 @@ def register_record_tools(
                 "view": view,
             }
             if selected_source == "api":
-                if query is not None or translated is None:
-                    recovery = recovery_help.unsupported_search_plan(entity_type, source, view)
-                    raise InvalidInputError(
-                        "The API supports only declared exact filters for this entity.",
-                        field="filters" if query is None else "query",
-                    )
+                assert translated is not None
                 state_ref = None
                 if cursor is not None:
                     response, offset, state_ref = await asyncio.to_thread(

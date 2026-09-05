@@ -83,6 +83,7 @@ async def test_record_tool_definitions_describe_every_argument_within_budget(tmp
                 )
                 <= 4800
             )
+        assert "membership" in tools["search_records"].description
         related = tools["get_related_records"].parameters["properties"]
         assert related["result_type"]["examples"] == ["relationship"]
         assert "connected-object" in related["other_type"]["description"]
@@ -161,15 +162,11 @@ async def test_auto_local_multivalue_search_and_snapshot_cursor(tmp_path):
             )
             recovery = wrong_source.structured_content
             assert recovery["recovery"]["valid_choices"]["source"] == ["api", "download"]
-            assert recovery["fallback_args"] == {
-                "entity_type": "gene",
-                "source": "download",
-                "limit": 20,
-            }
-            alternative = await client.call_tool(
-                recovery["fallback_tool"], recovery["fallback_args"]
-            )
-            assert alternative.structured_content["success"] is True
+            assert recovery["fallback_tool"] == "get_server_capabilities"
+            assert recovery["fallback_args"] == {}
+            assert recovery["recovery"]["next_commands"] == [
+                {"tool": "get_server_capabilities", "arguments": {}}
+            ]
 
             all_genes = await client.call_tool(
                 "search_records", {"entity_type": "gene", "source": "download", "limit": 1}
@@ -901,8 +898,9 @@ async def test_recovery_hides_malicious_identifiers_exception_payloads_and_filte
             ]
             assert hostile_key not in rendered
             assert "NEVER_ECHO" not in rendered
-            recovered = await client.call_tool(payload["fallback_tool"], payload["fallback_args"])
-            assert recovered.structured_content["success"] is True
+            assert payload["recovery"]["next_commands"] == [
+                {"tool": "get_server_capabilities", "arguments": {}}
+            ]
     finally:
         repository.close()
         store.close()
