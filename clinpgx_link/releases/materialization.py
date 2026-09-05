@@ -25,7 +25,11 @@ from clinpgx_link.releases.contract_json import (
 from clinpgx_link.releases.contract_json import (
     canonical_bytes as _canonical_bytes,
 )
-from clinpgx_link.releases.licenses import parse_licenses, validate_source_identity
+from clinpgx_link.releases.licenses import (
+    LicensesManifest,
+    parse_licenses,
+    validate_source_identity,
+)
 from clinpgx_link.releases.manifest import DataReleaseManifest
 from clinpgx_link.releases.schema import DatabaseSchema, parse_database_schema
 from clinpgx_link.releases.source_manifest import SourceManifest, parse_source_manifest
@@ -73,7 +77,11 @@ def _read_fixed(root: Path, name: str, maximum: int) -> bytes:
     root_fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW)
     descriptor = -1
     try:
-        descriptor = os.open(name, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW, dir_fd=root_fd)
+        descriptor = os.open(
+            name,
+            os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW | os.O_NONBLOCK,
+            dir_fd=root_fd,
+        )
         info = os.fstat(descriptor)
         if (
             not stat.S_ISREG(info.st_mode)
@@ -128,10 +136,33 @@ def _blob_digest(connection: sqlite3.Connection, table: str, rowid: int) -> tupl
 
 
 def _metadata(connection: sqlite3.Connection, key: str) -> str:
-    rows = connection.execute("SELECT value FROM metadata WHERE key=?", (key,)).fetchall()
-    if len(rows) != 1 or not isinstance(rows[0][0], str):
+    cursor = connection.execute("SELECT value FROM metadata WHERE key=?", (key,))
+    row = cursor.fetchone()
+    if row is None or cursor.fetchone() is not None or not isinstance(row[0], str):
         raise DataValidationError("SQLite release metadata is invalid")
-    return rows[0][0]
+    return row[0]
+
+
+def _validate_rights_mapping(source: SourceManifest, rights: LicensesManifest) -> None:
+    artifacts = {item.logical_name: item.license_id for item in source.artifacts}
+    license_ids = {item.license_id for item in rights.licenses}
+    affected: dict[str, str] = {}
+    for license_record in rights.licenses:
+        for name in license_record.affected_artifacts:
+            if name not in artifacts or name in affected:
+                raise DataValidationError(
+                    "Rights evidence does not map exactly to retained artifacts",
+                    subtype="rights_invalid",
+                )
+            affected[name] = license_record.license_id
+    if any(
+        license_id not in license_ids or affected.get(name) != license_id
+        for name, license_id in artifacts.items()
+    ):
+        raise DataValidationError(
+            "Rights evidence does not map exactly to retained artifacts",
+            subtype="rights_invalid",
+        )
 
 
 def _verify_sqlite(
@@ -145,7 +176,7 @@ def _verify_sqlite(
         or stat.S_IMODE(before.st_mode) != 0o444
     ):
         raise DataValidationError("SQLite snapshot is not immutable and regular")
-    descriptor = os.open(database, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
+    descriptor = os.open(database, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW | os.O_NONBLOCK)
     opened = os.fstat(descriptor)
     if (before.st_dev, before.st_ino) != (opened.st_dev, opened.st_ino):
         os.close(descriptor)
@@ -154,9 +185,10 @@ def _verify_sqlite(
     connection = sqlite3.connect(uri, uri=True)
     try:
         connection.execute("PRAGMA trusted_schema=OFF")
-        if connection.execute("PRAGMA quick_check").fetchall() != [("ok",)]:
+        quick = connection.execute("PRAGMA quick_check")
+        if quick.fetchone() != ("ok",) or quick.fetchone() is not None:
             raise DataValidationError("SQLite quick_check failed")
-        if connection.execute("PRAGMA foreign_key_check").fetchall():
+        if connection.execute("PRAGMA foreign_key_check").fetchone() is not None:
             raise DataValidationError("SQLite foreign keys are invalid")
         if (
             connection.execute("PRAGMA application_id").fetchone()[0]
@@ -181,10 +213,6 @@ def _verify_sqlite(
         snapshot = _metadata(connection, "snapshot_id")
         if not snapshot.startswith("sha256:") or len(snapshot) != 71:
             raise DataValidationError("SQLite snapshot identity is invalid")
-        datasets = connection.execute(
-            "SELECT dataset_id,sha256,byte_count,license_id,record_count "
-            "FROM dataset ORDER BY dataset_id"
-        ).fetchall()
         expected = [
             (
                 a.logical_name,
@@ -195,16 +223,28 @@ def _verify_sqlite(
             )
             for a in source.artifacts
         ]
-        if datasets != expected:
+        datasets = connection.execute(
+            "SELECT dataset_id,sha256,byte_count,license_id,record_count "
+            "FROM dataset ORDER BY dataset_id"
+        )
+        for expected_row in expected:
+            if datasets.fetchone() != expected_row:
+                raise DataValidationError("SQLite datasets do not match retained provenance")
+        if datasets.fetchone() is not None:
             raise DataValidationError("SQLite datasets do not match retained provenance")
         for artifact in source.artifacts:
-            rows = connection.execute(
+            archives = connection.execute(
                 "SELECT rowid,byte_count,sha256 FROM source_archive WHERE dataset_id=?",
                 (artifact.logical_name,),
-            ).fetchall()
-            if len(rows) != 1 or rows[0][1:] != (artifact.byte_count, artifact.sha256):
+            )
+            archive = archives.fetchone()
+            if (
+                archive is None
+                or archives.fetchone() is not None
+                or archive[1:] != (artifact.byte_count, artifact.sha256)
+            ):
                 raise DataValidationError("SQLite archive provenance does not match")
-            if _blob_digest(connection, "source_archive", rows[0][0]) != (
+            if _blob_digest(connection, "source_archive", archive[0]) != (
                 artifact.byte_count,
                 artifact.sha256,
             ):
@@ -213,10 +253,11 @@ def _verify_sqlite(
                 "SELECT rowid,path,byte_count,compressed_bytes,sha256,parser_status "
                 "FROM source_member WHERE dataset_id=? ORDER BY path",
                 (artifact.logical_name,),
-            ).fetchall()
-            if len(members) != len(artifact.members):
-                raise DataValidationError("SQLite member inventory does not match")
-            for row, member in zip(members, artifact.members, strict=True):
+            )
+            for member in artifact.members:
+                row = members.fetchone()
+                if row is None:
+                    raise DataValidationError("SQLite member inventory does not match")
                 consumed = row[5] in {"indexed", "quarantined"}
                 indexed = row[5] == "indexed"
                 if row[5] not in {"indexed", "quarantined", "preserved"}:
@@ -233,6 +274,8 @@ def _verify_sqlite(
                     member.sha256,
                 ):
                     raise DataValidationError("SQLite member bytes do not match")
+            if members.fetchone() is not None:
+                raise DataValidationError("SQLite member inventory does not match")
         return snapshot
     except sqlite3.Error as exc:
         raise DataValidationError("SQLite semantic validation failed") from exc
@@ -256,6 +299,7 @@ def validate_semantics(root: Path, manifest: DataReleaseManifest) -> SemanticRec
     rights_raw = _read_fixed(root, "licenses.json", 1024 * 1024)
     source = parse_source_manifest(source_raw)
     rights = parse_licenses(rights_raw)
+    _validate_rights_mapping(source, rights)
     validate_source_identity(source, rights)
     if hashlib.sha256(source_raw).hexdigest() != str(manifest.dataset.source.sha256):
         raise DataValidationError("Outer source digest does not match")

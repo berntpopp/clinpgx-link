@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import fcntl
 import hashlib
+import math
 import os
 import re
 import secrets
@@ -86,10 +87,20 @@ def _private_root(path: Path) -> None:
 
 def _versions(path: Path) -> Path:
     versions = path / "versions"
+    created = False
     if not versions.exists():
         versions.mkdir(mode=0o700)
+        created = True
     descriptor = bundle_io.open_private_directory(versions)
     os.close(descriptor)
+    if created:
+        root_fd = bundle_io.open_private_directory(path)
+        try:
+            os.fsync(root_fd)
+        except OSError as exc:
+            raise DataValidationError("New versions directory cannot be made durable") from exc
+        finally:
+            os.close(root_fd)
     return versions
 
 
@@ -105,15 +116,18 @@ def _admit_layout(root: Path, versions: Path) -> None:
 
 @contextmanager
 def _lock(root: Path, timeout: float) -> Iterator[None]:
-    if (
-        isinstance(timeout, bool)
-        or not isinstance(timeout, (int, float))
-        or timeout <= 0
-        or not float(timeout) < float("inf")
-    ):
+    if isinstance(timeout, bool) or not isinstance(timeout, (int, float)):
+        raise DataValidationError("Lock timeout must be finite and positive")
+    try:
+        timeout_value = float(timeout)
+    except (OverflowError, TypeError, ValueError) as exc:
+        raise DataValidationError("Lock timeout must be finite and positive") from exc
+    if not math.isfinite(timeout_value) or timeout_value <= 0:
         raise DataValidationError("Lock timeout must be finite and positive")
     descriptor = os.open(
-        root / ".materialize.lock", os.O_RDWR | os.O_CREAT | os.O_CLOEXEC | os.O_NOFOLLOW, 0o600
+        root / ".materialize.lock",
+        os.O_RDWR | os.O_CREAT | os.O_CLOEXEC | os.O_NOFOLLOW | os.O_NONBLOCK,
+        0o600,
     )
     try:
         info = os.fstat(descriptor)
@@ -126,7 +140,7 @@ def _lock(root: Path, timeout: float) -> Iterator[None]:
             or (info.st_dev, info.st_ino) != (named.st_dev, named.st_ino)
         ):
             raise DataValidationError("Materialization lock is unsafe")
-        deadline = time.monotonic() + timeout
+        deadline = time.monotonic() + timeout_value
         while True:
             try:
                 fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -329,6 +343,7 @@ def _stage_locked(
 def _select(root: Path, receipt: MaterializationReceipt) -> None:
     root_fd = bundle_io.open_private_directory(root)
     old: str | None = None
+    recovery: str | None = None
     try:
         try:
             info = os.stat("current", dir_fd=root_fd, follow_symlinks=False)
@@ -369,6 +384,9 @@ def _select(root: Path, receipt: MaterializationReceipt) -> None:
         finally:
             with suppress(FileNotFoundError):
                 os.unlink(temporary, dir_fd=root_fd)
+            if recovery is not None:
+                with suppress(FileNotFoundError):
+                    os.unlink(recovery, dir_fd=root_fd)
     finally:
         os.close(root_fd)
 
@@ -414,7 +432,6 @@ def install_release(
         target = versions / candidate_manifest.artifact.sha256
         if (
             not bootstrap
-            and previous is None
             and target.is_dir()
             and current.is_symlink()
             and os.readlink(current) == f"versions/{candidate_manifest.artifact.sha256}"
@@ -430,6 +447,8 @@ def install_release(
             if previous is None:
                 raise DataValidationError("An independently pinned direct predecessor is required")
             previous_manifest = _authenticate(previous, application_version, supported_schema)
+            if previous_manifest.artifact.sha256 == candidate_manifest.artifact.sha256:
+                raise DataValidationError("Candidate cannot be its own direct predecessor")
             if (
                 candidate_manifest.previous_known_good_digest
                 != f"sha256:{previous_manifest.artifact.sha256}"

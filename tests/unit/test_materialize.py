@@ -6,6 +6,8 @@ import hashlib
 import json
 import os
 import sqlite3
+import subprocess
+import sys
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
@@ -88,6 +90,8 @@ def _release(
     consumed: bool = True,
     indexed: bool = True,
     parser_status: str = "indexed",
+    rights_artifact: str = "data/genes.zip",
+    local_distribution_allowed: bool = True,
 ) -> FixtureRelease:
     from clinpgx_link.releases.bundle import BundleLimits, pack_bundle
     from clinpgx_link.releases.identity import release_identity
@@ -99,7 +103,12 @@ def _release(
 
     release_dir = _private(tmp_path / f"release-{marker}")
     source_dir = _private(release_dir / "source")
-    rights = parse_licenses(_canonical(licenses_value()))
+    rights_value = licenses_value()
+    license_record = rights_value["licenses"][0]  # type: ignore[index]
+    license_record["affected_artifacts"] = [rights_artifact]  # type: ignore[index]
+    if not local_distribution_allowed:
+        license_record["distribution"]["operator_local"]["allowed"] = False  # type: ignore[index]
+    rights = parse_licenses(_canonical(rights_value))
     rights_raw = rights_bytes(rights)
     archive = f"archive-{marker}".encode()
     member = f"member-{marker}".encode()
@@ -495,3 +504,197 @@ def test_failed_selection_commit_restores_old_current(
             **_kwargs(data_root),  # type: ignore[arg-type]
         )
     assert os.readlink(data_root / "current") == f"versions/{first.artifact_digest}"
+
+
+def test_nonbootstrap_upgrade_rejects_candidate_as_its_own_predecessor(tmp_path: Path) -> None:
+    from clinpgx_link.exceptions import DataValidationError
+    from clinpgx_link.releases.materialize import install_release
+
+    first = _release(tmp_path, "a")
+    candidate = _release(tmp_path, "self")
+    data_root = _private(tmp_path / "data")
+    install_release(first.release_input, **_kwargs(data_root))  # type: ignore[arg-type]
+
+    with pytest.raises(DataValidationError, match="predecessor"):
+        install_release(
+            candidate.release_input,
+            previous=candidate.release_input,
+            **_kwargs(data_root),  # type: ignore[arg-type]
+        )
+
+    assert os.readlink(data_root / "current") == f"versions/{first.artifact_digest}"
+
+
+@pytest.mark.parametrize("target", ["fixed", "lock"])
+def test_fifo_substitution_is_rejected_without_blocking(tmp_path: Path, target: str) -> None:
+    root = _private(tmp_path / "root")
+    fifo = root / ("schema.json" if target == "fixed" else ".materialize.lock")
+    os.mkfifo(fifo, mode=0o600 if target == "lock" else 0o444)
+    operation = (
+        "read_immutable(root, 'schema.json', 1024)"
+        if target == "fixed"
+        else "_lock(root, 0.1).__enter__()"
+    )
+    code = f"""
+from pathlib import Path
+from clinpgx_link.exceptions import DataValidationError
+from clinpgx_link.releases.materialization import read_immutable
+from clinpgx_link.releases.materialize import _lock
+root = Path({str(root)!r})
+try:
+    {operation}
+except DataValidationError:
+    raise SystemExit(0)
+raise SystemExit(1)
+"""
+
+    result = subprocess.run(  # noqa: S603 - bounded local regression subprocess
+        [sys.executable, "-c", code], check=False, timeout=1
+    )
+    assert result.returncode == 0
+
+
+def test_fixed_and_lock_admission_explicitly_use_nonblocking_open(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from clinpgx_link.releases import materialization, materialize
+
+    fixed_root = _private(tmp_path / "fixed")
+    (fixed_root / "schema.json").write_bytes(b"{}")
+    (fixed_root / "schema.json").chmod(0o444)
+    lock_root = _private(tmp_path / "lock")
+    observed: list[int] = []
+    real_open = os.open
+
+    def recording_open(path: object, flags: int, *args: object, **kwargs: object) -> int:
+        if path in {"schema.json", lock_root / ".materialize.lock"}:
+            observed.append(flags)
+        return real_open(path, flags, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(materialization.os, "open", recording_open)
+    monkeypatch.setattr(materialize.os, "open", recording_open)
+    assert materialization.read_immutable(fixed_root, "schema.json", 1024) == b"{}"
+    with materialize._lock(lock_root, 0.1):
+        pass
+    assert len(observed) == 2
+    assert all(flags & os.O_NONBLOCK for flags in observed)
+
+
+def test_retained_hardlink_is_rejected(tmp_path: Path) -> None:
+    from clinpgx_link.exceptions import DataValidationError
+    from clinpgx_link.releases.materialize import install_release
+
+    release = _release(tmp_path, "a")
+    data_root = _private(tmp_path / "data")
+    install_release(release.release_input, **_kwargs(data_root))  # type: ignore[arg-type]
+    schema = data_root / "versions" / release.artifact_digest / "schema.json"
+    external = tmp_path / "schema-copy.json"
+    schema.unlink()
+    external.write_bytes(
+        (release.release_input.artifact_path.parent / "source/schema.json").read_bytes()
+    )  # type: ignore[union-attr]
+    external.chmod(0o444)
+    os.link(external, schema)
+
+    with pytest.raises(DataValidationError, match="immutable and regular"):
+        install_release(release.release_input, **_kwargs(data_root))  # type: ignore[arg-type]
+
+
+def test_rights_mapping_is_exact_but_local_stage_does_not_claim_publication_approval(
+    tmp_path: Path,
+) -> None:
+    from clinpgx_link.exceptions import DataValidationError
+    from clinpgx_link.releases.materialize import stage_release
+
+    bad = _release(tmp_path, "bad-rights", rights_artifact="data/other.zip")
+    with pytest.raises(DataValidationError) as caught:
+        stage_release(bad.release_input, **_kwargs(_private(tmp_path / "bad-data")))  # type: ignore[arg-type]
+    assert caught.value.subtype == "rights_invalid"
+
+    local_only = _release(tmp_path, "local", local_distribution_allowed=False)
+    receipt = stage_release(
+        local_only.release_input,
+        **_kwargs(_private(tmp_path / "local-data")),  # type: ignore[arg-type]
+    )
+    assert receipt.release_tag == local_only.tag
+
+
+def test_semantic_verifier_contains_no_unbounded_fetchall() -> None:
+    import inspect
+
+    from clinpgx_link.releases import materialization
+
+    assert ".fetchall(" not in inspect.getsource(materialization)
+
+
+def test_first_versions_creation_requires_durable_data_root_sync(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from clinpgx_link.exceptions import DataValidationError
+    from clinpgx_link.releases import materialize
+
+    release = _release(tmp_path, "a")
+    data_root = _private(tmp_path / "data")
+    real_fsync = materialize.os.fsync
+
+    def reject_data_root(descriptor: int) -> None:
+        if os.readlink(f"/proc/self/fd/{descriptor}") == str(data_root):
+            raise OSError("synthetic data-root durability failure")
+        real_fsync(descriptor)
+
+    monkeypatch.setattr(materialize.os, "fsync", reject_data_root)
+    with pytest.raises(DataValidationError, match="versions"):
+        materialize.stage_release(release.release_input, **_kwargs(data_root))  # type: ignore[arg-type]
+    assert not (data_root / "current").exists()
+    assert not any((data_root / "versions").iterdir())
+
+
+def test_huge_lock_timeout_and_application_incompatibility_are_typed(tmp_path: Path) -> None:
+    from clinpgx_link.exceptions import DataValidationError
+    from clinpgx_link.releases import materialize
+
+    release = _release(tmp_path, "a")
+    kwargs = _kwargs(_private(tmp_path / "data"))
+    kwargs["lock_timeout_seconds"] = 10**10_000
+    with pytest.raises(DataValidationError, match="timeout"):
+        materialize.stage_release(release.release_input, **kwargs)  # type: ignore[arg-type]
+
+    kwargs = _kwargs(_private(tmp_path / "other"))
+    kwargs["application_version"] = "3.0.0"
+    with pytest.raises(DataValidationError, match="incompatible"):
+        materialize.stage_release(release.release_input, **kwargs)  # type: ignore[arg-type]
+
+
+def test_selection_commit_and_recovery_failure_is_typed_and_leaves_no_recovery_link(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from clinpgx_link.exceptions import DataValidationError
+    from clinpgx_link.releases import materialize
+
+    first = _release(tmp_path, "a")
+    second = _release(tmp_path, "b", f"sha256:{first.artifact_digest}")
+    data_root = _private(tmp_path / "data")
+    materialize.install_release(first.release_input, **_kwargs(data_root))  # type: ignore[arg-type]
+    real_fsync = materialize.os.fsync
+    real_replace = materialize.os.replace
+
+    def fail_commit_sync(descriptor: int) -> None:
+        if os.readlink(f"/proc/self/fd/{descriptor}") == str(data_root):
+            raise OSError("synthetic selection commit failure")
+        real_fsync(descriptor)
+
+    def fail_recovery_replace(source: object, destination: object, **kwargs: object) -> None:
+        if isinstance(source, str) and source.startswith(".current.recovery."):
+            raise OSError("synthetic selection recovery failure")
+        real_replace(source, destination, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(materialize.os, "fsync", fail_commit_sync)
+    monkeypatch.setattr(materialize.os, "replace", fail_recovery_replace)
+    with pytest.raises(DataValidationError) as caught:
+        materialize.install_release(
+            second.release_input,
+            previous=_retained(first),
+            **_kwargs(data_root),  # type: ignore[arg-type]
+        )
+    assert caught.value.subtype == "selection_recovery_failed"
+    assert not any(path.name.startswith(".current.recovery.") for path in data_root.iterdir())
