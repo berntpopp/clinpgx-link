@@ -146,6 +146,7 @@ class ArtifactProvenance(StrictModel):
     http_version_id: Metadata | None
     http_content_length: NonNegativeInt | None
     sha256: Sha256Hex
+    byte_count: NonNegativeInt
     retrieved_at: Timestamp
     embedded_marker: Annotated[str, Field(min_length=1, max_length=512)] | None
     embedded_created_at: Timestamp | None
