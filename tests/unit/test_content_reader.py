@@ -316,3 +316,21 @@ def test_pointer_descent_through_scalar_is_rejected():
 
     with pytest.raises(InvalidInputError):
         read_content(b'{"x":"abc"}', media_type="application/json", pointer="/x/0")
+
+
+def test_late_structure_page_does_not_materialize_all_child_descriptors():
+    import tracemalloc
+
+    from clinpgx_link.content.reader import read_content
+
+    raw = b"[" + b"0," * 49999 + b"0]"
+    tracemalloc.start()
+    try:
+        result = read_content(raw, media_type="application/json", start=49999, length=1)
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    assert result["items"][0]["key"] == 49999
+    assert result["returned"] == 1
+    assert result["has_more"] is False
+    assert peak < len(raw) * 20

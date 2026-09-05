@@ -11,6 +11,8 @@ import hashlib
 import json
 import math
 import re
+from collections.abc import Iterator
+from itertools import islice
 from typing import Any
 
 from clinpgx_link.exceptions import DataValidationError, InvalidInputError, ResponseTooLargeError
@@ -165,15 +167,18 @@ def _structure_page(
     start: int,
     length: int,
 ) -> dict[str, Any]:
-    entries: list[tuple[str | int, Any]] = (
-        list(value.items()) if isinstance(value, dict) else list(enumerate(value))
-    )
-    total = len(entries)
+    total = len(value)
     if start > total:
         raise _invalid("start", "Start must not exceed the reported total length.")
 
+    entries: Iterator[tuple[str | int, Any]]
+    if isinstance(value, dict):
+        entries = islice(value.items(), start, min(start + length, total))
+    else:
+        entries = ((index, value[index]) for index in range(start, min(start + length, total)))
+
     items: list[dict[str, Any]] = []
-    for key, child_value in entries[start : min(start + length, total)]:
+    for key, child_value in entries:
         child = _child_pointer(pointer, key)
         item = {"key": key, "pointer": child, **_describe(child_value)}
         candidate_items = [*items, item]
