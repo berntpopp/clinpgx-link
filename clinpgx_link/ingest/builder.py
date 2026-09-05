@@ -12,6 +12,7 @@ import tempfile
 from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import asdict, dataclass, is_dataclass
 from datetime import date, datetime
+from decimal import Decimal
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -27,7 +28,7 @@ from clinpgx_link.data.coverage import (
 )
 from clinpgx_link.exceptions import DataValidationError, InvalidInputError
 from clinpgx_link.ingest.acquire import AcquiredMember, AcquiredSource, read_local_source
-from clinpgx_link.ingest.json_records import iter_json_records
+from clinpgx_link.ingest.json_records import LOSSLESS_JSON_NUMBER_KEY, iter_json_records
 from clinpgx_link.ingest.spreadsheets import parse_spreadsheet
 from clinpgx_link.ingest.tabular import TabularReader
 
@@ -70,6 +71,8 @@ def _canonical_json(value: Any) -> str:
             return asdict(item)  # type: ignore[arg-type]
         if isinstance(item, (datetime, date)):
             return item.isoformat()
+        if isinstance(item, Decimal):
+            return {LOSSLESS_JSON_NUMBER_KEY: str(item)}
         raise TypeError(f"Unsupported normalized value: {type(item).__name__}")
 
     return json.dumps(

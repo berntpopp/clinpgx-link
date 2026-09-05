@@ -188,6 +188,26 @@ def test_json_profiles_retain_needed_children_without_pathway_row_explosion(tmp_
     assert pathway_count == 2
 
 
+def test_json_decimal_normalization_uses_an_explicit_lossless_representation(
+    tmp_path: Path,
+) -> None:
+    """Catch exact source decimals becoming rounded or non-serializable during ingestion."""
+    from clinpgx_link.ingest.builder import build_snapshot
+
+    source_path = tmp_path / "precision.json.zip"
+    _archive(
+        source_path,
+        {"precision.json": b'[{"frequency":0.12345678901234567890123456789}]'},
+    )
+    built = build_snapshot([_source(source_path)], tmp_path / "out", RELEASE_TAG)
+    with sqlite3.connect(built.database) as connection:
+        fields_json = connection.execute("SELECT fields_json FROM record").fetchone()[0]
+
+    assert json.loads(fields_json) == {
+        "frequency": {"$clinpgxJsonNumber": "0.12345678901234567890123456789"}
+    }
+
+
 def test_failed_candidate_build_preserves_previous_snapshot_and_never_activates(
     tmp_path: Path,
 ) -> None:

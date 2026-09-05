@@ -110,6 +110,18 @@ def test_json_records_index_array_root_pathways_without_fabricating_a_wrapper() 
     ]
 
 
+def test_json_records_do_not_round_source_numbers() -> None:
+    """Catch conversion of source decimals through an IEEE-754 binary float."""
+    from decimal import Decimal
+
+    from clinpgx_link.ingest.json_records import iter_json_records
+
+    records = list(
+        iter_json_records(io.BytesIO(b'[{"frequency":0.12345678901234567890123456789}]'))
+    )
+    assert records[0].value["frequency"] == Decimal("0.12345678901234567890123456789")
+
+
 def _profiled_workbook() -> bytes:
     from openpyxl import Workbook
 

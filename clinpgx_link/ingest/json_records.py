@@ -10,6 +10,8 @@ import ijson  # type: ignore[import-untyped]
 
 from clinpgx_link.exceptions import DataValidationError
 
+LOSSLESS_JSON_NUMBER_KEY = "$clinpgxJsonNumber"
+
 
 class _RejectDuplicates(dict[str, Any]):
     def __setitem__(self, key: str, value: Any) -> None:
@@ -93,7 +95,7 @@ def _items(stream: BinaryIO, prefix: str) -> Iterator[Any]:
             stream,
             prefix,
             map_type=_RejectDuplicates,
-            use_float=True,
+            use_float=False,
         )
     except DataValidationError:
         raise
@@ -130,4 +132,4 @@ def iter_json_records(stream: BinaryIO) -> Iterator[JsonRecord]:
     yield from _nested_records(root, base_pointer="", parent_pointer="", depth=1)
 
 
-__all__ = ["JsonRecord", "iter_json_records"]
+__all__ = ["LOSSLESS_JSON_NUMBER_KEY", "JsonRecord", "iter_json_records"]
