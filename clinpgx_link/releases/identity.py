@@ -52,7 +52,10 @@ def release_identity(
         raise DataValidationError("Invalid release-key input", subtype="release_key_invalid")
     seen: set[str] = set()
     artifacts: list[dict[str, str]] = []
-    for name, digest in sources:
+    for source in sources:
+        if not isinstance(source, (tuple, list)) or len(source) != 2:
+            raise DataValidationError("Invalid release source pair", subtype="release_key_invalid")
+        name, digest = source
         if (
             not isinstance(name, str)
             or not name
