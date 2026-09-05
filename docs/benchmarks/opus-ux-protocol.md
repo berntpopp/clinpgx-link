@@ -1,8 +1,10 @@
 # Mounted Opus MCP user-experience evaluation
 
 Requested 2026-09-05: multiple adversarial Claude Code rounds using Opus with this
-MCP mounted, followed by implementation fixes and fresh evaluation. Target is
-strictly greater than 80/100 in every scored category, not an averaged pass.
+MCP mounted, followed by implementation fixes and fresh evaluation. The user
+subsequently raised the target to strictly greater than 90/100 in every category
+and requested at least ten diverse tasks in parallel. Preserve the original
+baseline scores; do not retrospectively relabel its target or outcome.
 
 ## Method
 
@@ -30,6 +32,12 @@ repeat tasks for comparison and fresh equivalent tasks to check generalization;
 never coach the evaluator toward a desired score or remove failed tasks. Preserve
 the original frozen 18-case acceptance manifest separately and unchanged.
 
+For subsequent rounds, run twelve diverse tasks in isolated Opus sessions, with
+four sessions concurrently against the same MCP. Keep the existing shared upstream
+rate limit. Record queue delay separately from execution duration and label
+contention/cold-versus-warm conditions. Also run targeted single-session timing
+checks so concurrency is not confused with individual tool latency.
+
 ## Scoring and evidence
 
 The eight independently rated categories are correctness confidence, completeness,
@@ -37,6 +45,11 @@ discoverability, token efficiency, speed, error recovery, provenance clarity, an
 overall usability. Each rating must cite concrete interactions and improvements.
 Null/unobserved is incomplete, not 100. Self-ratings supplement independent answer
 and trace audits; an unsupported answer cannot pass because its author is confident.
+
+Report every task's observed scores. An aspect untested by one task may be evaluated
+by another task, but each aspect needs actual coverage. Use the minimum observed
+score per aspect for the batch gate, with independently checked task completion;
+an average cannot hide a low-scoring task. Do not tell Opus the target score.
 
 Audit returned identities and exact fields against read-only local source records
 or captured upstream responses. Report measured call counts, result sizes, elapsed
