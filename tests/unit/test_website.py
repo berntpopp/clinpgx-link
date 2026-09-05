@@ -124,7 +124,45 @@ async def test_website_client_decodes_text_plain_json_and_sets_clinpgx_license(t
     assert result.value == {"gene": "CYP2D6", "alleles": []}
     assert result.source.source == "ClinPGx website API"
     assert result.details["license"]["spdx"] == "CC-BY-SA-4.0"
+    assert result.details["source_pointer"] == "/data"
     assert source_client.content_store.get(result.details["content_ref"]).raw == raw
+    await client.close()
+
+
+@pytest.mark.asyncio
+async def test_text_plain_json_uses_one_exact_capacity_admission_and_cached_reference(tmp_path):
+    raw = b'{"alleles":[{"name":"*2"}]}'
+    calls = 0
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        return httpx.Response(200, content=raw, headers={"content-type": "text/plain"})
+
+    from clinpgx_link.api.client import ClinPGxClient
+    from clinpgx_link.api.website import WebsiteClient
+    from clinpgx_link.content.store import ContentStore
+
+    store = ContentStore(
+        tmp_path / "content.sqlite", max_bytes=len(raw), max_entries=1, ttl_seconds=3600
+    )
+    http_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    source_client = ClinPGxClient(_settings(tmp_path), http_client=http_client, content_store=store)
+    client = WebsiteClient(source_client)
+
+    first = await client.call("GET /site/alleleFunction/{geneId}", {"geneId": "PA128"}, {})
+    second = await client.call("GET /site/alleleFunction/{geneId}", {"geneId": "PA128"}, {})
+
+    assert calls == 1
+    assert first.value == {"alleles": [{"name": "*2"}]}
+    assert second.source.data_source == "cache"
+    assert second.details["content_ref"] == first.details["content_ref"]
+    assert first.details["media_type"] == "application/json"
+    assert first.details["upstream_media_type"] == "text/plain"
+    assert first.details["source_pointer"] == ""
+    stored = store.get(first.details["content_ref"])
+    assert stored.raw == raw
+    assert stored.media_type == "application/json"
     await client.close()
 
 

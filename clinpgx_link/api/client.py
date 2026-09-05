@@ -17,7 +17,7 @@ import httpx
 
 from clinpgx_link.api.cache import ResponseCache, request_cache_key
 from clinpgx_link.config import Settings
-from clinpgx_link.content.store import ContentStore
+from clinpgx_link.content.store import ContentStore, canonical_media_type
 from clinpgx_link.exceptions import (
     DataValidationError,
     InvalidInputError,
@@ -222,6 +222,32 @@ class ClinPGxClient:
             extra_headers={"prefer": "count=exact", "range-unit": "items"},
         )
 
+    async def _request_verified_text_json(
+        self,
+        method: str,
+        path: str,
+        *,
+        params: dict[str, Any] | None,
+        decoder: Callable[[Any], tuple[Any, str]],
+    ) -> SourceResponse:
+        """Decode one registry-authorized text/plain JSON route before retention."""
+        return await self._request(
+            "clinpgx",
+            self._settings.api_base_url,
+            self._settings.website_allowed_origins,
+            method,
+            path,
+            params=params,
+            form=None,
+            representation="text",
+            source_name="ClinPGx website API",
+            data_source="website",
+            value_decoder=decoder,
+            expected_media_types=frozenset({"text/plain"}),
+            effective_media_type="application/json",
+            cache_variant="verified-text-json",
+        )
+
     async def _request(
         self,
         namespace: str,
@@ -236,6 +262,10 @@ class ClinPGxClient:
         source_name: str,
         data_source: str,
         extra_headers: dict[str, str] | None = None,
+        value_decoder: Callable[[Any], tuple[Any, str]] | None = None,
+        expected_media_types: frozenset[str] | None = None,
+        effective_media_type: str | None = None,
+        cache_variant: str | None = None,
     ) -> SourceResponse:
         if self._closed:
             raise UpstreamUnavailableError("Source client is closed.")
@@ -247,7 +277,10 @@ class ClinPGxClient:
             raise InvalidInputError("Unsupported source representation.", field="representation")
         if _origin(base_url) not in allowed_origins:
             raise UpstreamUnavailableError("Source origin is not approved for this adapter.")
-        key = request_cache_key(namespace, method, path, params, form, representation)
+        cache_representation = (
+            representation if cache_variant is None else f"{representation}:{cache_variant}"
+        )
+        key = request_cache_key(namespace, method, path, params, form, cache_representation)
         cached = self._cache.get(key)
         if cached is not None:
             return cached
@@ -268,14 +301,26 @@ class ClinPGxClient:
         except TimeoutError as exc:
             raise UpstreamUnavailableError("Source request exceeded its deadline.") from exc
 
+        try:
+            upstream_media_type = canonical_media_type(
+                response.headers.get("content-type", "application/octet-stream")
+            )
+        except InvalidInputError as exc:
+            raise DataValidationError("Source returned an invalid Content-Type.") from exc
+        if expected_media_types is not None and upstream_media_type not in expected_media_types:
+            raise DataValidationError("Source did not return the required media type.")
+
         if response.status_code == 404 and path in _COLLECTION_PATHS:
             value: Any = []
+            source_pointer: str | None = None
         else:
             self._raise_for_status(response.status_code)
-            value = self._decode(path, response.status_code, raw, response.headers, representation)
-        media_type = response.headers.get("content-type", "application/octet-stream").split(";", 1)[
-            0
-        ]
+            value, source_pointer = self._decode(
+                path, response.status_code, raw, upstream_media_type, representation
+            )
+        if value_decoder is not None:
+            value, source_pointer = value_decoder(value)
+        media_type = canonical_media_type(effective_media_type or upstream_media_type)
         source = SourceInfo(
             source=source_name,
             url=str(response.url),
@@ -289,6 +334,10 @@ class ClinPGxClient:
             "byte_count": len(raw),
             "cache_hit": False,
         }
+        if media_type != upstream_media_type:
+            details["upstream_media_type"] = upstream_media_type
+        if source_pointer is not None:
+            details["source_pointer"] = source_pointer
         if content_range := response.headers.get("content-range"):
             details["content_range"] = content_range
         details["content_ref"] = self.content_store.put(raw, source, media_type)
@@ -396,14 +445,13 @@ class ClinPGxClient:
         path: str,
         status: int,
         raw: bytes,
-        headers: httpx.Headers,
+        media_type: str,
         representation: str,
-    ) -> Any:
+    ) -> tuple[Any, str]:
         if status == 204:
             if raw:
                 raise DataValidationError("No-content source response contained bytes.")
-            return None
-        media_type = headers.get("content-type", "").split(";", 1)[0].strip().lower()
+            return None, ""
         if representation == "jsonld" and media_type != "application/ld+json":
             raise DataValidationError("Source did not return the requested JSON-LD representation.")
         if representation == "json" and not (
@@ -420,8 +468,8 @@ class ClinPGxClient:
             if has_envelope:
                 if decoded["status"] != "success":
                     raise DataValidationError("Source returned a failure envelope.")
-                return decoded["data"]
-            return decoded
+                return decoded["data"], "/data"
+            return decoded, ""
         try:
             text = raw.decode("utf-8")
         except UnicodeError as exc:
@@ -430,8 +478,8 @@ class ClinPGxClient:
             stripped = text.strip()
             if re.fullmatch(r"[0-9]+", stripped) is None:
                 raise DataValidationError("Source returned an invalid literature identifier.")
-            return int(stripped)
-        return text
+            return int(stripped), ""
+        return text, ""
 
     async def close(self) -> None:
         if self._closed:

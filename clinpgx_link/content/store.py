@@ -22,6 +22,43 @@ from clinpgx_link.exceptions import (
 )
 from clinpgx_link.models import SourceInfo
 
+_MIME_TOKEN = re.compile(r"[A-Za-z0-9!#$%&'*+.^_`|~-]{1,127}\Z")
+_MIME_QUOTED_VALUE = re.compile(r'"(?:[\x20-\x21\x23-\x5b\x5d-\x7e]|\\[\x20-\x7e])*"\Z')
+
+
+def canonical_media_type(value: str) -> str:
+    """Return a bounded MIME essence after validating the complete declaration."""
+    if not isinstance(value, str) or not value or len(value) > 256:
+        raise InvalidInputError("Content media type is invalid.")
+    try:
+        value.encode("ascii")
+    except UnicodeEncodeError as exc:
+        raise InvalidInputError("Content media type is invalid.") from exc
+    if any(ord(character) < 0x20 or ord(character) == 0x7F for character in value):
+        raise InvalidInputError("Content media type is invalid.")
+
+    parts = value.split(";")
+    essence = parts[0].strip()
+    if essence.count("/") != 1:
+        raise InvalidInputError("Content media type is invalid.")
+    major, minor = essence.split("/", 1)
+    if _MIME_TOKEN.fullmatch(major) is None or _MIME_TOKEN.fullmatch(minor) is None:
+        raise InvalidInputError("Content media type is invalid.")
+
+    for parameter in parts[1:]:
+        parameter = parameter.strip()
+        if parameter.count("=") != 1:
+            raise InvalidInputError("Content media type is invalid.")
+        name, parameter_value = (part.strip() for part in parameter.split("=", 1))
+        if _MIME_TOKEN.fullmatch(name) is None or not parameter_value:
+            raise InvalidInputError("Content media type is invalid.")
+        if (
+            _MIME_TOKEN.fullmatch(parameter_value) is None
+            and _MIME_QUOTED_VALUE.fullmatch(parameter_value) is None
+        ):
+            raise InvalidInputError("Content media type is invalid.")
+    return f"{major.lower()}/{minor.lower()}"
+
 
 @dataclass(frozen=True)
 class StoredContent:
@@ -101,8 +138,9 @@ class ContentStore:
         """Admit a complete body or fail without breaking existing references."""
         if hashlib.sha256(raw).hexdigest() != source.sha256:
             raise DataValidationError("Source digest does not match content bytes.")
+        media_type = canonical_media_type(media_type)
         serialized = _source_json(source)
-        if len(serialized.encode()) > 65_536 or len(media_type) > 256:
+        if len(serialized.encode()) > 65_536:
             raise InvalidInputError("Content provenance exceeds cache metadata limits.")
         reference = _reference(serialized, media_type)
         now = self._clock()
@@ -157,11 +195,14 @@ class ContentStore:
             fields = json.loads(serialized)
             fields["warnings"] = tuple(fields["warnings"])
             source = SourceInfo(**fields)
+            canonical = canonical_media_type(media_type)
+            if canonical != media_type:
+                raise ValueError("Media type is not canonical.")
             if hashlib.sha256(raw).hexdigest() != source.sha256:
                 raise ValueError("Content digest mismatch.")
             if _reference(serialized, media_type) != reference:
                 raise ValueError("Reference identity mismatch.")
-        except (TypeError, ValueError, KeyError) as exc:
+        except (InvalidInputError, TypeError, ValueError, KeyError) as exc:
             raise DataValidationError("Cached content failed integrity validation.") from exc
         return StoredContent(reference, raw, source, media_type, expires)
 
@@ -169,3 +210,6 @@ class ContentStore:
         """Close the owned database connection during application shutdown."""
         with self._lock:
             self._db.close()
+
+
+__all__ = ["ContentStore", "StoredContent", "canonical_media_type"]

@@ -35,7 +35,7 @@ def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return result
 
 
-def _decode_text_json(value: Any) -> Any:
+def _decode_text_json(value: Any) -> tuple[Any, str]:
     if not isinstance(value, str):
         raise DataValidationError("Website source returned an invalid JSON representation.")
     try:
@@ -49,8 +49,8 @@ def _decode_text_json(value: Any) -> Any:
     if isinstance(decoded, dict) and set(decoded) >= {"status", "data"}:
         if decoded["status"] != "success":
             raise DataValidationError("Website source returned a failure envelope.")
-        return decoded["data"]
-    return decoded
+        return decoded["data"], "/data"
+    return decoded, ""
 
 
 class WebsiteClient:
@@ -82,40 +82,30 @@ class WebsiteClient:
             response = await self._client.request_cpic(request.path, params=request.params)
             response.details["license"] = dict(_CPIC_LICENSE)
         else:
-            response = await self._client.request(
-                request.method,
-                request.path,
-                params=request.params,
-                representation=request.representation,
-            )
             decoder = description["decoder"]
             if decoder == "json_body_even_if_text_plain":
-                response.value = _decode_text_json(response.value)
-                # The captured route contract, not MIME sniffing, authorizes JSON
-                # traversal. Retain identical original bytes with an effective JSON
-                # media type; keep the upstream declaration as separate evidence.
-                stored = self._client.content_store.get(response.details["content_ref"])
-                response.details["upstream_media_type"] = response.details["media_type"]
-                response.details["media_type"] = "application/json"
-                response.details["content_ref"] = self._client.content_store.put(
-                    stored.raw, response.source, "application/json"
+                response = await self._client._request_verified_text_json(
+                    request.method,
+                    request.path,
+                    params=request.params,
+                    decoder=_decode_text_json,
                 )
-            elif decoder == "json_envelope":
+            else:
+                response = await self._client.request(
+                    request.method,
+                    request.path,
+                    params=request.params,
+                    representation=request.representation,
+                )
+            if decoder == "json_envelope":
                 stored = self._client.content_store.get(response.details["content_ref"])
-                decoded = _decode_text_json(stored.raw.decode("utf-8"))
-                # _decode_text_json unwraps valid envelopes; check source shape independently.
-                try:
-                    source_shape = json.loads(stored.raw)
-                except (UnicodeError, json.JSONDecodeError) as exc:
-                    raise DataValidationError("Website source returned invalid JSON.") from exc
-                if not isinstance(source_shape, dict) or not set(source_shape) >= {
-                    "status",
-                    "data",
-                }:
+                decoded, source_pointer = _decode_text_json(stored.raw.decode("utf-8"))
+                if source_pointer != "/data":
                     raise DataValidationError(
                         "Website source response omitted its expected envelope."
                     )
                 response.value = decoded
+                response.details["source_pointer"] = source_pointer
             response.details["license"] = dict(_CLINPGX_LICENSE)
         response.details["operation"] = operation
         return response
