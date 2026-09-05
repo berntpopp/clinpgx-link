@@ -67,6 +67,19 @@ def _metadata_ref(
 
 
 def _decorate_member(member: dict[str, Any], source: SourceInfo, dataset_id: str) -> dict[str, Any]:
+    def decorate_sheet(value: Any, key: str, record_id: str) -> Any:
+        if isinstance(value, dict):
+            return {name: decorate_sheet(item, name, record_id) for name, item in value.items()}
+        if isinstance(value, list):
+            return [decorate_sheet(item, key, record_id) for item in value]
+        if isinstance(value, str) and (
+            key
+            in {"name", "path", "title", "description", "limitation", "sheet_name", "column_name"}
+            or key == "sheets"
+        ):
+            return _fence(value, source, record_id)
+        return value
+
     value = dict(member)
     path = str(value["path"])
     value["path"] = _fence(path, source, f"{dataset_id}:{path}")
@@ -79,28 +92,40 @@ def _decorate_member(member: dict[str, Any], source: SourceInfo, dataset_id: str
         fields.append(item)
     value["fields"] = fields
     if isinstance(value.get("sheets"), list):
-        value["sheets"] = [_fence(sheet, source, f"{dataset_id}:{path}") for sheet in value["sheets"]]
+        value["sheets"] = [
+            decorate_sheet(sheet, "sheets", f"{dataset_id}:{path}") for sheet in value["sheets"]
+        ]
     return value
 
 
 def _decorate_dataset(
-    description: dict[str, Any], source: SourceInfo, snapshot_id: str, store: ContentStore
+    description: dict[str, Any],
+    source: SourceInfo,
+    snapshot_id: str,
+    store: ContentStore,
+    *,
+    member_start: int = 0,
+    member_stop: int | None = None,
 ) -> dict[str, Any]:
     value = dict(description)
     dataset_id = str(value["dataset_id"])
     archive_ref = AssetReference(snapshot_id, dataset_id, None, str(value["sha256"])).encode()
     value["archive_ref"] = archive_ref
-    value["limitations"] = [_fence(item, source, dataset_id) for item in value.get("limitations", [])]
+    value["limitations"] = [
+        _fence(item, source, dataset_id) for item in value.get("limitations", [])
+    ]
     value["warnings"] = [_fence(item, source, dataset_id) for item in value.get("warnings", [])]
-    members = []
-    for member in value.get("members", []):
+    raw_members = description.get("members", [])
+    decorated_members = []
+    stop = len(raw_members) if member_stop is None else min(member_stop, len(raw_members))
+    for member in raw_members[member_start:stop]:
         path = str(member["path"])
         item = _decorate_member(member, source, dataset_id)
         item["content_ref"] = AssetReference(
             snapshot_id, dataset_id, path, str(member["sha256"])
         ).encode()
-        members.append(item)
-    value["members"] = members
+        decorated_members.append(item)
+    value["members"] = decorated_members
     metadata_ref = _metadata_ref(store, SourceResponse(description, source))
     if metadata_ref is not None:
         value["metadata_ref"] = metadata_ref
@@ -110,8 +135,12 @@ def _decorate_dataset(
 
 def _catalog_value(value: dict[str, Any], source: SourceInfo) -> dict[str, Any]:
     result = dict(value)
-    result["limitations"] = [_fence(item, source, str(value["dataset_id"])) for item in value.get("limitations", [])]
-    result["warnings"] = [_fence(item, source, str(value["dataset_id"])) for item in value.get("warnings", [])]
+    result["limitations"] = [
+        _fence(item, source, str(value["dataset_id"])) for item in value.get("limitations", [])
+    ]
+    result["warnings"] = [
+        _fence(item, source, str(value["dataset_id"])) for item in value.get("warnings", [])
+    ]
     return result
 
 
@@ -124,32 +153,94 @@ def register_dataset_tools(
     @server.tool(annotations=_ANNOTATIONS, tags={"catalog"}, output_schema=None)
     async def list_datasets(
         query: Annotated[
-            str | None, Field(description="Case-insensitive dataset ID or file-name filter.", max_length=256)
+            str | None,
+            Field(description="Case-insensitive dataset ID or file-name filter.", max_length=256),
         ] = None,
         include_legacy: Annotated[
             bool, Field(description="Include datasets marked legacy or deprecated.")
-        ] = False,
-        response_mode: Annotated[ResponseMode, Field(description="Response detail mode.")] = "compact",
+        ] = True,
+        limit: Annotated[int, Field(description="Maximum datasets to return.", ge=1, le=100)] = 20,
+        offset: Annotated[int, Field(description="Zero-based dataset offset.", ge=0)] = 0,
+        cursor: Annotated[
+            str | None, Field(description="Snapshot-bound continuation cursor.", max_length=2048)
+        ] = None,
+        response_mode: Annotated[
+            ResponseMode, Field(description="Response detail mode.")
+        ] = "compact",
     ) -> ToolResult:
         began = time.monotonic()
         try:
             if repository is None:
-                raise UpstreamUnavailableError("Local dataset snapshot is not configured.", subtype="dataset_unavailable")
+                raise UpstreamUnavailableError(
+                    "Local dataset snapshot is not configured.", subtype="dataset_unavailable"
+                )
+            if type(limit) is not int or not 1 <= limit <= 100:
+                raise InvalidInputError("Limit must be between 1 and 100.", field="limit")
+            if type(offset) is not int or offset < 0:
+                raise InvalidInputError("Offset must be non-negative.", field="offset")
+            if cursor is not None and offset:
+                raise InvalidInputError("Cursor and offset cannot be combined.", field="offset")
+            snapshot_id = str((await asyncio.to_thread(repository.status))["snapshot_id"])
+            selectors = {
+                "tool": "list_datasets",
+                "query": query,
+                "include_legacy": include_legacy,
+            }
+            if cursor is not None:
+                position = cursors.decode(cursor, selectors)
+                if position.identity != snapshot_id:
+                    raise UpstreamUnavailableError(
+                        "The cursor belongs to a different local snapshot.",
+                        subtype="snapshot_mismatch",
+                    )
+                offset = position.offset
             response = await asyncio.to_thread(repository.list_datasets)
+            if response.source.sha256 != snapshot_id.removeprefix("sha256:"):
+                raise UpstreamUnavailableError(
+                    "The local snapshot identity changed.", subtype="snapshot_mismatch"
+                )
             needle = query.casefold() if query else None
             values = []
             for item in response.value:
-                if not include_legacy and str(item.get("tier", "")).casefold() in {"legacy", "deprecated"}:
+                if not include_legacy and str(item.get("tier", "")).casefold() in {
+                    "legacy",
+                    "deprecated",
+                }:
                     continue
                 if needle and needle not in f"{item['dataset_id']} {item['file_name']}".casefold():
                     continue
                 values.append(_catalog_value(item, response.source))
-            return success_result(
-                values,
-                source=response.source,
-                collection=True,
-                elapsed_ms=(time.monotonic() - began) * 1000,
-            )
+            total = len(values)
+            if offset > total:
+                raise InvalidInputError("Offset exceeds dataset catalog.", field="offset")
+            selected = values[offset : offset + limit]
+            while True:
+                stop = offset + len(selected)
+                next_cursor = (
+                    cursors.encode(selectors, identity=snapshot_id, offset=stop)
+                    if stop < total
+                    else None
+                )
+                pagination = {
+                    "offset": offset,
+                    "returned": len(selected),
+                    "total_count": total,
+                    "has_more": next_cursor is not None,
+                    "next_cursor": next_cursor,
+                    "snapshot_id": snapshot_id,
+                }
+                try:
+                    return success_result(
+                        selected,
+                        source=response.source,
+                        collection=True,
+                        pagination=pagination,
+                        elapsed_ms=(time.monotonic() - began) * 1000,
+                    )
+                except ResponseTooLargeError:
+                    if len(selected) <= 1:
+                        raise
+                    selected = selected[: max(1, len(selected) // 2)]
         except ClinPGxError as exc:
             return error_result(exc)
         except Exception:
@@ -157,16 +248,25 @@ def register_dataset_tools(
 
     @server.tool(annotations=_ANNOTATIONS, tags={"catalog"}, output_schema=None)
     async def get_dataset(
-        dataset_id: Annotated[str, Field(description="Exact installed dataset identifier.", min_length=1, max_length=512)],
+        dataset_id: Annotated[
+            str,
+            Field(description="Exact installed dataset identifier.", min_length=1, max_length=512),
+        ],
         limit: Annotated[int, Field(description="Maximum members to return.", ge=1, le=100)] = 20,
         offset: Annotated[int, Field(description="Zero-based member offset.", ge=0)] = 0,
-        cursor: Annotated[str | None, Field(description="Snapshot-bound continuation cursor.", max_length=2048)] = None,
-        response_mode: Annotated[ResponseMode, Field(description="Response detail mode.")] = "compact",
+        cursor: Annotated[
+            str | None, Field(description="Snapshot-bound continuation cursor.", max_length=2048)
+        ] = None,
+        response_mode: Annotated[
+            ResponseMode, Field(description="Response detail mode.")
+        ] = "compact",
     ) -> ToolResult:
         began = time.monotonic()
         try:
             if repository is None:
-                raise UpstreamUnavailableError("Local dataset snapshot is not configured.", subtype="dataset_unavailable")
+                raise UpstreamUnavailableError(
+                    "Local dataset snapshot is not configured.", subtype="dataset_unavailable"
+                )
             if type(limit) is not int or not 1 <= limit <= 100:
                 raise InvalidInputError("Limit must be between 1 and 100.", field="limit")
             if type(offset) is not int or offset < 0:
@@ -179,24 +279,33 @@ def register_dataset_tools(
                 position = cursors.decode(cursor, selectors)
                 if position.identity != snapshot_id:
                     raise UpstreamUnavailableError(
-                        "The cursor belongs to a different local snapshot.", subtype="snapshot_mismatch"
+                        "The cursor belongs to a different local snapshot.",
+                        subtype="snapshot_mismatch",
                     )
                 offset = position.offset
             response = await asyncio.to_thread(repository.describe, dataset_id)
             if response.source.sha256 != snapshot_id.removeprefix("sha256:"):
-                raise UpstreamUnavailableError("The local snapshot identity changed.", subtype="snapshot_mismatch")
-            full = _decorate_dataset(response.value, response.source, snapshot_id, store)
-            members = full.pop("members")
-            total = len(members)
+                raise UpstreamUnavailableError(
+                    "The local snapshot identity changed.", subtype="snapshot_mismatch"
+                )
+            total = len(response.value.get("members", []))
             if offset > total:
                 raise InvalidInputError("Offset exceeds dataset members.", field="offset")
-            selected = members[offset : offset + limit]
-            value = dict(full)
-            value["members"] = selected
+            value = _decorate_dataset(
+                response.value,
+                response.source,
+                snapshot_id,
+                store,
+                member_start=offset,
+                member_stop=offset + limit,
+            )
+            selected = value["members"]
             value["response_mode"] = response_mode
             stop = offset + len(selected)
             next_cursor = (
-                cursors.encode(selectors, identity=snapshot_id, offset=stop) if stop < total else None
+                cursors.encode(selectors, identity=snapshot_id, offset=stop)
+                if stop < total
+                else None
             )
             pagination = {
                 "offset": offset,
@@ -237,8 +346,14 @@ def register_dataset_tools(
                         "content_ref": member["content_ref"],
                         "deferred_metadata": True,
                         "metadata_ref": value["metadata_ref"],
+                        "metadata_pointer": f"/members/{offset + index}",
+                        "fallback_args": {
+                            "content_ref": value["metadata_ref"],
+                            "pointer": f"/members/{offset + index}",
+                            "representation": "structure",
+                        },
                     }
-                    for member in selected
+                    for index, member in enumerate(selected)
                 ]
                 pagination["returned"] = len(selected)
                 return success_result(value, source=response.source, pagination=pagination)
