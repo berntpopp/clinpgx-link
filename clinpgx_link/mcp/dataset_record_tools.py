@@ -85,12 +85,20 @@ def _pointer_is_safe(pointer: str) -> bool:
     )
 
 
-def _has_unsafe_field_key(value: Any, *, depth: int = 0) -> bool:
+def _has_unsafe_field_key(
+    value: Any, *, trusted_field_names: frozenset[str] | None = None, depth: int = 0
+) -> bool:
     if isinstance(value, dict):
         if depth >= _MAX_POINTER_SEGMENTS:
             return True
         for key, item in value.items():
             key_text = str(key)
+            if (
+                depth == 0
+                and trusted_field_names is not None
+                and key_text not in trusted_field_names
+            ):
+                return True
             if (
                 not key_text
                 or len(key_text) > 512
@@ -99,7 +107,7 @@ def _has_unsafe_field_key(value: Any, *, depth: int = 0) -> bool:
                 or "~" in key_text
             ):
                 return True
-            if _has_unsafe_field_key(item, depth=depth + 1):
+            if _has_unsafe_field_key(item, trusted_field_names=None, depth=depth + 1):
                 return True
     elif isinstance(value, list):
         if depth >= _MAX_POINTER_SEGMENTS:
@@ -123,20 +131,10 @@ def _has_overlong_field_pointer(value: Any, pointer: str = "/fields") -> bool:
     return False
 
 
-def _field_fence_count(value: Any) -> int:
-    if isinstance(value, str):
-        return 1
-    if isinstance(value, dict):
-        return sum(_field_fence_count(item) for item in value.values())
-    if isinstance(value, list):
-        return sum(_field_fence_count(item) for item in value)
-    return 0
-
-
-def _needs_deferred_fields(value: Any) -> bool:
-    if _has_unsafe_field_key(value) or _field_fence_count(value) > 100:
-        return True
-    return len(_json(value)) > 60_000
+def _needs_deferred_fields(
+    value: Any, *, trusted_field_names: frozenset[str] | None = None
+) -> bool:
+    return _has_unsafe_field_key(value, trusted_field_names=trusted_field_names)
 
 
 def _escape_pointer_token(value: str) -> str:
@@ -253,10 +251,14 @@ def _shape_row(
     store: ContentStore,
     *,
     asset_response: SourceResponse | None = None,
+    trusted_field_names: frozenset[str] | None = None,
+    force_defer_fields: bool = False,
 ) -> dict[str, Any]:
     source_ref = _asset_reference(asset_response or response, snapshot_id)
     fields = row.get("fields", {})
-    defer_fields = _needs_deferred_fields(fields)
+    defer_fields = force_defer_fields or _needs_deferred_fields(
+        fields, trusted_field_names=trusted_field_names
+    )
     derived_ref = (
         _retain_row(store, row, response.source)
         if defer_fields or _has_oversized_string(row)
@@ -294,6 +296,28 @@ def _shape_row(
     return result
 
 
+def shape_dataset_row(
+    row: dict[str, Any],
+    response: SourceResponse,
+    snapshot_id: str,
+    store: ContentStore,
+    *,
+    asset_response: SourceResponse | None = None,
+    trusted_field_names: frozenset[str] | None = None,
+    force_defer_fields: bool = False,
+) -> dict[str, Any]:
+    """Shape one indexed row for MCP consumers with explicit recovery metadata."""
+    return _shape_row(
+        row,
+        response,
+        snapshot_id,
+        store,
+        asset_response=asset_response,
+        trusted_field_names=trusted_field_names,
+        force_defer_fields=force_defer_fields,
+    )
+
+
 def _selected_value(
     row: dict[str, Any], pointer: str, response: SourceResponse, store: ContentStore
 ) -> dict[str, Any]:
@@ -326,6 +350,25 @@ def _selected_value(
             raw.decode("utf-8"), source=response.source, record_id=str(row["record_id"])
         ),
     }
+
+
+def select_dataset_record_value(
+    row: dict[str, Any], pointer: str, response: SourceResponse, store: ContentStore
+) -> dict[str, Any]:
+    """Select a validated normalized-record pointer with a derived retained ref."""
+    return _selected_value(row, pointer, response, store)
+
+
+def _trusted_fields(description: SourceResponse, member: str) -> frozenset[str]:
+    for candidate in description.value.get("members", []):
+        if candidate.get("path") != member:
+            continue
+        return frozenset(
+            str(field["name"])
+            for field in candidate.get("fields", [])
+            if isinstance(field, dict) and isinstance(field.get("name"), str)
+        )
+    return frozenset()
 
 
 def register_dataset_record_tools(
@@ -406,6 +449,11 @@ def register_dataset_record_tools(
                 raise UpstreamUnavailableError(
                     "The local snapshot identity changed.", subtype="snapshot_mismatch"
                 )
+            description = await asyncio.to_thread(repository.describe, dataset_id)
+            trusted_by_member = {
+                str(member["path"]): _trusted_fields(description, str(member["path"]))
+                for member in description.value.get("members", [])
+            }
             asset_responses = await asyncio.gather(
                 *(
                     asyncio.to_thread(
@@ -414,12 +462,24 @@ def register_dataset_record_tools(
                     for row in response.value
                 )
             )
-            rows = [
-                _shape_row(row, response, snapshot_id, store, asset_response=asset_response)
-                for row, asset_response in zip(response.value, asset_responses, strict=True)
-            ]
+            row_inputs = list(zip(response.value, asset_responses, strict=True))
+            visible_count = len(row_inputs)
+            force_defer_fields = False
             total = int(response.details["total_count"])
             while True:
+                visible_inputs = row_inputs[:visible_count]
+                rows = [
+                    shape_dataset_row(
+                        row,
+                        response,
+                        snapshot_id,
+                        store,
+                        asset_response=asset_response,
+                        trusted_field_names=trusted_by_member.get(str(row["member"])),
+                        force_defer_fields=force_defer_fields,
+                    )
+                    for row, asset_response in visible_inputs
+                ]
                 next_offset = offset + len(rows)
                 next_cursor = (
                     cursors.encode(selectors, identity=snapshot_id, offset=next_offset)
@@ -442,9 +502,12 @@ def register_dataset_record_tools(
                         elapsed_ms=(time.monotonic() - began) * 1000,
                     )
                 except ResponseTooLargeError:
-                    if len(rows) <= 1:
+                    if visible_count > 1:
+                        visible_count = max(1, visible_count // 2)
+                    elif not force_defer_fields:
+                        force_defer_fields = True
+                    else:
                         raise
-                    rows = rows[: max(1, len(rows) // 2)]
         except ClinPGxError as exc:
             return error_result(exc)
         except Exception:
@@ -476,21 +539,49 @@ def register_dataset_record_tools(
                 raise UpstreamUnavailableError(
                     "The local snapshot identity changed.", subtype="snapshot_mismatch"
                 )
-            result = _shape_row(response.value, response, snapshot_id, store)
+            description = await asyncio.to_thread(repository.describe, response.value["dataset_id"])
+            trusted_names = _trusted_fields(description, str(response.value["member"]))
+            result = shape_dataset_row(
+                response.value,
+                response,
+                snapshot_id,
+                store,
+                trusted_field_names=trusted_names,
+            )
             result["snapshot_id"] = snapshot_id
             result["response_mode"] = response_mode
             if pointer:
                 result["selected"] = _selected_value(response.value, pointer, response, store)
-            return success_result(
-                result,
-                source=response.source,
-                snapshot_id=snapshot_id,
-                elapsed_ms=(time.monotonic() - began) * 1000,
-            )
+            try:
+                return success_result(
+                    result,
+                    source=response.source,
+                    snapshot_id=snapshot_id,
+                    elapsed_ms=(time.monotonic() - began) * 1000,
+                )
+            except ResponseTooLargeError:
+                result = shape_dataset_row(
+                    response.value,
+                    response,
+                    snapshot_id,
+                    store,
+                    trusted_field_names=trusted_names,
+                    force_defer_fields=True,
+                )
+                return success_result(
+                    result,
+                    source=response.source,
+                    snapshot_id=snapshot_id,
+                    elapsed_ms=(time.monotonic() - began) * 1000,
+                )
         except ClinPGxError as exc:
             return error_result(exc)
         except Exception:
             return error_result(ClinPGxError("Dataset record retrieval failed."))
 
 
-__all__ = ["register_dataset_record_tools"]
+__all__ = [
+    "register_dataset_record_tools",
+    "select_dataset_record_value",
+    "shape_dataset_row",
+]
