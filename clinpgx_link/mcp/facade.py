@@ -20,10 +20,12 @@ from clinpgx_link.content.store import ContentStore, StoredContent
 from clinpgx_link.data.repository import DatasetRepository
 from clinpgx_link.exceptions import ClinPGxError, UpstreamUnavailableError
 from clinpgx_link.mcp.data_tools import register_data_tools
+from clinpgx_link.mcp.dataset_record_tools import register_dataset_record_tools
 from clinpgx_link.mcp.dataset_tools import register_dataset_tools
 from clinpgx_link.mcp.diagnostics import register_diagnostics
 from clinpgx_link.mcp.envelope import error_result, success_result
 from clinpgx_link.mcp.middleware import BoundaryGuard
+from clinpgx_link.mcp.record_tools import register_record_tools
 from clinpgx_link.mcp.schema_tools import register_schema_tool
 from clinpgx_link.mcp.untrusted_content import UntrustedText, enforce_limits, fence_text
 from clinpgx_link.models import SourceInfo
@@ -81,6 +83,8 @@ def create_mcp(
     register_schema_tool(server, content_store)
     register_data_tools(server, content_store, api_service, website_client)
     register_dataset_tools(server, repository, content_store)
+    register_dataset_record_tools(server, repository, content_store)
+    register_record_tools(server, repository, content_store, api_service, website_client)
     register_diagnostics(
         server,
         api_service if source_access_allowed else None,

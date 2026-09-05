@@ -511,6 +511,15 @@ def test_http_dataset_discovery_reaches_exact_installed_bytes(tmp_path):
             assert json.loads(result["content"][0]["text"]) == result["structuredContent"]
             return result["structuredContent"]
 
+        entry = call(
+            "search_records",
+            {
+                "entity_type": "gene",
+                "source": "download",
+                "filters": {"id": "PA124"},
+            },
+        )
+        assert entry["results"][0]["id"] == "PA124"
         catalog = call("list_datasets", {"query": "genes", "limit": 1})
         assert catalog["results"][0]["dataset_id"] == "data/genes.zip"
         dataset = call("get_dataset", {"dataset_id": "data/genes.zip"})
@@ -524,3 +533,64 @@ def test_http_dataset_discovery_reaches_exact_installed_bytes(tmp_path):
         assert content["offline_available"] is True
         assert content["has_more"] is False
         assert base64.b64decode(content["base64"]) == (FIXTURES / "genes.tsv").read_bytes()
+        first = call("search_dataset", {"dataset_id": "data/genes.zip", "limit": 1})
+        page = first["_meta"]["pagination"]
+        assert page["total_count"] == 2
+        assert first["results"][0]["id"] == "PA124"
+        second = call(
+            "search_dataset",
+            {
+                "dataset_id": "data/genes.zip",
+                "cursor": page["next_cursor"],
+                "limit": 1,
+            },
+        )
+        assert second["results"][0]["id"] == "PA165884561"
+        assert second["_meta"]["pagination"]["has_more"] is False
+        record = call(
+            "get_dataset_record",
+            {
+                "record_id": first["results"][0]["record_id"],
+                "pointer": "/fields/Symbol",
+            },
+        )
+        assert record["_meta"]["snapshot_id"] == built.snapshot_id
+        assert json.loads(record["result"]["selected"]["data"]["text"]) == "CYP2C19"
+        entities = call(
+            "search_records",
+            {
+                "entity_type": "gene",
+                "source": "download",
+                "filters": {"name": "CYP2C19"},
+            },
+        )
+        assert entities["results"][0]["id"] == "PA124"
+        detail = call(
+            "get_record",
+            {
+                "entity_type": "gene",
+                "record_id": "PA124",
+                "source": "download",
+                "pointer": "/fields/Symbol",
+            },
+        )
+        assert detail["_meta"]["snapshot_id"] == built.snapshot_id
+        assert json.loads(detail["result"]["selected"]["data"]["text"]) == "CYP2C19"
+        annotations = call(
+            "search_dataset",
+            {
+                "dataset_id": "data/summaryAnnotations.zip",
+                "member": "summary_annotations.tsv",
+                "filters": {"Summary Annotation ID": "655384602"},
+            },
+        )
+        related = call(
+            "get_related_records",
+            {
+                "record_id": annotations["results"][0]["record_id"],
+                "result_type": "evidence",
+                "source": "download",
+            },
+        )
+        assert related["_meta"]["pagination"]["total_count"] == 1
+        assert related["results"][0]["join"]["relation_kind"] == "evidence"
