@@ -62,6 +62,7 @@ def success_result(
     pagination: dict[str, Any] | None = None,
     content_ref: str | None = None,
     snapshot_id: str | None = None,
+    search_diagnostics: dict[str, Any] | None = None,
 ) -> ToolResult:
     """Build provenance without confusing source time with the time of a cache hit."""
     request_id = REQUEST_ID.get() or str(uuid.uuid4())
@@ -115,6 +116,11 @@ def success_result(
                 **({"content_ref": content_ref} if content_ref is not None else {}),
                 **({"pagination": pagination} if pagination is not None else {}),
                 **({"snapshot_id": snapshot_id} if snapshot_id is not None else {}),
+                **(
+                    {"search_diagnostics": search_diagnostics}
+                    if search_diagnostics is not None
+                    else {}
+                ),
             },
             "recommended_citation": (
                 f"ClinPGx source evidence. {source.url} "

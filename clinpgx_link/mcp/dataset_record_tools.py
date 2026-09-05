@@ -37,6 +37,10 @@ from clinpgx_link.mcp.dataset_record_selection import (
 from clinpgx_link.mcp.envelope import error_result, success_result
 from clinpgx_link.mcp.pagination import CursorCodec
 from clinpgx_link.mcp.row_provenance import row_provenance
+from clinpgx_link.mcp.search_diagnostics import (
+    dataset_search_error_result,
+    presented_search_diagnostics,
+)
 from clinpgx_link.mcp.selection import validate_pointers
 from clinpgx_link.mcp.untrusted_content import fence_text
 from clinpgx_link.models import SourceInfo, SourceResponse
@@ -385,8 +389,6 @@ def register_dataset_record_tools(
                 raise InvalidInputError("Limit must be between 1 and 100.", field="limit")
             if type(offset) is not int or offset < 0:
                 raise InvalidInputError("Offset must be non-negative.", field="offset")
-            if cursor is not None and offset:
-                raise InvalidInputError("Cursor and offset cannot be combined.", field="offset")
             snapshot_id = str((await asyncio.to_thread(repository.status))["snapshot_id"])
             selected_filters = filters or {}
             selectors = {
@@ -399,7 +401,7 @@ def register_dataset_record_tools(
                 "include_fields": list(selected_field_names) if selected_field_names else None,
             }
             if cursor is not None:
-                position = cursors.decode(cursor, selectors)
+                position = cursors.decode(cursor, selectors, offset=offset)
                 if position.identity != snapshot_id:
                     raise UpstreamUnavailableError(
                         "The cursor belongs to a different local snapshot.",
@@ -433,6 +435,7 @@ def register_dataset_record_tools(
             visible_count = len(row_inputs)
             force_defer_fields = False
             total = int(response.details["total_count"])
+            search_diagnostics = presented_search_diagnostics(response)
             while True:
                 visible_inputs = row_inputs[:visible_count]
                 rows: list[dict[str, Any]] = []
@@ -490,6 +493,7 @@ def register_dataset_record_tools(
                             "snapshot_id": snapshot_id,
                         },
                         elapsed_ms=(time.monotonic() - began) * 1000,
+                        search_diagnostics=search_diagnostics,
                     )
                 except ResponseTooLargeError:
                     if visible_count > 1:
@@ -499,11 +503,7 @@ def register_dataset_record_tools(
                     else:
                         raise
         except ClinPGxError as exc:
-            return error_result(
-                exc,
-                content_ref=getattr(exc, "content_ref", None),
-                recovery_pointer=getattr(exc, "recovery_pointer", None),
-            )
+            return dataset_search_error_result(exc)
         except Exception:
             return error_result(ClinPGxError("Dataset search failed."))
 

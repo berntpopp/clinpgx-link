@@ -25,6 +25,8 @@ RecoveryKind = Literal[
     "unsupported_related_mode",
     "unsupported_search_source",
     "variant_symbol_requires_search",
+    "use_exact_gene_or_name_filter",
+    "restart_dataset_search",
 ]
 _KINDS = frozenset(
     {
@@ -35,6 +37,8 @@ _KINDS = frozenset(
         "unsupported_related_mode",
         "unsupported_search_source",
         "variant_symbol_requires_search",
+        "use_exact_gene_or_name_filter",
+        "restart_dataset_search",
     }
 )
 
@@ -176,6 +180,8 @@ class RecoveryPlan:
             ),
             "unsupported_search_source": (self.entity_type, self.source),
             "variant_symbol_requires_search": (self.entity_type, self.record_id, self.source),
+            "use_exact_gene_or_name_filter": (),
+            "restart_dataset_search": (),
         }
         if any(value is None for value in required[self.kind]):
             raise ValueError("recovery context is incomplete")
@@ -199,6 +205,14 @@ def variant_symbol_plan(record_id: str, view: str) -> RecoveryPlan:
         source="api",
         view=view,
     )
+
+
+def dataset_query_plan() -> RecoveryPlan:
+    return RecoveryPlan("use_exact_gene_or_name_filter")
+
+
+def dataset_cursor_plan() -> RecoveryPlan:
+    return RecoveryPlan("restart_dataset_search")
 
 
 def not_found_plan(entity_type: str, record_id: str, source: str, view: str) -> RecoveryPlan | None:
@@ -320,7 +334,22 @@ def recovery_payload(plan: RecoveryPlan) -> dict[str, Any]:
     choices: dict[str, list[str]] = {}
     commands: list[dict[str, Any]] = []
 
-    if plan.kind == "variant_symbol_requires_search":
+    if plan.kind == "use_exact_gene_or_name_filter":
+        limitation = (
+            "ASCII star is not literal token syntax. Omit query and use a supported exact "
+            "gene or name filter after inspecting dataset capabilities."
+        )
+        choices["filters"] = ["gene", "name"]
+        choices["match"] = ["exact"]
+        commands.append(_command("get_server_capabilities", {}))
+    elif plan.kind == "restart_dataset_search":
+        limitation = (
+            "A cursor is bound to its original selectors and snapshot, expires, and cannot "
+            "be combined with a nonzero offset. Restart from the first page without a cursor."
+        )
+        choices["offset"] = ["0"]
+        commands.append(_command("get_server_capabilities", {}))
+    elif plan.kind == "variant_symbol_requires_search":
         limitation = (
             "An rs identifier is a variant symbol, not a detail-route accession; "
             "this validation failure is not an absence claim about the source."
@@ -471,6 +500,8 @@ __all__ = [
     "WEBSITE_GET",
     "RecoveryPlan",
     "api_filters",
+    "dataset_cursor_plan",
+    "dataset_query_plan",
     "detail_source_supported",
     "invalid_filters_plan",
     "not_found_plan",

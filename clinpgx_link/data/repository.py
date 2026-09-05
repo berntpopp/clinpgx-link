@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import base64
 import json
-import re
 import sqlite3
 import threading
 from pathlib import Path
@@ -15,6 +14,13 @@ from clinpgx_link.data.coverage import field_metadata, known_filters
 from clinpgx_link.data.repository_locking import serialized_connection
 from clinpgx_link.data.repository_profiles import RepositoryProfileSupport
 from clinpgx_link.data.repository_provenance import dataset_source, snapshot_source
+from clinpgx_link.data.search_diagnostics import (
+    CANONICAL_FILTERS,
+    DiagnosticLimits,
+    RepositoryDiagnosticsSupport,
+    validate_canonical_filters,
+    validate_filter_values,
+)
 from clinpgx_link.exceptions import (
     DataValidationError,
     InvalidInputError,
@@ -24,17 +30,17 @@ from clinpgx_link.exceptions import (
 )
 from clinpgx_link.models import SourceInfo, SourceResponse
 
-_FILTERS = frozenset({"id", "name", "gene", "chemical", "variant", "source", "annotation_id"})
 _ENTITY_TYPES = frozenset(
     {"allele", "annotation_id", "chemical", "disease", "gene", "literature", "variant"}
 )
-_FTS_TOKEN = re.compile(r"\w+", re.UNICODE)
 
 
-class DatasetRepository(RepositoryProfileSupport):
+class DatasetRepository(RepositoryDiagnosticsSupport, RepositoryProfileSupport):
     """Repository pinned to an immutable SQLite database file and snapshot identity."""
 
-    def __init__(self, database: Path) -> None:
+    def __init__(
+        self, database: Path, *, diagnostic_limits: DiagnosticLimits | None = None
+    ) -> None:
         if not database.is_absolute() or database.is_symlink() or not database.is_file():
             raise InvalidInputError("Snapshot database must be an absolute regular file")
         self.database = database.resolve(strict=True)
@@ -42,6 +48,7 @@ class DatasetRepository(RepositoryProfileSupport):
         uri = f"file:{self.database.as_posix()}?mode=ro&immutable=1"
         self._connection = sqlite3.connect(uri, uri=True, check_same_thread=False)
         self._connection.row_factory = sqlite3.Row
+        self._initialize_search_diagnostics(diagnostic_limits)
         self._snapshot_id = self._metadata("snapshot_id")
         self._release_tag = self._metadata("release_tag")
         self._load_profile_validation()
@@ -158,26 +165,6 @@ class DatasetRepository(RepositoryProfileSupport):
         if isinstance(offset, bool) or not isinstance(offset, int) or offset < 0:
             raise InvalidInputError("Offset must be non-negative", field="offset")
 
-    @staticmethod
-    def _validate_filter_values(filters: dict[str, str]) -> None:
-        for key, value in filters.items():
-            if not isinstance(value, str) or not value:
-                raise InvalidInputError("Filter values must be nonempty strings", field=key)
-
-    @classmethod
-    def _validate_filters(cls, filters: dict[str, str]) -> None:
-        cls._validate_filter_values(filters)
-        for key in filters:
-            if key not in _FILTERS:
-                raise InvalidInputError("Unknown canonical dataset filter", field=key)
-
-    @staticmethod
-    def _fts_query(query: str) -> str | None:
-        tokens = _FTS_TOKEN.findall(query)
-        if not tokens:
-            return None
-        return " AND ".join(f'"{token.replace(chr(34), chr(34) * 2)}"' for token in tokens)
-
     @serialized_connection
     def _query_records(
         self,
@@ -282,7 +269,7 @@ class DatasetRepository(RepositoryProfileSupport):
         if match not in {"exact", "member"}:
             raise InvalidInputError("Match must be exact or member", field="match")
         selected_filters = filters or {}
-        self._validate_filter_values(selected_filters)
+        validate_filter_values(selected_filters)
         dataset = self._dataset(dataset_id)
         member_row: sqlite3.Row | None = None
         if member is not None:
@@ -294,10 +281,10 @@ class DatasetRepository(RepositoryProfileSupport):
                 raise NotFoundError("Dataset member is not installed", field="member")
         supported = known_filters(dataset_id, member)
         canonical_filters = {
-            key: value for key, value in selected_filters.items() if key in _FILTERS
+            key: value for key, value in selected_filters.items() if key in CANONICAL_FILTERS
         }
         source_filters = {
-            key: value for key, value in selected_filters.items() if key not in _FILTERS
+            key: value for key, value in selected_filters.items() if key not in CANONICAL_FILTERS
         }
         unsupported = set(canonical_filters) - supported
         if unsupported:
@@ -356,7 +343,15 @@ class DatasetRepository(RepositoryProfileSupport):
             limit=limit,
             offset=offset,
         )
-        return self._page_response(values, total, offset, dataset)
+        return self._with_search_diagnostics(
+            self._page_response(values, total, offset, dataset),
+            dataset_id=dataset_id,
+            member=member,
+            query=query,
+            canonical_filters=canonical_filters,
+            source_filters=source_filters,
+            match=match,
+        )
 
     @serialized_connection
     def get_record(self, record_id: str, *, expected_snapshot: str | None = None) -> SourceResponse:
@@ -402,16 +397,16 @@ class DatasetRepository(RepositoryProfileSupport):
         if entity_type not in _ENTITY_TYPES:
             raise InvalidInputError("Unknown local entity type", field="entity_type")
         selected_filters = filters or {}
-        self._validate_filters(selected_filters)
+        validate_canonical_filters(selected_filters)
         supported_rows = self._connection.execute(
             "SELECT DISTINCT candidate.kind FROM membership entity "
             "JOIN membership candidate ON candidate.record_pk=entity.record_pk "
             "WHERE entity.kind=?",
             (entity_type,),
         ).fetchall()
-        supported_filters = {str(row[0]) for row in supported_rows if str(row[0]) in _FILTERS} | {
-            "id"
-        }
+        supported_filters = {
+            str(row[0]) for row in supported_rows if str(row[0]) in CANONICAL_FILTERS
+        } | {"id"}
         unsupported = set(selected_filters) - supported_filters
         if unsupported:
             raise InvalidInputError(

@@ -353,7 +353,9 @@ def test_declared_member_match_finds_multivalue_gene_drug_row(tmp_path: Path) ->
 
 
 def test_literal_fts_uses_and_tokens_without_accepting_fts_syntax(tmp_path: Path) -> None:
-    """Catch OR broadening or caller-controlled FTS operators entering the query grammar."""
+    """Catch OR broadening while ASCII-star syntax is rejected by the corrected contract."""
+    from clinpgx_link.exceptions import InvalidInputError
+
     repository, _ = _repository(tmp_path)
 
     found = repository.search(
@@ -361,15 +363,49 @@ def test_literal_fts_uses_and_tokens_without_accepting_fts_syntax(tmp_path: Path
         member="summary_ann_evidence.tsv",
         query="response risperidone",
     )
-    hostile = repository.search(
-        "data/summaryAnnotations.zip",
-        member="summary_ann_evidence.tsv",
-        query='response" OR *',
-    )
+    with pytest.raises(InvalidInputError) as hostile:
+        repository.search(
+            "data/summaryAnnotations.zip",
+            member="summary_ann_evidence.tsv",
+            query='response" OR *',
+        )
 
     assert found.details["total_count"] == 1
     assert found.value[0]["fields"]["Evidence ID"] == "655387128"
-    assert hostile.details["total_count"] == 0
+    assert hostile.value.subtype == "wildcard_query_unsupported"
+
+
+@pytest.mark.parametrize("query", ["*1", "*1/*1", "CYP2C19*2"])
+def test_literal_fts_rejects_ascii_star_with_fixed_exact_filter_guidance(
+    tmp_path: Path, query: str
+) -> None:
+    """ASCII star allele notation cannot be silently tokenized into a broader query."""
+    from clinpgx_link.exceptions import InvalidInputError
+
+    repository, _ = _repository(tmp_path)
+    with pytest.raises(InvalidInputError) as failure:
+        repository.search("data/genes.zip", member="genes.tsv", query=query)
+
+    assert failure.value.field == "query"
+    assert failure.value.subtype == "wildcard_query_unsupported"
+    assert failure.value.hint == "Omit query and use an exact gene or name filter."
+
+
+@pytest.mark.parametrize(
+    ("query", "expression"),
+    [
+        ("Reference/Reference", '"Reference" AND "Reference"'),
+        ("5-fluorouracil", '"5" AND "fluorouracil"'),
+        ("N-acetyltransferase", '"N" AND "acetyltransferase"'),
+        ("warfarin/clopidogrel", '"warfarin" AND "clopidogrel"'),
+        ("rs123", '"rs123"'),
+    ],
+)
+def test_literal_fts_keeps_nonstar_punctuation_as_token_search(query: str, expression: str) -> None:
+    """Allowed punctuation remains token syntax and is never represented as exact matching."""
+    from clinpgx_link.data.repository import DatasetRepository
+
+    assert DatasetRepository._fts_query(query) == expression
 
 
 def test_expected_snapshot_mismatch_fails_before_dataset_lookup_or_rows(tmp_path: Path) -> None:
