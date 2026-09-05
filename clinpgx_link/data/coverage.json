@@ -1,0 +1,3009 @@
+{
+  "schema_version": 1,
+  "snapshot_date": "2026-09-05",
+  "state": "foundation_inventory_not_runtime_coverage",
+  "source_artifacts": {
+    "openapi": {
+      "path": "api/openapi.json",
+      "sha256": "d5945ffec00d99df4b10c8df605ff95ca1e1f360279541580c67097e93f06cc6"
+    },
+    "operations": {
+      "path": "api/operations.json",
+      "operation_count": 34
+    },
+    "download_registry": {
+      "source": "https://api.clinpgx.org/v1/data/file/data/?view=min",
+      "sha256": "ec2819750c2da439b8edc49d31c12694be1012acac8f845190bab54e9d490084",
+      "file_count": 120
+    },
+    "website_operations_evidence": {
+      "path": "docs/research/website-operations.json",
+      "sha256": "71a0be1640212bffe97c912de168c723f27a894bfce1d1a6ba91f8d916aa88a0",
+      "operation_count": 27
+    }
+  },
+  "coverage_dimensions": [
+    "discovered",
+    "acquired",
+    "parsed",
+    "searchable",
+    "field_complete",
+    "mcp_retrievable"
+  ],
+  "website_operation_registry": "api/website_operations.json",
+  "api_operations": [
+    {
+      "operation": "GET /data/pathway",
+      "namespace": "api",
+      "documented": true,
+      "status": "documented_unverified",
+      "mcp_retrievable": false,
+      "fallbacks": [],
+      "limitations": [
+        "Captured from official OpenAPI; runtime behavior has not been verified for every parameter combination."
+      ],
+      "evidence": [
+        "clinpgx_link/api/openapi.json",
+        "docs/research/clinpgx-sources.md#rest-api-inventory"
+      ]
+    },
+    {
+      "operation": "GET /data/pathway/{id}",
+      "namespace": "api",
+      "documented": true,
+      "status": "documented_unverified",
+      "mcp_retrievable": false,
+      "fallbacks": [],
+      "limitations": [
+        "Captured from official OpenAPI; runtime behavior has not been verified for every parameter combination."
+      ],
+      "evidence": [
+        "clinpgx_link/api/openapi.json",
+        "docs/research/clinpgx-sources.md#rest-api-inventory"
+      ]
+    },
+    {
+      "operation": "GET /data/gene",
+      "namespace": "api",
+      "documented": true,
+      "status": "observed_working",
+      "mcp_retrievable": false,
+      "fallbacks": [],
+      "limitations": [
+        "Not yet exposed through MCP; live shape or timing was sampled, not every parameter combination."
+      ],
+      "evidence": [
+        "clinpgx_link/api/openapi.json",
+        "docs/research/clinpgx-sources.md#rest-api-inventory"
+      ]
+    },
+    {
+      "operation": "GET /data/gene/{id}",
+      "namespace": "api",
+      "documented": true,
+      "status": "observed_working",
+      "mcp_retrievable": false,
+      "fallbacks": [],
+      "limitations": [
+        "Not yet exposed through MCP; live shape or timing was sampled, not every parameter combination."
+      ],
+      "evidence": [
+        "clinpgx_link/api/openapi.json",
+        "docs/research/clinpgx-sources.md#rest-api-inventory"
+      ]
+    },
+    {
+      "operation": "GET /data/gene/{id}/crossReferences",
+      "namespace": "api",
+      "documented": true,
+      "status": "documented_unverified",
+      "mcp_retrievable": false,
+      "fallbacks": [],
+      "limitations": [
+        "Captured from official OpenAPI; runtime behavior has not been verified for every parameter combination."
+      ],
+      "evidence": [
+        "clinpgx_link/api/openapi.json",
+        "docs/research/clinpgx-sources.md#rest-api-inventory"
+      ]
+    },
+    {
+      "operation": "GET /data/gene/{id}/ontologyTerms",
+      "namespace": "api",
+      "documented": true,
+      "status": "documented_unverified",
+      "mcp_retrievable": false,
+      "fallbacks": [],
+      "limitations": [
+        "Captured from official OpenAPI; runtime behavior has not been verified for every parameter combination."
+      ],
+      "evidence": [
+        "clinpgx_link/api/openapi.json",
+        "docs/research/clinpgx-sources.md#rest-api-inventory"
+      ]
+    },
+    {
+      "operation": "GET /data/chemical",
+      "namespace": "api",
+      "documented": true,
+      "status": "documented_unverified",
+      "mcp_retrievable": false,
+      "fallbacks": [],
+      "limitations": [
+        "Captured from official OpenAPI; runtime behavior has not been verified for every parameter combination."
+      ],
+      "evidence": [
+        "clinpgx_link/api/openapi.json",
+        "docs/research/clinpgx-sources.md#rest-api-inventory"
+      ]
+    },
+    {
+      "operation": "GET /data/chemical/{id}",
+      "namespace": "api",
+      "documented": true,
+      "status": "observed_working",
+      "mcp_retrievable": false,
+      "fallbacks": [],
+      "limitations": [
+        "Not yet exposed through MCP; live shape or timing was sampled, not every parameter combination."
+      ],
+      "evidence": [
+        "clinpgx_link/api/openapi.json",
+        "docs/research/clinpgx-sources.md#rest-api-inventory"
+      ]
+    },
+    {
+      "operation": "GET /data/disease",
+      "namespace": "api",
+      "documented": true,
+      "status": "documented_unverified",
+      "mcp_retrievable": false,
+      "fallbacks": [],
+      "limitations": [
+        "Captured from official OpenAPI; runtime behavior has not been verified for every parameter combination."
+      ],
+      "evidence": [
+        "clinpgx_link/api/openapi.json",
+        "docs/research/clinpgx-sources.md#rest-api-inventory"
+      ]
+    },
+    {
+      "operation": "GET /data/disease/{id}",
+      "namespace": "api",
+      "documented": true,
+      "status": "documented_unverified",
+      "mcp_retrievable": false,
+      "fallbacks": [],
+      "limitations": [
+        "Captured from official OpenAPI; runtime behavior has not been verified for every parameter combination."
+      ],
+      "evidence": [
+        "clinpgx_link/api/openapi.json",
+        "docs/research/clinpgx-sources.md#rest-api-inventory"
+      ]
+    },
+    {
+      "operation": "GET /data/variant/",
+      "namespace": "api",
+      "documented": true,
+      "status": "documented_unverified",
+      "mcp_retrievable": false,
+      "fallbacks": [],
+      "limitations": [
+        "Captured from official OpenAPI; runtime behavior has not been verified for every parameter combination."
+      ],
+      "evidence": [
+        "clinpgx_link/api/openapi.json",
+        "docs/research/clinpgx-sources.md#rest-api-inventory"
+      ]
+    },
+    {
+      "operation": "GET /data/variant/{id}",
+      "namespace": "api",
+      "documented": true,
+      "status": "observed_working",
+      "mcp_retrievable": false,
+      "fallbacks": [],
+      "limitations": [
+        "Not yet exposed through MCP; live shape or timing was sampled, not every parameter combination."
+      ],
+      "evidence": [
+        "clinpgx_link/api/openapi.json",
+        "docs/research/clinpgx-sources.md#rest-api-inventory"
+      ]
+    },
+    {
+      "operation": "GET /data/literature",
+      "namespace": "api",
+      "documented": true,
+      "status": "documented_unverified",
+      "mcp_retrievable": false,
+      "fallbacks": [],
+      "limitations": [
+        "Captured from official OpenAPI; runtime behavior has not been verified for every parameter combination."
+      ],
+      "evidence": [
+        "clinpgx_link/api/openapi.json",
+        "docs/research/clinpgx-sources.md#rest-api-inventory"
+      ]
+    },
+    {
+      "operation": "GET /data/literature/{id}",
+      "namespace": "api",
+      "documented": true,
+      "status": "documented_unverified",
+      "mcp_retrievable": false,
+      "fallbacks": [],
+      "limitations": [
+        "Captured from official OpenAPI; runtime behavior has not been verified for every parameter combination."
+      ],
+      "evidence": [
+        "clinpgx_link/api/openapi.json",
+        "docs/research/clinpgx-sources.md#rest-api-inventory"
+      ]
+    },
+    {
+      "operation": "GET /data/guidelineAnnotation",
+      "namespace": "api",
+      "documented": true,
+      "status": "observed_working",
+      "mcp_retrievable": false,
+      "fallbacks": [],
+      "limitations": [
+        "Not yet exposed through MCP; live shape or timing was sampled, not every parameter combination."
+      ],
+      "evidence": [
+        "clinpgx_link/api/openapi.json",
+        "docs/research/clinpgx-sources.md#rest-api-inventory"
+      ]
+    },
+    {
+      "operation": "GET /data/guidelineAnnotation/{id}",
+      "namespace": "api",
+      "documented": true,
+      "status": "observed_working",
+      "mcp_retrievable": false,
+      "fallbacks": [],
+      "limitations": [
+        "Not yet exposed through MCP; live shape or timing was sampled, not every parameter combination."
+      ],
+      "evidence": [
+        "clinpgx_link/api/openapi.json",
+        "docs/research/clinpgx-sources.md#rest-api-inventory"
+      ]
+    },
+    {
+      "operation": "GET /data/label",
+      "namespace": "api",
+      "documented": true,
+      "status": "documented_unverified",
+      "mcp_retrievable": false,
+      "fallbacks": [],
+      "limitations": [
+        "Captured from official OpenAPI; runtime behavior has not been verified for every parameter combination."
+      ],
+      "evidence": [
+        "clinpgx_link/api/openapi.json",
+        "docs/research/clinpgx-sources.md#rest-api-inventory"
+      ]
+    },
+    {
+      "operation": "GET /data/label/{id}",
+      "namespace": "api",
+      "documented": true,
+      "status": "documented_unverified",
+      "mcp_retrievable": false,
+      "fallbacks": [],
+      "limitations": [
+        "Captured from official OpenAPI; runtime behavior has not been verified for every parameter combination."
+      ],
+      "evidence": [
+        "clinpgx_link/api/openapi.json",
+        "docs/research/clinpgx-sources.md#rest-api-inventory"
+      ]
+    },
+    {
+      "operation": "GET /data/summaryAnnotation",
+      "namespace": "api",
+      "documented": true,
+      "status": "observed_working",
+      "mcp_retrievable": false,
+      "fallbacks": [],
+      "limitations": [
+        "Not yet exposed through MCP; live shape or timing was sampled, not every parameter combination."
+      ],
+      "evidence": [
+        "clinpgx_link/api/openapi.json",
+        "docs/research/clinpgx-sources.md#rest-api-inventory"
+      ]
+    },
+    {
+      "operation": "GET /data/summaryAnnotation/{id}",
+      "namespace": "api",
+      "documented": true,
+      "status": "observed_working",
+      "mcp_retrievable": false,
+      "fallbacks": [],
+      "limitations": [
+        "Not yet exposed through MCP; live shape or timing was sampled, not every parameter combination."
+      ],
+      "evidence": [
+        "clinpgx_link/api/openapi.json",
+        "docs/research/clinpgx-sources.md#rest-api-inventory"
+      ]
+    },
+    {
+      "operation": "GET /data/variantAnnotation",
+      "namespace": "api",
+      "documented": true,
+      "status": "observed_working",
+      "mcp_retrievable": false,
+      "fallbacks": [],
+      "limitations": [
+        "Not yet exposed through MCP; live shape or timing was sampled, not every parameter combination."
+      ],
+      "evidence": [
+        "clinpgx_link/api/openapi.json",
+        "docs/research/clinpgx-sources.md#rest-api-inventory"
+      ]
+    },
+    {
+      "operation": "GET /data/variantAnnotation/{id}",
+      "namespace": "api",
+      "documented": true,
+      "status": "observed_working",
+      "mcp_retrievable": false,
+      "fallbacks": [],
+      "limitations": [
+        "Not yet exposed through MCP; live shape or timing was sampled, not every parameter combination."
+      ],
+      "evidence": [
+        "clinpgx_link/api/openapi.json",
+        "docs/research/clinpgx-sources.md#rest-api-inventory"
+      ]
+    },
+    {
+      "operation": "GET /data/vip/{id}",
+      "namespace": "api",
+      "documented": true,
+      "status": "observed_broken",
+      "mcp_retrievable": false,
+      "fallbacks": [
+        {
+          "operation": "GET /site/vip/{id}",
+          "status": "observed_working",
+          "evidence": "docs/research/website-coverage.md#bounded-live-endpoint-probes"
+        },
+        {
+          "operation": "GET /data/gene/{id}",
+          "status": "observed_working",
+          "evidence": "docs/research/clinpgx-api-probe-fixtures-2026-09-05.json"
+        }
+      ],
+      "limitations": [
+        "A live gene vipId returned HTTP 400 because vip is rejected as an ObjectType."
+      ],
+      "evidence": [
+        "clinpgx_link/api/openapi.json",
+        "docs/research/clinpgx-sources.md#rest-api-inventory"
+      ]
+    },
+    {
+      "operation": "GET /data/ontologyTerm",
+      "namespace": "api",
+      "documented": true,
+      "status": "documented_unverified",
+      "mcp_retrievable": false,
+      "fallbacks": [],
+      "limitations": [
+        "Captured from official OpenAPI; runtime behavior has not been verified for every parameter combination."
+      ],
+      "evidence": [
+        "clinpgx_link/api/openapi.json",
+        "docs/research/clinpgx-sources.md#rest-api-inventory"
+      ]
+    },
+    {
+      "operation": "GET /data/dataAnnotation",
+      "namespace": "api",
+      "documented": true,
+      "status": "documented_unverified",
+      "mcp_retrievable": false,
+      "fallbacks": [],
+      "limitations": [
+        "Captured from official OpenAPI; runtime behavior has not been verified for every parameter combination."
+      ],
+      "evidence": [
+        "clinpgx_link/api/openapi.json",
+        "docs/research/clinpgx-sources.md#rest-api-inventory"
+      ]
+    },
+    {
+      "operation": "GET /data/connection",
+      "namespace": "api",
+      "documented": true,
+      "status": "observed_working",
+      "mcp_retrievable": false,
+      "fallbacks": [],
+      "limitations": [
+        "Not yet exposed through MCP; live shape or timing was sampled, not every parameter combination."
+      ],
+      "evidence": [
+        "clinpgx_link/api/openapi.json",
+        "docs/research/clinpgx-sources.md#rest-api-inventory"
+      ]
+    },
+    {
+      "operation": "GET /report/variantFrequency",
+      "namespace": "api",
+      "documented": true,
+      "status": "observed_working",
+      "mcp_retrievable": false,
+      "fallbacks": [],
+      "limitations": [
+        "Not yet exposed through MCP; live shape or timing was sampled, not every parameter combination."
+      ],
+      "evidence": [
+        "clinpgx_link/api/openapi.json",
+        "docs/research/clinpgx-sources.md#rest-api-inventory"
+      ]
+    },
+    {
+      "operation": "GET /report/stats",
+      "namespace": "api",
+      "documented": true,
+      "status": "observed_working",
+      "mcp_retrievable": false,
+      "fallbacks": [],
+      "limitations": [
+        "Not yet exposed through MCP; live shape or timing was sampled, not every parameter combination."
+      ],
+      "evidence": [
+        "clinpgx_link/api/openapi.json",
+        "docs/research/clinpgx-sources.md#rest-api-inventory"
+      ]
+    },
+    {
+      "operation": "GET /report/crossReference",
+      "namespace": "api",
+      "documented": true,
+      "status": "observed_working",
+      "mcp_retrievable": false,
+      "fallbacks": [],
+      "limitations": [
+        "Not yet exposed through MCP; live shape or timing was sampled, not every parameter combination."
+      ],
+      "evidence": [
+        "clinpgx_link/api/openapi.json",
+        "docs/research/clinpgx-sources.md#rest-api-inventory"
+      ]
+    },
+    {
+      "operation": "GET /report/pair/{firstObjId}/{secondObjId}/{resultType}",
+      "namespace": "api",
+      "documented": true,
+      "status": "observed_working",
+      "mcp_retrievable": false,
+      "fallbacks": [],
+      "limitations": [
+        "Not yet exposed through MCP; live shape or timing was sampled, not every parameter combination."
+      ],
+      "evidence": [
+        "clinpgx_link/api/openapi.json",
+        "docs/research/clinpgx-sources.md#rest-api-inventory"
+      ]
+    },
+    {
+      "operation": "GET /report/connectedObjects/{id}/{type}",
+      "namespace": "api",
+      "documented": true,
+      "status": "observed_working",
+      "mcp_retrievable": false,
+      "fallbacks": [],
+      "limitations": [
+        "Not yet exposed through MCP; live shape or timing was sampled, not every parameter combination."
+      ],
+      "evidence": [
+        "clinpgx_link/api/openapi.json",
+        "docs/research/clinpgx-sources.md#rest-api-inventory"
+      ]
+    },
+    {
+      "operation": "GET /report/literatureId/{pmid}",
+      "namespace": "api",
+      "documented": true,
+      "status": "observed_working",
+      "mcp_retrievable": false,
+      "fallbacks": [],
+      "limitations": [
+        "Not yet exposed through MCP; live shape or timing was sampled, not every parameter combination."
+      ],
+      "evidence": [
+        "clinpgx_link/api/openapi.json",
+        "docs/research/clinpgx-sources.md#rest-api-inventory"
+      ]
+    },
+    {
+      "operation": "GET /infobutton",
+      "namespace": "api",
+      "documented": true,
+      "status": "documented_unverified",
+      "mcp_retrievable": false,
+      "fallbacks": [],
+      "limitations": [
+        "Captured from official OpenAPI; runtime behavior has not been verified for every parameter combination."
+      ],
+      "evidence": [
+        "clinpgx_link/api/openapi.json",
+        "docs/research/clinpgx-sources.md#rest-api-inventory"
+      ]
+    },
+    {
+      "operation": "POST /infobutton",
+      "namespace": "api",
+      "documented": true,
+      "status": "documented_unverified",
+      "mcp_retrievable": false,
+      "fallbacks": [],
+      "limitations": [
+        "Captured from official OpenAPI; runtime behavior has not been verified for every parameter combination."
+      ],
+      "evidence": [
+        "clinpgx_link/api/openapi.json",
+        "docs/research/clinpgx-sources.md#rest-api-inventory"
+      ]
+    }
+  ],
+  "datasets": [
+    {
+      "dataset_id": "data/CPIC.ClinVar.Submission.PA124.xlsx",
+      "file_name": "CPIC.ClinVar.Submission.PA124.xlsx",
+      "source_date": "2021-04-05T00:31:10-07:00",
+      "reported_size": 696955,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB.ClinVar.Submission.xlsx",
+      "file_name": "PharmGKB.ClinVar.Submission.xlsx",
+      "source_date": "2021-04-05T00:31:05-07:00",
+      "reported_size": 210069,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission.xlsx",
+      "source_date": "2021-10-19T11:52:45-07:00",
+      "reported_size": 347983,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Haplotypes_2021-10-22.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Haplotypes_2021-10-22.xlsx",
+      "source_date": "2021-10-22T16:35:21-07:00",
+      "reported_size": 351740,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2021-10-22.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2021-10-22.xlsx",
+      "source_date": "2021-10-22T16:35:37-07:00",
+      "reported_size": 275511,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2021-11-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2021-11-05.xlsx",
+      "source_date": "2021-11-05T00:32:04-07:00",
+      "reported_size": 275511,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2021-12-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2021-12-05.xlsx",
+      "source_date": "2021-12-05T00:32:00-08:00",
+      "reported_size": 271576,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2022-01-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2022-01-05.xlsx",
+      "source_date": "2022-01-05T13:29:38-08:00",
+      "reported_size": 229087,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2022-01-06.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2022-01-06.xlsx",
+      "source_date": "2022-01-06T12:57:51-08:00",
+      "reported_size": 229087,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2022-02-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2022-02-05.xlsx",
+      "source_date": "2022-02-05T00:32:00-08:00",
+      "reported_size": 224786,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2022-03-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2022-03-05.xlsx",
+      "source_date": "2022-03-05T00:31:54-08:00",
+      "reported_size": 227305,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2022-03-06.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2022-03-06.xlsx",
+      "source_date": "2022-03-06T20:51:57-08:00",
+      "reported_size": 227305,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2022-03-10.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2022-03-10.xlsx",
+      "source_date": "2022-03-10T02:28:26-08:00",
+      "reported_size": 227305,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2022-04-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2022-04-05.xlsx",
+      "source_date": "2022-04-05T00:32:06-07:00",
+      "reported_size": 227305,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2022-05-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2022-05-05.xlsx",
+      "source_date": "2022-05-05T00:32:05-07:00",
+      "reported_size": 224294,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2022-06-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2022-06-05.xlsx",
+      "source_date": "2022-06-05T00:32:01-07:00",
+      "reported_size": 224294,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2022-07-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2022-07-05.xlsx",
+      "source_date": "2022-07-05T00:32:05-07:00",
+      "reported_size": 224294,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2022-08-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2022-08-05.xlsx",
+      "source_date": "2022-08-05T00:32:05-07:00",
+      "reported_size": 224084,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2022-08-08.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2022-08-08.xlsx",
+      "source_date": "2022-08-08T02:27:01-07:00",
+      "reported_size": 224084,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2022-09-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2022-09-05.xlsx",
+      "source_date": "2022-09-05T00:32:03-07:00",
+      "reported_size": 224084,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2022-09-13.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2022-09-13.xlsx",
+      "source_date": "2022-09-13T19:27:21-07:00",
+      "reported_size": 224084,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2022-10-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2022-10-05.xlsx",
+      "source_date": "2022-10-05T00:32:02-07:00",
+      "reported_size": 224084,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2022-11-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2022-11-05.xlsx",
+      "source_date": "2022-11-05T00:32:03-07:00",
+      "reported_size": 224084,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2022-12-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2022-12-05.xlsx",
+      "source_date": "2022-12-05T00:32:01-08:00",
+      "reported_size": 224084,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2023-01-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2023-01-05.xlsx",
+      "source_date": "2023-01-05T00:32:11-08:00",
+      "reported_size": 224177,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2023-02-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2023-02-05.xlsx",
+      "source_date": "2023-02-05T00:32:15-08:00",
+      "reported_size": 224177,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2023-03-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2023-03-05.xlsx",
+      "source_date": "2023-03-05T00:32:18-08:00",
+      "reported_size": 224177,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2023-04-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2023-04-05.xlsx",
+      "source_date": "2023-04-05T11:46:07-07:00",
+      "reported_size": 224177,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2023-05-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2023-05-05.xlsx",
+      "source_date": "2023-05-05T00:32:19-07:00",
+      "reported_size": 226618,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2023-06-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2023-06-05.xlsx",
+      "source_date": "2023-06-05T00:32:20-07:00",
+      "reported_size": 225074,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2023-07-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2023-07-05.xlsx",
+      "source_date": "2023-07-05T00:32:17-07:00",
+      "reported_size": 225074,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2023-08-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2023-08-05.xlsx",
+      "source_date": "2023-08-05T00:31:13-07:00",
+      "reported_size": 225074,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2023-09-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2023-09-05.xlsx",
+      "source_date": "2023-09-05T00:31:55-07:00",
+      "reported_size": 225074,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2023-10-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2023-10-05.xlsx",
+      "source_date": "2023-10-05T00:32:05-07:00",
+      "reported_size": 225074,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2023-11-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2023-11-05.xlsx",
+      "source_date": "2023-11-05T00:32:01-07:00",
+      "reported_size": 222153,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2023-12-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2023-12-05.xlsx",
+      "source_date": "2023-12-05T00:32:04-08:00",
+      "reported_size": 213629,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2024-01-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2024-01-05.xlsx",
+      "source_date": "2024-01-05T00:32:04-08:00",
+      "reported_size": 213629,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2024-02-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2024-02-05.xlsx",
+      "source_date": "2024-02-05T00:32:17-08:00",
+      "reported_size": 213629,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2024-03-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2024-03-05.xlsx",
+      "source_date": "2024-03-05T00:32:07-08:00",
+      "reported_size": 213629,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2024-04-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2024-04-05.xlsx",
+      "source_date": "2024-04-05T00:28:12-07:00",
+      "reported_size": 213629,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2024-05-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2024-05-05.xlsx",
+      "source_date": "2024-05-05T00:28:14-07:00",
+      "reported_size": 213629,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2024-06-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2024-06-05.xlsx",
+      "source_date": "2024-06-05T00:31:45-07:00",
+      "reported_size": 213629,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2024-07-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2024-07-05.xlsx",
+      "source_date": "2024-07-05T00:31:43-07:00",
+      "reported_size": 213629,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2024-08-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2024-08-05.xlsx",
+      "source_date": "2024-08-05T00:31:50-07:00",
+      "reported_size": 213629,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2024-09-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2024-09-05.xlsx",
+      "source_date": "2024-09-05T00:31:51-07:00",
+      "reported_size": 213629,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2024-10-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2024-10-05.xlsx",
+      "source_date": "2024-10-05T00:30:26-07:00",
+      "reported_size": 213629,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2024-11-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2024-11-05.xlsx",
+      "source_date": "2024-11-05T00:31:54-08:00",
+      "reported_size": 213629,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2024-12-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2024-12-05.xlsx",
+      "source_date": "2024-12-05T00:31:50-08:00",
+      "reported_size": 213629,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2025-01-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2025-01-05.xlsx",
+      "source_date": "2025-01-05T00:31:51-08:00",
+      "reported_size": 213629,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2025-02-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2025-02-05.xlsx",
+      "source_date": "2025-02-05T00:31:55-08:00",
+      "reported_size": 213629,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2025-03-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2025-03-05.xlsx",
+      "source_date": "2025-03-05T00:32:04-08:00",
+      "reported_size": 213629,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2025-04-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2025-04-05.xlsx",
+      "source_date": "2025-04-05T00:32:10-07:00",
+      "reported_size": 213629,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2025-05-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2025-05-05.xlsx",
+      "source_date": "2025-05-05T00:32:07-07:00",
+      "reported_size": 213629,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2025-06-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2025-06-05.xlsx",
+      "source_date": "2025-06-05T00:32:07-07:00",
+      "reported_size": 213629,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2025-07-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2025-07-05.xlsx",
+      "source_date": "2025-07-05T00:32:13-07:00",
+      "reported_size": 213629,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2025-08-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2025-08-05.xlsx",
+      "source_date": "2025-08-05T00:31:19-07:00",
+      "reported_size": 213629,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2025-09-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2025-09-05.xlsx",
+      "source_date": "2025-09-05T00:31:11-07:00",
+      "reported_size": 213629,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2025-10-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2025-10-05.xlsx",
+      "source_date": "2025-10-05T00:31:05-07:00",
+      "reported_size": 213629,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2025-11-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2025-11-05.xlsx",
+      "source_date": "2025-11-05T00:31:11-08:00",
+      "reported_size": 213629,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2025-12-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2025-12-05.xlsx",
+      "source_date": "2025-12-05T00:31:11-08:00",
+      "reported_size": 213629,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2026-01-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2026-01-05.xlsx",
+      "source_date": "2026-01-05T00:30:56-08:00",
+      "reported_size": 213629,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2026-02-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2026-02-05.xlsx",
+      "source_date": "2026-02-05T00:31:03-08:00",
+      "reported_size": 213629,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2026-03-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2026-03-05.xlsx",
+      "source_date": "2026-03-05T00:31:14-08:00",
+      "reported_size": 213629,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2026-04-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2026-04-05.xlsx",
+      "source_date": "2026-04-05T00:26:48-07:00",
+      "reported_size": 213629,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2026-05-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2026-05-05.xlsx",
+      "source_date": "2026-05-05T00:31:18-07:00",
+      "reported_size": 213629,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2026-06-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2026-06-05.xlsx",
+      "source_date": "2026-06-05T00:31:20-07:00",
+      "reported_size": 213629,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2026-07-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2026-07-05.xlsx",
+      "source_date": "2026-07-05T00:31:24-07:00",
+      "reported_size": 213629,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2026-08-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2026-08-05.xlsx",
+      "source_date": "2026-08-05T00:31:26-07:00",
+      "reported_size": 213629,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/PharmGKB_ClinVar_Submission_Variants_2026-09-05.xlsx",
+      "file_name": "PharmGKB_ClinVar_Submission_Variants_2026-09-05.xlsx",
+      "source_date": "2026-09-05T00:31:25-07:00",
+      "reported_size": 213629,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/annotations.zip",
+      "file_name": "annotations.zip",
+      "source_date": "2021-03-05T00:26:09-08:00",
+      "reported_size": 5083064,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/atc.zip",
+      "file_name": "atc.zip",
+      "source_date": "2026-09-05T00:25:17-07:00",
+      "reported_size": 63677,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/automated_annotations.zip",
+      "file_name": "automated_annotations.zip",
+      "source_date": "2025-07-05T00:25:18-07:00",
+      "reported_size": 1881822,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/chemicals.zip",
+      "file_name": "chemicals.zip",
+      "source_date": "2026-09-05T00:31:19-07:00",
+      "reported_size": 814225,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/clinicalAnnotations.zip",
+      "file_name": "clinicalAnnotations.zip",
+      "source_date": "2025-07-05T00:31:53-07:00",
+      "reported_size": 1231768,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/clinicalAnnotations_LOE1-2.zip",
+      "file_name": "clinicalAnnotations_LOE1-2.zip",
+      "source_date": "2025-07-05T00:32:07-07:00",
+      "reported_size": 271314,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/clinicalVariants.zip",
+      "file_name": "clinicalVariants.zip",
+      "source_date": "2026-09-05T00:31:23-07:00",
+      "reported_size": 74404,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/clinical_annotations-public.zip",
+      "file_name": "clinical_annotations-public.zip",
+      "source_date": "2021-09-05T02:04:48-07:00",
+      "reported_size": 87914,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/clinpgx.annotations.bed",
+      "file_name": "clinpgx.annotations.bed",
+      "source_date": "2026-09-05T00:26:49-07:00",
+      "reported_size": 10713150,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/clinpgxAnnotatedPmids.zip",
+      "file_name": "clinpgxAnnotatedPmids.zip",
+      "source_date": "2026-09-05T00:25:12-07:00",
+      "reported_size": 70682,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/clinpgxHaplotypes.zip",
+      "file_name": "clinpgxHaplotypes.zip",
+      "source_date": "2026-09-05T00:37:38-07:00",
+      "reported_size": 19207,
+      "status": "observed_partial",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Two TSV members parse; README.pdf is a JSON error body and allele function is absent."
+      ],
+      "evidence": [
+        "docs/research/auxiliary-formats.md#current-clinpgxhaplotypeszip-basic-definitions-not-functions"
+      ]
+    },
+    {
+      "dataset_id": "data/cpic.alleles.csv",
+      "file_name": "cpic.alleles.csv",
+      "source_date": "2026-09-05T00:31:38-07:00",
+      "reported_size": 26,
+      "status": "observed_defective",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "The published file is a 26-byte header with no data rows."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-sources.md#allelehaplotype-and-registry-only-artifacts"
+      ]
+    },
+    {
+      "dataset_id": "data/cpic.alleles.json",
+      "file_name": "cpic.alleles.json",
+      "source_date": "2026-09-05T00:31:38-07:00",
+      "reported_size": 564830,
+      "status": "observed_partial",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "The tested guidelines arrays are empty; do not infer absence of guidelines."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-sources.md#allelehaplotype-and-registry-only-artifacts"
+      ]
+    },
+    {
+      "dataset_id": "data/cpic.drug.mapping.zip",
+      "file_name": "cpic.drug.mapping.zip",
+      "source_date": "2026-09-05T00:31:40-07:00",
+      "reported_size": 2617846,
+      "status": "observed_parseable",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "All 171 workbooks parse, but this is a CPIC drug subset rather than all chemicals."
+      ],
+      "evidence": [
+        "docs/research/auxiliary-formats.md#cpicdrugmappingzip-uniform-simple-xlsx-tables"
+      ]
+    },
+    {
+      "dataset_id": "data/dosingGuidelines.extended.json.zip",
+      "file_name": "dosingGuidelines.extended.json.zip",
+      "source_date": "2021-10-05T01:25:16-07:00",
+      "reported_size": 1244136,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/dosingGuidelines.json.zip",
+      "file_name": "dosingGuidelines.json.zip",
+      "source_date": "2021-10-05T01:25:16-07:00",
+      "reported_size": 1059475,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/drugLabels.zip",
+      "file_name": "drugLabels.zip",
+      "source_date": "2026-08-05T01:12:06-07:00",
+      "reported_size": 59489,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/drugs.zip",
+      "file_name": "drugs.zip",
+      "source_date": "2026-09-05T00:31:19-07:00",
+      "reported_size": 678392,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/genecards.zip",
+      "file_name": "genecards.zip",
+      "source_date": "2026-09-05T00:37:04-07:00",
+      "reported_size": 450413,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/genes.zip",
+      "file_name": "genes.zip",
+      "source_date": "2026-09-05T00:37:36-07:00",
+      "reported_size": 2905541,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/guidelineAnnotations.extended.json.zip",
+      "file_name": "guidelineAnnotations.extended.json.zip",
+      "source_date": "2023-10-05T01:04:46-07:00",
+      "reported_size": 1146803,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/guidelineAnnotations.json.zip",
+      "file_name": "guidelineAnnotations.json.zip",
+      "source_date": "2026-08-05T01:12:06-07:00",
+      "reported_size": 861200,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/haplotypes.zip",
+      "file_name": "haplotypes.zip",
+      "source_date": "2026-04-05T01:02:02-07:00",
+      "reported_size": 571302,
+      "status": "observed_corrupt",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "All 49 embedded XLSX members fail structural ZIP validation."
+      ],
+      "evidence": [
+        "docs/research/auxiliary-formats.md#legacy-haplotypeszip-all-inner-workbooks-are-unusable"
+      ]
+    },
+    {
+      "dataset_id": "data/lexicon.zip",
+      "file_name": "lexicon.zip",
+      "source_date": "2026-09-05T00:37:51-07:00",
+      "reported_size": 1481706,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/occurrences.zip",
+      "file_name": "occurrences.zip",
+      "source_date": "2026-08-05T01:10:20-07:00",
+      "reported_size": 2904200,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/pathvisio.zip",
+      "file_name": "pathvisio.zip",
+      "source_date": "2026-08-24T08:26:33-07:00",
+      "reported_size": 355589,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/pathway-illustrator.zip",
+      "file_name": "pathway-illustrator.zip",
+      "source_date": "2026-08-24T08:26:33-07:00",
+      "reported_size": 414302,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/pathway-overview.zip",
+      "file_name": "pathway-overview.zip",
+      "source_date": "2019-09-05T00:50:42-07:00",
+      "reported_size": 24012,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/pathways-biopax.zip",
+      "file_name": "pathways-biopax.zip",
+      "source_date": "2026-08-05T01:10:54-07:00",
+      "reported_size": 634025,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/pathways-overview.zip",
+      "file_name": "pathways-overview.zip",
+      "source_date": "2026-08-05T01:10:54-07:00",
+      "reported_size": 703834,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/pathways-tsv.zip",
+      "file_name": "pathways-tsv.zip",
+      "source_date": "2026-08-05T01:10:54-07:00",
+      "reported_size": 204070,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/pathways.json.zip",
+      "file_name": "pathways.json.zip",
+      "source_date": "2026-08-05T01:10:55-07:00",
+      "reported_size": 1929507,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/pharmcat-shc.zip",
+      "file_name": "pharmcat-shc.zip",
+      "source_date": "2024-07-20T21:07:03-07:00",
+      "reported_size": 1813082,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/pharmcat.zip",
+      "file_name": "pharmcat.zip",
+      "source_date": "2026-09-05T00:32:08-07:00",
+      "reported_size": 2010280,
+      "status": "observed_parseable",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Structured PharmCAT scope is not complete ClinPGx website parity."
+      ],
+      "evidence": [
+        "docs/research/auxiliary-formats.md#pharmcatzip-the-strongest-local-functionphenotype-fallback"
+      ]
+    },
+    {
+      "dataset_id": "data/pharmgkb.annotations.bed",
+      "file_name": "pharmgkb.annotations.bed",
+      "source_date": "2025-07-05T00:26:44-07:00",
+      "reported_size": 10417455,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/pharmgkb.gene.phenotypes.json",
+      "file_name": "pharmgkb.gene.phenotypes.json",
+      "source_date": "2021-10-05T00:55:48-07:00",
+      "reported_size": 34306,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/pharmgkbAnnotatedPmids.zip",
+      "file_name": "pharmgkbAnnotatedPmids.zip",
+      "source_date": "2025-07-05T00:25:08-07:00",
+      "reported_size": 64936,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/pharmgkb_haplotype_frequencies_AllOfUs.zip",
+      "file_name": "pharmgkb_haplotype_frequencies_AllOfUs.zip",
+      "source_date": "2024-08-27T11:16:06-07:00",
+      "reported_size": 58421,
+      "status": "observed_parseable",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "All of Us v7 is a dataset-specific 2024 snapshot and has no embedded license file."
+      ],
+      "evidence": [
+        "docs/research/auxiliary-formats.md#all-of-us-v7-frequency-export"
+      ]
+    },
+    {
+      "dataset_id": "data/pharmgkb_haplotype_frequencies_UKBB.zip",
+      "file_name": "pharmgkb_haplotype_frequencies_UKBB.zip",
+      "source_date": "2026-09-05T00:37:37-07:00",
+      "reported_size": 29629,
+      "status": "observed_parseable",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "UKBB frequencies are dataset-specific and include required QC notes."
+      ],
+      "evidence": [
+        "docs/research/auxiliary-formats.md#uk-biobank-frequency-export"
+      ]
+    },
+    {
+      "dataset_id": "data/phenotypes.zip",
+      "file_name": "phenotypes.zip",
+      "source_date": "2026-08-05T01:11:00-07:00",
+      "reported_size": 187372,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/publications.tsv",
+      "file_name": "publications.tsv",
+      "source_date": "2026-08-05T01:11:01-07:00",
+      "reported_size": 102107,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/relationships.zip",
+      "file_name": "relationships.zip",
+      "source_date": "2026-08-05T01:11:34-07:00",
+      "reported_size": 2370578,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/rsid.zip",
+      "file_name": "rsid.zip",
+      "source_date": "2026-08-05T01:11:59-07:00",
+      "reported_size": 199502,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/summaryAnnotations.zip",
+      "file_name": "summaryAnnotations.zip",
+      "source_date": "2026-08-05T01:12:59-07:00",
+      "reported_size": 1236737,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/topPairs.json",
+      "file_name": "topPairs.json",
+      "source_date": "2019-12-05T00:53:44-08:00",
+      "reported_size": 15708,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/uniprot.zip",
+      "file_name": "uniprot.zip",
+      "source_date": "2026-08-05T01:13:00-07:00",
+      "reported_size": 164082,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/variant.clinical.summary.zip",
+      "file_name": "variant.clinical.summary.zip",
+      "source_date": "2026-08-05T01:15:07-07:00",
+      "reported_size": 662566,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/variantAnnotations.zip",
+      "file_name": "variantAnnotations.zip",
+      "source_date": "2026-08-05T01:14:32-07:00",
+      "reported_size": 4272899,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/variants.zip",
+      "file_name": "variants.zip",
+      "source_date": "2026-08-05T01:34:43-07:00",
+      "reported_size": 894788,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/vip.variants.zip",
+      "file_name": "vip.variants.zip",
+      "source_date": "2018-08-05T00:51:49-07:00",
+      "reported_size": 2260,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    },
+    {
+      "dataset_id": "data/vip.zip",
+      "file_name": "vip.zip",
+      "source_date": "2018-08-05T00:51:49-07:00",
+      "reported_size": 256078,
+      "status": "published_unassessed",
+      "discovered": true,
+      "acquired": false,
+      "parsed": false,
+      "searchable": false,
+      "field_complete": false,
+      "mcp_retrievable": false,
+      "limitations": [
+        "Catalogued only; parse, rights, and objective coverage remain unverified."
+      ],
+      "evidence": [
+        "docs/research/clinpgx-download-registry-2026-09-05.json"
+      ]
+    }
+  ],
+  "website_families": [
+    {
+      "family": "allele_haplotype",
+      "status": "observed_working_not_yet_mcp_retrievable",
+      "operation_refs": [
+        "GET /site/gene/{id}/haplotypes",
+        "GET /site/haplotype/{id}",
+        "GET /site/allele/{id}"
+      ],
+      "mcp_retrievable": false,
+      "limitations": [
+        "Observed website routes are not documented public API contracts and require the separately validated website registry."
+      ],
+      "evidence": [
+        "docs/research/website-coverage.md"
+      ]
+    },
+    {
+      "family": "allele_function",
+      "status": "observed_working_not_yet_mcp_retrievable",
+      "operation_refs": [
+        "GET /site/alleleFunction/{geneId}"
+      ],
+      "mcp_retrievable": false,
+      "limitations": [
+        "Observed website routes are not documented public API contracts and require the separately validated website registry."
+      ],
+      "evidence": [
+        "docs/research/website-coverage.md"
+      ]
+    },
+    {
+      "family": "allele_frequency",
+      "status": "observed_working_not_yet_mcp_retrievable",
+      "operation_refs": [
+        "GET /site/alleleFrequency/{id}",
+        "GET /site/haplotypeFrequency/_download/{id}"
+      ],
+      "mcp_retrievable": false,
+      "limitations": [
+        "Observed website routes are not documented public API contracts and require the separately validated website registry."
+      ],
+      "evidence": [
+        "docs/research/website-coverage.md"
+      ]
+    },
+    {
+      "family": "cpic_gene",
+      "status": "observed_working_not_yet_mcp_retrievable",
+      "operation_refs": [
+        "GET /site/guideline/cpic/gene/{symbol}"
+      ],
+      "mcp_retrievable": false,
+      "limitations": [
+        "Observed website routes are not documented public API contracts and require the separately validated website registry."
+      ],
+      "evidence": [
+        "docs/research/website-coverage.md"
+      ]
+    },
+    {
+      "family": "prescribing",
+      "status": "observed_working_not_yet_mcp_retrievable",
+      "operation_refs": [
+        "GET /site/tab/prescribingInfo/{objCls}/{id}",
+        "GET /site/guidelinesByDrugs",
+        "GET /site/prescribingTree"
+      ],
+      "mcp_retrievable": false,
+      "limitations": [
+        "Observed website routes are not documented public API contracts and require the separately validated website registry."
+      ],
+      "evidence": [
+        "docs/research/website-coverage.md"
+      ]
+    },
+    {
+      "family": "vip",
+      "status": "observed_working_not_yet_mcp_retrievable",
+      "operation_refs": [
+        "GET /site/vip/{id}",
+        "GET /site/vips"
+      ],
+      "mcp_retrievable": false,
+      "limitations": [
+        "Observed website routes are not documented public API contracts and require the separately validated website registry."
+      ],
+      "evidence": [
+        "docs/research/website-coverage.md"
+      ]
+    },
+    {
+      "family": "labels_fda",
+      "status": "observed_working_not_yet_mcp_retrievable",
+      "operation_refs": [
+        "GET /site/labelsByDrug",
+        "GET /site/labelAnnotation/{id}",
+        "GET /site/fdaPgxAssociation"
+      ],
+      "mcp_retrievable": false,
+      "limitations": [
+        "Observed website routes are not documented public API contracts and require the separately validated website registry."
+      ],
+      "evidence": [
+        "docs/research/website-coverage.md"
+      ]
+    },
+    {
+      "family": "amp",
+      "status": "observed_working_not_yet_mcp_retrievable",
+      "operation_refs": [
+        "GET /site/testing",
+        "GET /site/testing/_tsv"
+      ],
+      "mcp_retrievable": false,
+      "limitations": [
+        "Observed website routes are not documented public API contracts and require the separately validated website registry."
+      ],
+      "evidence": [
+        "docs/research/website-coverage.md"
+      ]
+    },
+    {
+      "family": "publications",
+      "status": "observed_working_not_yet_mcp_retrievable",
+      "operation_refs": [
+        "GET /site/publications/_download"
+      ],
+      "mcp_retrievable": false,
+      "limitations": [
+        "Observed website routes are not documented public API contracts and require the separately validated website registry."
+      ],
+      "evidence": [
+        "docs/research/website-coverage.md"
+      ]
+    },
+    {
+      "family": "pathways",
+      "status": "observed_working_not_yet_mcp_retrievable",
+      "operation_refs": [
+        "GET /site/pathway/{id}",
+        "GET /site/pathwayCategories"
+      ],
+      "mcp_retrievable": false,
+      "limitations": [
+        "Observed website routes are not documented public API contracts and require the separately validated website registry."
+      ],
+      "evidence": [
+        "docs/research/website-coverage.md"
+      ]
+    }
+  ],
+  "non_registry_sources": [
+    {
+      "source": "verified attachment references from allowlisted website responses",
+      "status": "observed_partial",
+      "mcp_retrievable": false,
+      "evidence": [
+        "docs/research/website-coverage.md"
+      ]
+    },
+    {
+      "source": "external ClinPGx-linked project artifacts",
+      "status": "catalog_pending_rights_review",
+      "mcp_retrievable": false,
+      "evidence": [
+        "docs/research/clinpgx-sources.md#download-inventory"
+      ]
+    }
+  ]
+}
