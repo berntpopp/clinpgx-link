@@ -12,6 +12,7 @@ from clinpgx_link.api.client import ClinPGxClient
 from clinpgx_link.api.website import WebsiteClient
 from clinpgx_link.config import Settings
 from clinpgx_link.content.store import ContentStore
+from clinpgx_link.models import SourceResponse
 from clinpgx_link.services.api import ApiService
 from tests.unit.test_repository import RELEASE_TAG, _archive, _repository
 
@@ -26,6 +27,33 @@ def _server(store, *, repository=None, api=None, website=None):
 
 def _data(row, key):
     return row["fields"][key]["text"]
+
+
+@pytest.mark.asyncio
+async def test_record_tool_definitions_describe_every_argument_within_budget(tmp_path):
+    store = ContentStore(tmp_path / "content.sqlite")
+    try:
+        tools = {tool.name: tool for tool in await _server(store).list_tools()}
+        for name in ("search_records", "get_record", "get_related_records"):
+            tool = tools[name]
+            properties = tool.parameters["properties"]
+            assert all(value.get("description") for value in properties.values())
+            assert all(value.get("examples") for value in properties.values())
+            assert (
+                len(
+                    json.dumps(
+                        {
+                            "name": tool.name,
+                            "description": tool.description,
+                            "inputSchema": tool.parameters,
+                        },
+                        separators=(",", ":"),
+                    ).encode()
+                )
+                <= 4800
+            )
+    finally:
+        store.close()
 
 
 @pytest.mark.asyncio
@@ -246,6 +274,73 @@ async def test_download_detail_resolves_exact_external_id_and_rejects_ambiguity(
 
 
 @pytest.mark.asyncio
+async def test_local_search_and_detail_defer_first_row_that_exceeds_wire_fence_budget(
+    tmp_path, monkeypatch
+):
+    repository, _ = _repository(tmp_path)
+    store = ContentStore(tmp_path / "content.sqlite")
+    original_search = repository.search_entities
+    original_get = repository.get_record
+    found = original_search("gene", filters={"id": "PA124"}, limit=1)
+    oversized = dict(found.value[0])
+    oversized["fields"] = {f"F{index}": "short" for index in range(70)}
+    fetched = original_get(found.value[0]["record_id"])
+    trusted_description = {
+        "members": [
+            {
+                "path": oversized["member"],
+                "fields": [{"name": name} for name in oversized["fields"]],
+            }
+        ]
+    }
+    monkeypatch.setattr(
+        repository,
+        "search_entities",
+        lambda *args, **kwargs: SourceResponse(
+            [oversized], found.source, {**found.details, "total_count": 1, "has_more": False}
+        ),
+    )
+    monkeypatch.setattr(
+        repository,
+        "get_record",
+        lambda *args, **kwargs: SourceResponse(oversized, fetched.source, fetched.details),
+    )
+    monkeypatch.setattr(
+        repository,
+        "describe",
+        lambda dataset_id: SourceResponse(trusted_description, fetched.source),
+    )
+    try:
+        async with Client(_server(store, repository=repository)) as client:
+            search = await client.call_tool(
+                "search_records",
+                {
+                    "entity_type": "gene",
+                    "filters": {"id": "PA124"},
+                    "source": "download",
+                },
+            )
+            assert search.structured_content["results"][0]["fields"]["deferred_content"] is True
+
+            detail = await client.call_tool(
+                "get_record",
+                {
+                    "entity_type": "gene",
+                    "record_id": "PA124",
+                    "source": "download",
+                    "pointer": "/fields/F0",
+                },
+            )
+            row = detail.structured_content["result"]
+            assert row["fields"]["deferred_content"] is True
+            assert row["selected"]["pointer"] == "/fields/F0"
+            assert row["selected"]["data"]["text"] == '"short"'
+    finally:
+        repository.close()
+        store.close()
+
+
+@pytest.mark.asyncio
 async def test_api_and_website_detail_preserve_pointer_and_source_honesty(tmp_path):
     paths = []
 
@@ -322,12 +417,24 @@ async def test_download_related_returns_every_joined_source_row(tmp_path):
                     "source": "download",
                 },
             )
+            literature = await client.call_tool(
+                "get_related_records",
+                {
+                    "record_id": parent["record_id"],
+                    "result_type": "literature",
+                    "source": "download",
+                },
+            )
             assert len(evidence.structured_content["results"]) == 1
             assert len(alleles.structured_content["results"]) == 3
+            assert len(literature.structured_content["results"]) == 1
             assert alleles.structured_content["_meta"]["snapshot_id"] == built.snapshot_id
             assert all(
                 row["join"]["relation_kind"] == "allele"
                 for row in alleles.structured_content["results"]
+            )
+            assert literature.structured_content["results"][0]["join"]["limitation"] == (
+                "citing_evidence_row_not_bibliographic_detail"
             )
     finally:
         repository.close()
