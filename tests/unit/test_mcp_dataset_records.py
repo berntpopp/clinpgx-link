@@ -244,7 +244,10 @@ async def test_get_record_preserves_row_and_pointer_is_explicitly_derived(tmp_pa
     try:
         row = repository.search("data/genes.zip", member="genes.tsv", limit=1).value[0]
         async with Client(_record_server(repository, store)) as client:
-            call = await client.call_tool("get_dataset_record", {"record_id": row["record_id"]})
+            call = await client.call_tool(
+                "get_dataset_record",
+                {"record_id": row["record_id"], "response_mode": "full"},
+            )
             result = call.structured_content["result"]
             assert result["record_id"] == row["record_id"]
             assert result["member"]["text"] == "genes.tsv"
@@ -365,7 +368,11 @@ async def test_aggregate_field_budget_uses_progressing_fields_descriptor(
         async with Client(server) as client:
             call = await client.call_tool(
                 "get_dataset_record",
-                {"record_id": row["record_id"], "pointer": "/fields/F0"},
+                {
+                    "record_id": row["record_id"],
+                    "pointer": "/fields/F0",
+                    "response_mode": "full",
+                },
             )
             descriptor = call.structured_content["result"]["fields"]
             assert descriptor["deferred_content"] is True
@@ -376,7 +383,7 @@ async def test_aggregate_field_budget_uses_progressing_fields_descriptor(
             assert selected["data"]["text"] == '"' + fields["F0"] + '"'
             result = call.structured_content["result"]
             assert result["snapshot_id"].startswith("sha256:")
-            assert result["response_mode"] == "compact"
+            assert result["response_mode"] == "full"
             assert call.structured_content["_meta"]["snapshot_id"] == result["snapshot_id"]
             recovered = await client.call_tool("get_source_content", descriptor["fallback_args"])
             assert recovered.structured_content["result"]["type"] == "object"
@@ -421,7 +428,10 @@ async def test_hostile_field_key_is_fenced_and_recovered_without_raw_pointer(
 
         register_dataset_record_tools(server, repository, store)
         async with Client(server) as client:
-            call = await client.call_tool("get_dataset_record", {"record_id": row["record_id"]})
+            call = await client.call_tool(
+                "get_dataset_record",
+                {"record_id": row["record_id"], "response_mode": "full"},
+            )
             descriptor = call.structured_content["result"]["fields"]
             assert descriptor["deferred_content"] is True
             if len(field_name) > 4096:
@@ -484,7 +494,10 @@ async def test_nested_hostile_field_key_is_not_whitelisted_by_source_description
 
         register_dataset_record_tools(server, repository, store)
         async with Client(server) as client:
-            call = await client.call_tool("get_dataset_record", {"record_id": row["record_id"]})
+            call = await client.call_tool(
+                "get_dataset_record",
+                {"record_id": row["record_id"], "response_mode": "full"},
+            )
             descriptor = call.structured_content["result"]["fields"]
             assert descriptor["deferred_content"] is True
             recovered = await client.call_tool("get_source_content", descriptor["fallback_args"])

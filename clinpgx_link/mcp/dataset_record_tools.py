@@ -14,7 +14,6 @@ from fastmcp.tools.base import ToolResult
 from pydantic import Field
 
 from clinpgx_link.content.assets import AssetReference
-from clinpgx_link.content.reader import select_value
 from clinpgx_link.content.store import ContentStore
 from clinpgx_link.data.repository import DatasetRepository
 from clinpgx_link.exceptions import (
@@ -25,15 +24,23 @@ from clinpgx_link.exceptions import (
 )
 from clinpgx_link.mcp.dataset_record_fields import (
     profiled_nested_fields_are_safe,
+    profiled_selected_nested_value_is_safe,
     trusted_fields_for_row,
+)
+from clinpgx_link.mcp.dataset_record_selection import (
+    ResponseMode,
+    pointer_selected_row,
+    profiled_row,
+    select_dataset_record_value,
+    validate_include_fields,
 )
 from clinpgx_link.mcp.envelope import error_result, success_result
 from clinpgx_link.mcp.pagination import CursorCodec
 from clinpgx_link.mcp.row_provenance import row_provenance
+from clinpgx_link.mcp.selection import validate_pointers
 from clinpgx_link.mcp.untrusted_content import fence_text
 from clinpgx_link.models import SourceInfo, SourceResponse
 
-ResponseMode = Literal["minimal", "compact", "standard", "full"]
 MatchMode = Literal["exact", "member"]
 _ANNOTATIONS = {
     "readOnlyHint": True,
@@ -47,9 +54,7 @@ _MAX_POINTER_SEGMENTS = 128
 
 
 def _json(value: Any) -> bytes:
-    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode(
-        "utf-8"
-    )
+    return json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode()
 
 
 def _derived_source(source: SourceInfo, record_id: str, raw: bytes) -> SourceInfo:
@@ -254,7 +259,7 @@ def _asset_reference(response: SourceResponse, snapshot_id: str) -> str:
         ) from exc
 
 
-def _shape_row(
+def shape_dataset_row(
     row: dict[str, Any],
     response: SourceResponse,
     snapshot_id: str,
@@ -263,6 +268,8 @@ def _shape_row(
     asset_response: SourceResponse | None = None,
     trusted_field_names: frozenset[str] | None = None,
     force_defer_fields: bool = False,
+    retained_row: dict[str, Any] | None = None,
+    profile_projection: bool = False,
 ) -> dict[str, Any]:
     owning_response = asset_response or response
     source = owning_response.source
@@ -274,13 +281,20 @@ def _shape_row(
         if trusted_field_names is None
         else frozenset(trusted_field_names).intersection(owned_names)
     )
+    projected_nested_safe = isinstance(fields, dict) and all(
+        profiled_selected_nested_value_is_safe(retained_row or row, str(name), value)
+        for name, value in fields.items()
+    )
     defer_fields = (
         force_defer_fields
-        or not profiled_nested_fields_are_safe(row)
+        or not (
+            projected_nested_safe if profile_projection else profiled_nested_fields_are_safe(row)
+        )
         or _needs_deferred_fields(fields, trusted_field_names=trusted_names)
     )
+    raw_row = retained_row or row
     derived_ref = (
-        _retain_row(store, row, source) if defer_fields or _has_oversized_string(row) else None
+        _retain_row(store, raw_row, source) if defer_fields or _has_oversized_string(row) else None
     )
     result = dict(row)
     result["content_ref"] = source_ref
@@ -293,7 +307,7 @@ def _shape_row(
                 str(result[pointer_key]), source=source, record_id=record_id
             )
     if defer_fields:
-        root_ref = derived_ref or _retain_row(store, row, source)
+        root_ref = derived_ref or _retain_row(store, raw_row, source)
         result["fields"] = _fields_descriptor(
             root_ref,
             pointer="" if _has_overlong_field_pointer(fields) else "/fields",
@@ -314,73 +328,9 @@ def _shape_row(
     return result
 
 
-def shape_dataset_row(
-    row: dict[str, Any],
-    response: SourceResponse,
-    snapshot_id: str,
-    store: ContentStore,
-    *,
-    asset_response: SourceResponse | None = None,
-    trusted_field_names: frozenset[str] | None = None,
-    force_defer_fields: bool = False,
-) -> dict[str, Any]:
-    """Shape one indexed row for MCP consumers with explicit recovery metadata."""
-    return _shape_row(
-        row,
-        response,
-        snapshot_id,
-        store,
-        asset_response=asset_response,
-        trusted_field_names=trusted_field_names,
-        force_defer_fields=force_defer_fields,
-    )
-
-
-def _selected_value(
-    row: dict[str, Any], pointer: str, response: SourceResponse, store: ContentStore
-) -> dict[str, Any]:
-    selected = select_value(row, pointer)
-    raw = _json(selected)
-    derived_ref = _retain_row(store, row, response.source)
-    if len(raw) > _MAX_INLINE_FIELD_BYTES:
-        return {
-            "deferred_content": True,
-            "content_ref": derived_ref,
-            "pointer": pointer,
-            "representation": "normalized_record_json",
-            "derived": True,
-            "sha256": hashlib.sha256(raw).hexdigest(),
-            "length": len(raw),
-            "unit": "bytes",
-            "fallback_tool": "get_source_content",
-            "fallback_args": {
-                "content_ref": derived_ref,
-                "pointer": pointer,
-                "representation": "structure",
-            },
-        }
-    return {
-        "pointer": pointer,
-        "representation": "normalized_record_json",
-        "derived": True,
-        "content_ref": derived_ref,
-        "data": fence_text(
-            raw.decode("utf-8"), source=response.source, record_id=str(row["record_id"])
-        ),
-    }
-
-
-def select_dataset_record_value(
-    row: dict[str, Any], pointer: str, response: SourceResponse, store: ContentStore
-) -> dict[str, Any]:
-    """Select a validated normalized-record pointer with a derived retained ref."""
-    return _selected_value(row, pointer, response, store)
-
-
 def register_dataset_record_tools(
     server: FastMCP, repository: DatasetRepository | None, store: ContentStore
 ) -> None:
-    """Register indexed-row tools, retaining registration when local data is absent."""
     cursors = CursorCodec(clock=store.now)
 
     @server.tool(annotations=_ANNOTATIONS, tags={"dataset", "search"}, output_schema=None)
@@ -419,9 +369,14 @@ def register_dataset_record_tools(
         response_mode: Annotated[
             ResponseMode, Field(description="Response detail mode.")
         ] = "compact",
+        include_fields: Annotated[
+            list[str] | None,
+            Field(description="Ordered profiled source fields to return.", max_length=16),
+        ] = None,
     ) -> ToolResult:
         began = time.monotonic()
         try:
+            selected_field_names = validate_include_fields(include_fields)
             if repository is None:
                 raise UpstreamUnavailableError(
                     "Local dataset snapshot is not configured.", subtype="dataset_unavailable"
@@ -441,6 +396,7 @@ def register_dataset_record_tools(
                 "query": query,
                 "filters": selected_filters,
                 "match": match,
+                "include_fields": list(selected_field_names) if selected_field_names else None,
             }
             if cursor is not None:
                 position = cursors.decode(cursor, selectors)
@@ -480,16 +436,36 @@ def register_dataset_record_tools(
             while True:
                 visible_inputs = row_inputs[:visible_count]
                 rows = [
-                    shape_dataset_row(
+                    profiled_row(
                         row,
                         response,
                         snapshot_id,
                         store,
+                        repository,
+                        response_mode,
+                        selected_field_names,
+                        shape_dataset_row,
                         asset_response=asset_response,
-                        trusted_field_names=trusted_fields_for_row(row),
                         force_defer_fields=force_defer_fields,
                     )
                     for row, asset_response in visible_inputs
+                ]
+                rows = [
+                    row
+                    if len(_json(row)) <= 70_000
+                    else profiled_row(
+                        raw,
+                        response,
+                        snapshot_id,
+                        store,
+                        repository,
+                        response_mode,
+                        selected_field_names,
+                        shape_dataset_row,
+                        asset_response=asset_response,
+                        force_defer_fields=True,
+                    )
+                    for row, (raw, asset_response) in zip(rows, visible_inputs, strict=True)
                 ]
                 next_offset = offset + len(rows)
                 next_cursor = (
@@ -538,12 +514,24 @@ def register_dataset_record_tools(
         pointer: Annotated[
             str, Field(description="RFC 6901 pointer in the normalized record.", max_length=4096)
         ] = "",
+        pointers: Annotated[
+            list[str] | None,
+            Field(description="Ordered scalar RFC 6901 pointers.", max_length=12),
+        ] = None,
         response_mode: Annotated[
             ResponseMode, Field(description="Response detail mode.")
         ] = "compact",
+        include_fields: Annotated[
+            list[str] | None,
+            Field(description="Ordered profiled source fields to return.", max_length=16),
+        ] = None,
     ) -> ToolResult:
         began = time.monotonic()
         try:
+            selected_field_names = validate_include_fields(include_fields)
+            selected_pointers = validate_pointers(
+                pointers, pointer=pointer, include_fields=selected_field_names
+            )
             if repository is None:
                 raise UpstreamUnavailableError(
                     "Local dataset snapshot is not configured.", subtype="dataset_unavailable"
@@ -556,17 +544,32 @@ def register_dataset_record_tools(
                 raise UpstreamUnavailableError(
                     "The local snapshot identity changed.", subtype="snapshot_mismatch"
                 )
-            result = shape_dataset_row(
-                response.value,
-                response,
-                snapshot_id,
-                store,
-                trusted_field_names=trusted_fields_for_row(response.value),
-            )
+            if selected_pointers is None:
+                result = profiled_row(
+                    response.value,
+                    response,
+                    snapshot_id,
+                    store,
+                    repository,
+                    response_mode,
+                    selected_field_names,
+                    shape_dataset_row,
+                )
+            else:
+                result = pointer_selected_row(
+                    response.value,
+                    response,
+                    snapshot_id,
+                    store,
+                    selected_pointers,
+                    shape_dataset_row,
+                )
             result["snapshot_id"] = snapshot_id
             result["response_mode"] = response_mode
             if pointer:
-                result["selected"] = _selected_value(response.value, pointer, response, store)
+                result["selected"] = select_dataset_record_value(
+                    response.value, pointer, response, store
+                )
             try:
                 return success_result(
                     result,
@@ -575,14 +578,27 @@ def register_dataset_record_tools(
                     elapsed_ms=(time.monotonic() - began) * 1000,
                 )
             except ResponseTooLargeError:
-                result = shape_dataset_row(
-                    response.value,
-                    response,
-                    snapshot_id,
-                    store,
-                    trusted_field_names=trusted_fields_for_row(response.value),
-                    force_defer_fields=True,
-                )
+                if selected_pointers is None:
+                    result = profiled_row(
+                        response.value,
+                        response,
+                        snapshot_id,
+                        store,
+                        repository,
+                        response_mode,
+                        selected_field_names,
+                        shape_dataset_row,
+                        force_defer_fields=True,
+                    )
+                else:
+                    result = pointer_selected_row(
+                        response.value,
+                        response,
+                        snapshot_id,
+                        store,
+                        selected_pointers,
+                        shape_dataset_row,
+                    )
                 result["snapshot_id"] = snapshot_id
                 result["response_mode"] = response_mode
                 if pointer:

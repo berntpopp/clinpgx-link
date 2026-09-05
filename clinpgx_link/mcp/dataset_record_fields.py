@@ -64,26 +64,46 @@ def profiled_nested_fields_are_safe(row: dict[str, Any]) -> bool:
         return False
     key = fields.get("diplotypekey")
     activity_score = fields.get("activityScore")
-    return (
-        isinstance(key, dict)
-        and 1 <= len(key) <= 2
-        and (
-            activity_score is None
-            or (
-                isinstance(activity_score, (str, int, float))
-                and not isinstance(activity_score, bool)
-                and (not isinstance(activity_score, str) or len(activity_score) <= 128)
-                and (not isinstance(activity_score, float) or isfinite(activity_score))
-            )
+    return _safe_diplotype_key(key) and (
+        activity_score is None
+        or (
+            isinstance(activity_score, (str, int, float))
+            and not isinstance(activity_score, bool)
+            and (not isinstance(activity_score, str) or len(activity_score) <= 128)
+            and (not isinstance(activity_score, float) or isfinite(activity_score))
         )
+    )
+
+
+def _safe_diplotype_key(value: Any) -> bool:
+    return (
+        isinstance(value, dict)
+        and 1 <= len(value) <= 2
         and all(
             isinstance(name, str)
             and _PHARMCAT_ALLELE_KEY.fullmatch(name) is not None
             and type(count) is int
             and count in {1, 2}
-            for name, count in key.items()
+            for name, count in value.items()
         )
     )
 
 
-__all__ = ["profiled_nested_fields_are_safe", "trusted_fields_for_row"]
+def profiled_selected_nested_value_is_safe(
+    row: dict[str, Any], field_name: str, value: Any
+) -> bool:
+    """Authorize only the declared PharmCAT dynamic-key map in isolation."""
+    if not isinstance(value, (dict, list)):
+        return True
+    return (
+        _is_pharmcat_diplotype_row(row)
+        and field_name == "diplotypekey"
+        and _safe_diplotype_key(value)
+    )
+
+
+__all__ = [
+    "profiled_nested_fields_are_safe",
+    "profiled_selected_nested_value_is_safe",
+    "trusted_fields_for_row",
+]
