@@ -91,6 +91,15 @@ class WebsiteClient:
             decoder = description["decoder"]
             if decoder == "json_body_even_if_text_plain":
                 response.value = _decode_text_json(response.value)
+                # The captured route contract, not MIME sniffing, authorizes JSON
+                # traversal. Retain identical original bytes with an effective JSON
+                # media type; keep the upstream declaration as separate evidence.
+                stored = self._client.content_store.get(response.details["content_ref"])
+                response.details["upstream_media_type"] = response.details["media_type"]
+                response.details["media_type"] = "application/json"
+                response.details["content_ref"] = self._client.content_store.put(
+                    stored.raw, response.source, "application/json"
+                )
             elif decoder == "json_envelope":
                 stored = self._client.content_store.get(response.details["content_ref"])
                 decoded = _decode_text_json(stored.raw.decode("utf-8"))

@@ -1,5 +1,6 @@
 """Real source adapters through FastMCP, with only external HTTP replaced."""
 
+import base64
 import json
 
 import httpx
@@ -82,6 +83,18 @@ async def test_website_text_plain_json_is_retrievable_through_mcp(tmp_path):
             )
             assert json.loads(call.structured_content["results"][0]["data"]["text"])["name"] == "*2"
             assert call.structured_content["_meta"]["data_source"] == "website"
+            reference = call.structured_content["results"][0]["content_ref"]
+            content = await client.call_tool(
+                "get_source_content",
+                {"content_ref": reference, "pointer": "/alleles/0/name", "representation": "text"},
+            )
+            assert content.structured_content["result"]["text"]["text"] == "*2"
+            original = await client.call_tool(
+                "get_source_content", {"content_ref": reference, "representation": "base64"}
+            )
+            assert base64.b64decode(original.structured_content["result"]["base64"]) == (
+                b'{"alleles":[{"name":"*2","function":"Normal function"}]}'
+            )
     finally:
         await upstream.close()
 
