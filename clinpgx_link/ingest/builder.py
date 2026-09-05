@@ -16,7 +16,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from clinpgx_link.config import settings
-from clinpgx_link.data.catalog import SourceInput
+from clinpgx_link.data.catalog import SourceInput, is_canonical_release_tag
 from clinpgx_link.data.coverage import (
     Membership,
     contextual_json_memberships,
@@ -540,7 +540,7 @@ def build_snapshot(
         raise InvalidInputError("At least one explicit source is required", field="sources")
     if not destination.is_absolute() or destination.is_symlink():
         raise InvalidInputError("Candidate destination must be an absolute nonsymlink path")
-    if not release_tag.startswith("data-clinpgx-") or "/" in release_tag or ".." in release_tag:
+    if not is_canonical_release_tag(release_tag):
         raise InvalidInputError("Release tag is not canonical", field="release_tag")
     ordered = tuple(sorted(sources, key=lambda item: item.dataset_id))
     if len({source.dataset_id for source in ordered}) != len(ordered):

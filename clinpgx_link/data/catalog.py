@@ -21,6 +21,7 @@ _TIERS = frozenset(
     {"canonical_page", "approved_registry", "experimental_or_legacy", "related_project"}
 )
 _SHA256 = re.compile(r"[0-9a-f]{64}\Z")
+_RELEASE_TAG = re.compile(r"data-clinpgx-(?:core|extended)-[0-9a-f]{16}\Z")
 _ALLOWED_SOURCE_HOSTS = frozenset({"api.clinpgx.org", "s3.pgkb.org"})
 _FILE_CHUNK_BYTES = 1024 * 1024
 
@@ -39,7 +40,7 @@ def _file_digest(path: Path) -> tuple[str, int]:
 
 
 def _validate_timestamp(value: str, *, require_utc: bool = False) -> None:
-    if require_utc and not value.endswith("Z"):
+    if not isinstance(value, str) or not value or (require_utc and not value.endswith("Z")):
         raise InvalidInputError("Acquisition time must be canonical UTC", field="retrieved_at")
     try:
         parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
@@ -50,6 +51,8 @@ def _validate_timestamp(value: str, *, require_utc: bool = False) -> None:
 
 
 def _validate_dataset_id(value: str) -> None:
+    if not isinstance(value, str) or not value:
+        raise InvalidInputError("Dataset ID must be a canonical data/ path", field="dataset_id")
     path = PurePosixPath(value)
     if (
         not value.startswith("data/")
@@ -63,7 +66,9 @@ def _validate_dataset_id(value: str) -> None:
         raise InvalidInputError("Dataset ID must be a canonical data/ path", field="dataset_id")
 
 
-def _validate_source_url(value: str) -> None:
+def _validate_source_url(value: str, dataset_id: str) -> None:
+    if not isinstance(value, str):
+        raise InvalidInputError("Source URL is outside the ClinPGx allowlist", field="source_url")
     parsed = urlsplit(value)
     if (
         parsed.scheme != "https"
@@ -75,6 +80,18 @@ def _validate_source_url(value: str) -> None:
         or parsed.fragment
     ):
         raise InvalidInputError("Source URL is outside the ClinPGx allowlist", field="source_url")
+    expected_path = (
+        f"/v1/download/file/{dataset_id}"
+        if parsed.hostname == "api.clinpgx.org"
+        else f"/{dataset_id}"
+    )
+    if parsed.path != expected_path:
+        raise InvalidInputError("Source URL does not match its dataset identity", field="source_url")
+
+
+def is_canonical_release_tag(value: object) -> bool:
+    """Return whether a candidate tag is accepted by the production release contract."""
+    return isinstance(value, str) and _RELEASE_TAG.fullmatch(value) is not None
 
 
 @dataclass(frozen=True)
@@ -110,7 +127,14 @@ class DownloadCatalog:
         coverage_rows = coverage.get("datasets")
         if not isinstance(registry_rows, list) or not isinstance(coverage_rows, list):
             raise DataValidationError("Catalog evidence has an invalid shape")
-        covered = {row.get("dataset_id"): row for row in coverage_rows if isinstance(row, dict)}
+        covered: dict[str, dict[str, object]] = {}
+        for row in coverage_rows:
+            if not isinstance(row, dict) or not isinstance(row.get("dataset_id"), str):
+                raise DataValidationError("Coverage ledger entry must have a dataset identity")
+            coverage_id = row["dataset_id"]
+            if coverage_id in covered:
+                raise DataValidationError("Coverage ledger contains a duplicate dataset identity")
+            covered[coverage_id] = row
         entries: list[CatalogEntry] = []
         seen: set[str] = set()
         for row in registry_rows:
@@ -124,7 +148,8 @@ class DownloadCatalog:
                 not isinstance(dataset_id, str)
                 or not isinstance(file_name, str)
                 or not isinstance(source_date, str)
-                or not isinstance(reported_size, int)
+                or type(reported_size) is not int
+                or reported_size < 0
             ):
                 raise DataValidationError("Registry entry is missing identity metadata")
             _validate_dataset_id(dataset_id)
@@ -191,6 +216,31 @@ class SourceInput:
     last_modified: str | None = None
     version_id: str | None = None
 
+    def __post_init__(self) -> None:
+        _validate_dataset_id(self.dataset_id)
+        expected_name = PurePosixPath(self.dataset_id).name
+        if self.file_name != expected_name:
+            raise InvalidInputError("Source filename does not match its dataset", field="file_name")
+        _validate_source_url(self.source_url, self.dataset_id)
+        _validate_timestamp(self.retrieved_at, require_utc=True)
+        if self.published_at is not None:
+            _validate_timestamp(self.published_at)
+        if self.tier not in _TIERS:
+            raise InvalidInputError("Unsupported catalog tier", field="tier")
+        if not isinstance(self.path, Path) or not self.path.is_absolute():
+            raise InvalidInputError("Source path must be absolute", field="path")
+        if not _SHA256.fullmatch(self.sha256):
+            raise InvalidInputError("Source receipt digest is not canonical", field="sha256")
+        if type(self.byte_count) is not int or self.byte_count < 0:
+            raise InvalidInputError("Source receipt byte count is invalid", field="byte_count")
+        if self.media_type != "application/zip":
+            raise InvalidInputError("Snapshot source must be a ZIP archive", field="media_type")
+        if not isinstance(self.license_id, str) or not self.license_id or len(self.license_id) > 256:
+            raise InvalidInputError("Source license identifier is invalid", field="license_id")
+        for value in (self.etag, self.last_modified, self.version_id):
+            if value is not None and (not isinstance(value, str) or len(value) > 4096):
+                raise InvalidInputError("Source version metadata is invalid", field="source_metadata")
+
     @classmethod
     def from_path(
         cls,
@@ -208,7 +258,7 @@ class SourceInput:
         version_id: str | None = None,
     ) -> SourceInput:
         _validate_dataset_id(dataset_id)
-        _validate_source_url(source_url)
+        _validate_source_url(source_url, dataset_id)
         _validate_timestamp(retrieved_at, require_utc=True)
         if published_at is not None:
             _validate_timestamp(published_at)
@@ -268,4 +318,10 @@ class SourceInput:
         return raw
 
 
-__all__ = ["CatalogEntry", "CatalogTier", "DownloadCatalog", "SourceInput"]
+__all__ = [
+    "CatalogEntry",
+    "CatalogTier",
+    "DownloadCatalog",
+    "SourceInput",
+    "is_canonical_release_tag",
+]

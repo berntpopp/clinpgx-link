@@ -219,6 +219,26 @@ def test_failed_candidate_build_preserves_previous_snapshot_and_never_activates(
     assert not (tmp_path / "releases" / "data-clinpgx-core-fedcba9876543210").exists()
 
 
+@pytest.mark.parametrize(
+    "release_tag",
+    [
+        "data-clinpgx-invalid tag",
+        "data-clinpgx-core-0123456789abcde",
+        "data-clinpgx-other-0123456789abcdef",
+        "data-clinpgx-core-0123456789ABCDEf",
+    ],
+)
+def test_builder_rejects_release_tags_runtime_cannot_activate(
+    tmp_path: Path, release_tag: str
+) -> None:
+    """Catch creation of candidates that the production readiness contract rejects."""
+    from clinpgx_link.exceptions import InvalidInputError
+    from clinpgx_link.ingest.builder import build_snapshot
+
+    with pytest.raises(InvalidInputError, match="canonical"):
+        build_snapshot(_fixture_sources(tmp_path / "inputs"), tmp_path / "out", release_tag)
+
+
 def test_repeated_memberships_do_not_duplicate_external_record_ids_in_every_index(
     tmp_path: Path,
 ) -> None:
