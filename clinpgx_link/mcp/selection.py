@@ -24,7 +24,6 @@ from clinpgx_link.exceptions import DataValidationError, InvalidInputError
 _MAX_POINTERS = 12
 _MAX_POINTER_CHARACTERS = 4096
 _MAX_POINTER_SEGMENTS = 128
-_MAX_JSON_DEPTH = 128
 _ARRAY_INDEX = re.compile(r"0|[1-9][0-9]*")
 _MALFORMED_ESCAPE = re.compile(r"~(?![01])")
 _MISSING = object()
@@ -127,15 +126,13 @@ def _is_json_scalar(value: Any) -> TypeGuard[JsonScalar]:
 
 def _validate_json_domain(value: Any) -> None:
     """Reject Python values that json.dumps would coerce outside the JSON domain."""
-    stack: list[tuple[Any, int, bool]] = [(value, 0, False)]
+    stack: list[tuple[Any, bool]] = [(value, False)]
     active_containers: set[int] = set()
     while stack:
-        item, depth, leaving = stack.pop()
+        item, leaving = stack.pop()
         if leaving:
             active_containers.remove(id(item))
             continue
-        if depth > _MAX_JSON_DEPTH:
-            raise ValueError("JSON nesting exceeds the supported depth")
         if _is_json_scalar(item):
             if isinstance(item, str):
                 item.encode("utf-8")
@@ -148,15 +145,15 @@ def _validate_json_domain(value: Any) -> None:
         if identity in active_containers:
             raise ValueError("cyclic JSON value")
         active_containers.add(identity)
-        stack.append((item, depth, True))
+        stack.append((item, True))
         if isinstance(item, dict):
             for key, child in item.items():
                 if type(key) is not str:
                     raise TypeError("JSON object key is not a string")
                 key.encode("utf-8")
-                stack.append((child, depth + 1, False))
+                stack.append((child, False))
         else:
-            stack.extend((child, depth + 1, False) for child in item)
+            stack.extend((child, False) for child in item)
 
 
 def _resolve(value: Any, tokens: tuple[str, ...]) -> Any:

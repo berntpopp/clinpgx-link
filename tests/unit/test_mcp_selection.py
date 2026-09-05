@@ -167,20 +167,41 @@ def test_finite_json_bytes_rejects_nested_non_string_mapping_keys():
     assert str(caught.value) == "Source value is not finite UTF-8 JSON."
 
 
-def test_finite_json_bytes_rejects_cycles_and_excessive_depth_with_typed_errors():
+def test_finite_json_bytes_rejects_cycles_with_typed_errors():
     from clinpgx_link.exceptions import DataValidationError
     from clinpgx_link.mcp.selection import finite_json_bytes
 
     cyclic = []
     cyclic.append(cyclic)
+
+    with pytest.raises(DataValidationError):
+        finite_json_bytes(cyclic)
+
+
+def test_finite_json_bytes_does_not_apply_the_pointer_segment_limit_to_json_depth():
+    from clinpgx_link.mcp.selection import finite_json_bytes
+
     deep = None
     for _ in range(130):
         deep = [deep]
 
-    with pytest.raises(DataValidationError):
-        finite_json_bytes(cyclic)
-    with pytest.raises(DataValidationError):
-        finite_json_bytes(deep)
+    assert finite_json_bytes(deep) == b"[" * 130 + b"null" + b"]" * 130
+
+
+def test_finite_json_bytes_normalizes_actual_serializer_recursion_errors():
+    import sys
+
+    from clinpgx_link.exceptions import DataValidationError
+    from clinpgx_link.mcp.selection import finite_json_bytes
+
+    too_deep = None
+    for _ in range(sys.getrecursionlimit() * 10):
+        too_deep = [too_deep]
+
+    with pytest.raises(DataValidationError) as caught:
+        finite_json_bytes(too_deep)
+
+    assert isinstance(caught.value.__cause__, RecursionError)
 
 
 def test_finite_json_bytes_is_sorted_compact_utf8_and_normalizes_failures():
