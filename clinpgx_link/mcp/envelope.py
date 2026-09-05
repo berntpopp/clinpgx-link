@@ -51,13 +51,20 @@ def wire_result(payload: dict[str, Any], *, is_error: bool = False) -> ToolResul
     )
 
 
-def success_result(value: Any, *, source: SourceInfo, elapsed_ms: float = 0) -> ToolResult:
+def success_result(
+    value: Any,
+    *,
+    source: SourceInfo,
+    elapsed_ms: float = 0,
+    collection: bool = False,
+    pagination: dict[str, Any] | None = None,
+) -> ToolResult:
     """Build provenance without confusing source time with the time of a cache hit."""
     request_id = REQUEST_ID.get() or str(uuid.uuid4())
     return wire_result(
         {
             "success": True,
-            "result": value,
+            "results" if collection else "result": value,
             "_meta": {
                 "request_id": request_id,
                 "elapsed_ms": round(elapsed_ms, 3),
@@ -75,6 +82,7 @@ def success_result(value: Any, *, source: SourceInfo, elapsed_ms: float = 0) -> 
                 ],
                 "unsafe_for_clinical_use": True,
                 "next_commands": [],
+                **({"pagination": pagination} if pagination is not None else {}),
             },
             "recommended_citation": f"ClinPGx source evidence. {source.url} Retrieved {source.retrieved_at}.",
             "unsafe_for_clinical_use": True,
