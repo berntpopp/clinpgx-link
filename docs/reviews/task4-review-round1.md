@@ -55,3 +55,17 @@ proof of a completed release installer or historical-release resolver.
 - Finding 5: original-body pointer composition is still open.
 
 No finding is independently approved solely because its author reports a fix.
+
+## Scoped independent adapter verification
+
+Root reviewed dab2f61 after the API implementer's fix: canonical MIME admission
+rejects the hostile declaration before retention, stored MIME is revalidated on
+read, the verified text/plain-JSON route decodes before its single put, and a
+separate cache variant prevents representation collisions. All 47 focused
+client/store/website tests passed in a fresh root run. Findings 1 and 6 are
+addressed for their reproduced scope; this is not approval of all Task 4 work.
+
+The original-body pointer fix 2d84f8c includes a real MCP recovery test for
+/data/a~1b/0 and its 148,743-character evidence field. A row pointer is fenced,
+its exact executable recovery selector is preserved, and pointer fences count
+toward page admission. Finding 5 awaits independent re-review.

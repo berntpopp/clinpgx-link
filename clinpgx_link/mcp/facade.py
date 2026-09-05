@@ -20,6 +20,7 @@ from clinpgx_link.content.store import ContentStore, StoredContent
 from clinpgx_link.data.repository import DatasetRepository
 from clinpgx_link.exceptions import ClinPGxError, UpstreamUnavailableError
 from clinpgx_link.mcp.data_tools import register_data_tools
+from clinpgx_link.mcp.diagnostics import register_diagnostics
 from clinpgx_link.mcp.envelope import error_result, success_result
 from clinpgx_link.mcp.middleware import BoundaryGuard
 from clinpgx_link.mcp.schema_tools import register_schema_tool
@@ -77,6 +78,7 @@ def create_mcp(
     server.add_middleware(BoundaryGuard(server))
     register_schema_tool(server, content_store)
     register_data_tools(server, content_store, api_service, website_client)
+    register_diagnostics(server, api_service, website_client, repository)
 
     @server.tool(annotations=_ANNOTATIONS, tags={"metadata"}, output_schema=None)
     async def get_server_capabilities(
