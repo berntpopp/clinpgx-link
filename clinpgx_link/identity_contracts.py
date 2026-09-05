@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, Literal
 
-FieldKind = Literal["integer", "string", "object", "array", "boolean"]
+FieldKind = Literal["integer", "string", "object", "array", "boolean", "cross_references"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -16,13 +16,12 @@ class NumericIdentityContract:
 
     entity_type: str
     operation: str
-    search_filters: tuple[str, ...]
     minimal: tuple[str, ...]
     compact: tuple[str, ...]
     standard: tuple[str, ...]
     required_types: tuple[tuple[str, FieldKind], ...]
     optional_types: tuple[tuple[str, FieldKind], ...]
-    external_cross_reference: tuple[str, str] | None = None
+    external_reference_note: str | None = None
 
     def source_value_is_valid(self, value: Any) -> bool:
         if not isinstance(value, dict):
@@ -30,10 +29,16 @@ class NumericIdentityContract:
         for name, kind in self.required_types:
             if name not in value or not _field_matches(value[name], kind):
                 return False
-        return all(
+        valid_optional = all(
             name not in value or _field_matches(value[name], kind)
             for name, kind in self.optional_types
         )
+        if self.entity_type == "literature":
+            return valid_optional and (
+                "resourceId" in value
+                or bool(isinstance(value.get("crossReferences"), list) and value["crossReferences"])
+            )
+        return valid_optional
 
     def capability(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -43,7 +48,6 @@ class NumericIdentityContract:
             "value_type": "integer",
             "tool_argument": "record_id",
             "argument_encoding": "decimal_string",
-            "search_filters": list(self.search_filters),
         }
         if self.entity_type == "variant_annotation":
             payload["optional_accession"] = {
@@ -52,45 +56,73 @@ class NumericIdentityContract:
                 "role": "external_cross_reference",
                 "detail_identifier": False,
             }
-        if self.external_cross_reference is not None:
-            field, note = self.external_cross_reference
-            payload["external_cross_reference"] = {
-                "source_field": field,
-                "role": "external_cross_reference",
-                "detail_identifier": False,
-                "note": note,
-            }
+        if self.entity_type == "literature":
+            payload["external_cross_references"] = [
+                {
+                    "source_field": field,
+                    "role": "external_cross_reference",
+                    "detail_identifier": False,
+                }
+                for field in ("resourceId", "crossReferences[].resourceId")
+            ]
+        if self.external_reference_note is not None:
+            payload["external_reference_note"] = self.external_reference_note
         return payload
 
 
 def _field_matches(value: Any, kind: FieldKind) -> bool:
     if kind == "integer":
         return type(value) is int and 0 <= value <= 2_147_483_647
+    if kind == "cross_references":
+        return isinstance(value, list) and all(_cross_reference_is_valid(item) for item in value)
     expected = {"string": str, "object": dict, "array": list, "boolean": bool}[kind]
     return isinstance(value, expected)
+
+
+def _cross_reference_is_valid(value: Any) -> bool:
+    if not isinstance(value, dict) or not set(value) <= {"id", "resource", "resourceId", "_url"}:
+        return False
+    if set(value) < {"id", "resource", "resourceId"}:
+        return False
+    return (
+        _field_matches(value["id"], "integer")
+        and _field_matches(value["resource"], "string")
+        and _field_matches(value["resourceId"], "string")
+        and ("_url" not in value or _field_matches(value["_url"], "string"))
+    )
 
 
 _ROWS = (
     NumericIdentityContract(
         "literature",
         "GET /data/literature/{id}",
-        ("id", "resource_id"),
         ("id",),
-        ("id", "resourceId", "title", "type"),
-        ("id", "resourceId", "title", "type", "authors", "journal", "pubDate", "year"),
-        (("id", "integer"), ("resourceId", "string"), ("title", "string"), ("type", "string")),
+        ("id", "resourceId", "title", "type", "crossReferences"),
         (
+            "id",
+            "resourceId",
+            "title",
+            "type",
+            "crossReferences",
+            "authors",
+            "journal",
+            "pubDate",
+            "year",
+        ),
+        (("id", "integer"), ("title", "string"), ("type", "string")),
+        (
+            ("resourceId", "string"),
+            ("crossReferences", "cross_references"),
             ("authors", "array"),
             ("journal", "string"),
             ("pubDate", "string"),
             ("year", "integer"),
         ),
-        ("resourceId", "PubMed resourceId is not the internal ClinPGx literature id."),
+        "PubMed resourceId is not the internal ClinPGx literature id.",
     ),
     NumericIdentityContract(
         "summary_annotation",
         "GET /data/summaryAnnotation/{id}",
-        ("annotation_id", "chemical", "gene", "id", "variant"),
         ("id",),
         ("id", "levelOfEvidence", "relatedChemicals"),
         ("id", "levelOfEvidence", "location", "relatedChemicals", "allelePhenotypes"),
@@ -105,7 +137,6 @@ _ROWS = (
     NumericIdentityContract(
         "variant_annotation",
         "GET /data/variantAnnotation/{id}",
-        ("gene", "variant"),
         ("id",),
         ("id", "accessionId", "objCls", "sentence", "literature"),
         (
@@ -145,20 +176,22 @@ def numeric_identity_contract(entity_type: str | None) -> NumericIdentityContrac
 
 
 def numeric_detail_argument_is_valid(entity_type: str, value: str) -> bool:
-    """Match the numeric path binder and captured int32 source identity."""
+    """Match the registry's request-side ASCII decimal path contract."""
     return (
         entity_type in NUMERIC_IDENTITY_CONTRACTS
         and isinstance(value, str)
         and value.isascii()
         and value.isdecimal()
         and len(value) <= 32
-        and int(value) <= 2_147_483_647
     )
 
 
-def detail_identifier_capabilities() -> dict[str, Any]:
+def detail_identifier_capabilities(
+    search_filters: Callable[[str], list[str]],
+) -> dict[str, Any]:
     return {
-        entity: contract.capability() for entity, contract in NUMERIC_IDENTITY_CONTRACTS.items()
+        entity: {**contract.capability(), "search_filters": search_filters(entity)}
+        for entity, contract in NUMERIC_IDENTITY_CONTRACTS.items()
     }
 
 

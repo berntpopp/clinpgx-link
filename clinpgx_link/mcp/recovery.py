@@ -353,7 +353,7 @@ def recovery_payload(plan: RecoveryPlan) -> dict[str, Any]:
             "This family uses its internal numeric id for detail retrieval. Discover a row "
             "with a supported filter and reuse its returned id; accessionId is not a detail id."
         )
-        choices["filters"] = list(contract.search_filters)
+        choices["filters"] = api_filter_choices(str(entity))
         commands.append(_command("get_server_capabilities", {}))
     elif plan.kind == "use_exact_gene_or_name_filter":
         limitation = (

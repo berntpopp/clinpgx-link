@@ -14,6 +14,8 @@ from clinpgx_link.content.store import ContentStore
 from clinpgx_link.mcp.facade import create_mcp
 from clinpgx_link.services.api import ApiService
 
+OBSERVED_LITERATURE_BODY_SHA256 = "97abd1e42c9fa645890cb5e945b95f16a81b3af1966160399ec5e1bcb5395621"
+
 
 def _api(tmp_path, handler):
     store = ContentStore(tmp_path / "content.sqlite")
@@ -23,6 +25,44 @@ def _api(tmp_path, handler):
         store,
     )
     return store, client, ApiService(client)
+
+
+@pytest.mark.asyncio
+async def test_registry_valid_32_digit_numeric_detail_id_reaches_upstream(tmp_path):
+    record_id = "9" * 32
+    calls: list[httpx.Request] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        return httpx.Response(404)
+
+    store, upstream, service = _api(tmp_path, handle)
+    try:
+        async with Client(create_mcp(content_store=store, api_service=service)) as client:
+            result = await client.call_tool(
+                "get_record",
+                {"entity_type": "literature", "record_id": record_id, "source": "api"},
+                raise_on_error=False,
+            )
+        assert result.structured_content["error_code"] == "not_found"
+        assert [request.url.path for request in calls] == [f"/v1/data/literature/{record_id}"]
+    finally:
+        await upstream.close()
+
+
+def test_numeric_capabilities_take_discovery_filters_from_executable_contract() -> None:
+    from clinpgx_link.identity_contracts import detail_identifier_capabilities
+
+    requested: list[str] = []
+
+    def executable_filters(entity_type: str) -> list[str]:
+        requested.append(entity_type)
+        return [f"derived-{entity_type}"]
+
+    capabilities = detail_identifier_capabilities(executable_filters)
+
+    assert requested == ["literature", "summary_annotation", "variant_annotation"]
+    assert capabilities["literature"]["search_filters"] == ["derived-literature"]
 
 
 @pytest.mark.asyncio
@@ -176,12 +216,95 @@ async def test_literature_profile_and_capabilities_distinguish_internal_id_from_
         assert literature["source_field"] == "id"
         assert literature["role"] == "internal_numeric_detail_id"
         assert literature["argument_encoding"] == "decimal_string"
-        assert literature["external_cross_reference"] == {
-            "source_field": "resourceId",
-            "role": "external_cross_reference",
-            "detail_identifier": False,
-            "note": "PubMed resourceId is not the internal ClinPGx literature id.",
-        }
+        assert literature["external_cross_references"] == [
+            {
+                "source_field": "resourceId",
+                "role": "external_cross_reference",
+                "detail_identifier": False,
+            },
+            {
+                "source_field": "crossReferences[].resourceId",
+                "role": "external_cross_reference",
+                "detail_identifier": False,
+            },
+        ]
+        assert literature["external_reference_note"] == (
+            "PubMed resourceId is not the internal ClinPGx literature id."
+        )
+    finally:
+        await upstream.close()
+
+
+@pytest.mark.asyncio
+async def test_observed_literature_cross_reference_profile_is_active_and_strict(tmp_path):
+    """Reduced shape from the retained body identified by OBSERVED_LITERATURE_BODY_SHA256."""
+    assert len(OBSERVED_LITERATURE_BODY_SHA256) == 64
+    valid = {
+        "id": 15178564,
+        "title": "Reduced source title",
+        "type": "article",
+        "crossReferences": [
+            {
+                "id": 123,
+                "resource": "PubMed",
+                "resourceId": "40297930",
+                "_url": "https://pubmed.ncbi.nlm.nih.gov/40297930/",
+            }
+        ],
+    }
+    malformed = {
+        **valid,
+        "crossReferences": [{"id": True, "resource": "PubMed", "resourceId": 40297930}],
+    }
+
+    def handle(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"status": "success", "data": [valid, malformed]})
+
+    store, upstream, service = _api(tmp_path, handle)
+    try:
+        async with Client(create_mcp(content_store=store, api_service=service)) as client:
+            result = await client.call_tool(
+                "search_records",
+                {"entity_type": "literature", "filters": {"id": "15178564"}},
+            )
+        active, drifted = result.structured_content["results"]
+        assert active["source_profile"] == "literature"
+        assert json.loads(active["data"]["text"])["crossReferences"] == valid["crossReferences"]
+        assert drifted["record_profile_status"] == "unprofiled"
+        assert "data" not in drifted
+    finally:
+        await upstream.close()
+
+
+@pytest.mark.asyncio
+async def test_summary_annotation_profile_is_active_and_invalid_id_falls_back(tmp_path):
+    valid = {
+        "id": 1448100508,
+        "levelOfEvidence": {"term": "1A"},
+        "relatedChemicals": [{"id": "PA449053", "name": "clopidogrel"}],
+    }
+    invalid = {**valid, "id": 1.5}
+
+    def handle(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"status": "success", "data": [valid, invalid]})
+
+    store, upstream, service = _api(tmp_path, handle)
+    try:
+        async with Client(create_mcp(content_store=store, api_service=service)) as client:
+            result = await client.call_tool(
+                "search_records",
+                {
+                    "entity_type": "summary_annotation",
+                    "filters": {"id": "1448100508"},
+                    "source": "api",
+                },
+            )
+        active, drifted = result.structured_content["results"]
+        assert active["source_profile"] == "summary_annotation"
+        assert active["next_commands"][0]["arguments"]["record_id"] == "1448100508"
+        assert json.loads(active["data"]["text"]) == valid
+        assert drifted["record_profile_status"] == "unprofiled"
+        assert "next_commands" not in drifted
     finally:
         await upstream.close()
 
