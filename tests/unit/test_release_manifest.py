@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -68,6 +69,50 @@ def test_release_manifest_roundtrip_matches_vendored_fleet_schema():
     Draft202012Validator(schema, format_checker=FormatChecker()).validate(serialized)
     assert model.application_compatibility.contains("0.1.5")
     assert not model.application_compatibility.contains("0.2.0")
+
+
+def test_generated_schema_exactly_matches_pinned_router_contract():
+    from clinpgx_link.releases.manifest import DataReleaseManifest
+
+    vendored = json.loads(
+        (
+            Path(__file__).parents[2] / "vendor/genefoundry/data-release-manifest.schema.json"
+        ).read_text()
+    )
+    generated = DataReleaseManifest.model_json_schema()
+
+    assert generated == vendored
+    assert generated["$schema"] == "https://json-schema.org/draft/2020-12/schema"
+    assert generated["properties"]["schema_version"]["const"] == 1
+    assert generated["$defs"]["DatasetIdentity"]["properties"]["release"]["not"] == {
+        "enum": ["latest", "main", "master", "head", "stable", "current"]
+    }
+    for model_name, field_name in (
+        ("UpstreamSource", "retrieved_at"),
+        ("LicenseEvidence", "reviewed_at"),
+    ):
+        timestamp_schema = generated["$defs"][model_name]["properties"][field_name]
+        assert timestamp_schema["format"] == "date-time"
+        assert timestamp_schema["pattern"].startswith("^")
+    Draft202012Validator.check_schema(generated)
+
+
+def test_timestamps_are_timezone_aware_datetimes_with_json_roundtrip():
+    value = manifest_value()
+    value["dataset"]["source"]["retrieved_at"] = "2026-09-05T12:30:45.125+02:30"
+
+    model = _validate(value)
+
+    retrieved_at = model.dataset.source.retrieved_at
+    reviewed_at = model.license.reviewed_at
+    assert isinstance(retrieved_at, datetime)
+    assert retrieved_at.utcoffset() == timedelta(hours=2, minutes=30)
+    assert isinstance(reviewed_at, datetime)
+    assert reviewed_at.utcoffset() == timedelta(0)
+    assert (
+        model.model_dump(mode="json", by_alias=True)["dataset"]["source"]["retrieved_at"]
+        == "2026-09-05T12:30:45.125000+02:30"
+    )
 
 
 @pytest.mark.parametrize(

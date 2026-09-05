@@ -12,23 +12,42 @@ import hmac
 import json
 import re
 from datetime import datetime
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from pydantic import (
     AfterValidator,
     AnyHttpUrl,
+    AwareDatetime,
     BaseModel,
+    BeforeValidator,
     ConfigDict,
     Field,
     StrictBool,
     StrictInt,
     ValidationError,
+    WithJsonSchema,
     model_validator,
 )
+from pydantic.config import JsonDict
 
 from clinpgx_link.exceptions import DataValidationError
 
 MAX_MANIFEST_BYTES = 1024 * 1024
+RFC3339_PATTERN = (
+    r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}"
+    r"(?:\.[0-9]+)?(?:Z|[+-][0-9]{2}:[0-9]{2})$"
+)
+DATA_RELEASE_TAG_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+MUTABLE_DATA_RELEASE_TAGS = ("latest", "main", "master", "head", "stable", "current")
+SEMANTIC_SCHEMA_COMMENT = (
+    "This checked-in schema enforces structural constraints. Acceptance additionally requires "
+    "semantic validation through ReleaseConfig or ApplicationReleaseManifest; cross-field "
+    "equality is enforced by Pydantic validators."
+)
+TOP_LEVEL_SCHEMA_METADATA: JsonDict = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$comment": SEMANTIC_SCHEMA_COMMENT,
+}
 Sha256Hex = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
 SemanticVersion = Annotated[
     str, Field(pattern=r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
@@ -43,26 +62,45 @@ def _https(value: AnyHttpUrl) -> AnyHttpUrl:
     return value
 
 
-def _timestamp(value: str) -> str:
-    if not re.fullmatch(
-        r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]+)?(?:Z|[+-][0-9]{2}:[0-9]{2})",
-        value,
-    ):
-        raise ValueError("RFC 3339 timestamp required")
-    datetime.fromisoformat(value)
+def _exact_schema_version(value: object) -> object:
+    if type(value) is not int or value != 1:
+        raise ValueError("schema_version must be the integer 1")
     return value
 
 
+def _rfc3339_string(value: object) -> datetime:
+    if not isinstance(value, str) or re.fullmatch(RFC3339_PATTERN, value) is None:
+        raise ValueError("timestamp must be an RFC3339 string with an explicit timezone")
+    # StrictModel intentionally retains strict=True. Parse only after exact lexical
+    # admission so AwareDatetime receives the same value Router's non-strict core
+    # would produce without accepting Python datetime objects at this JSON boundary.
+    return datetime.fromisoformat(value)
+
+
 def _immutable_tag(value: str) -> str:
-    if value.lower() in {"latest", "current", "stable", "main", "master", "head"}:
+    if value.lower() in MUTABLE_DATA_RELEASE_TAGS:
         raise ValueError("Immutable release required")
     return value
 
 
 HttpsUrl = Annotated[AnyHttpUrl, AfterValidator(_https)]
-Timestamp = Annotated[str, AfterValidator(_timestamp)]
+SchemaVersion = Annotated[Literal[1], BeforeValidator(_exact_schema_version)]
+Timestamp = Annotated[
+    AwareDatetime,
+    BeforeValidator(_rfc3339_string),
+    WithJsonSchema({"type": "string", "format": "date-time", "pattern": RFC3339_PATTERN}),
+]
 ReleaseTag = Annotated[
-    str, Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"), AfterValidator(_immutable_tag)
+    str,
+    Field(pattern=DATA_RELEASE_TAG_PATTERN),
+    AfterValidator(_immutable_tag),
+    WithJsonSchema(
+        {
+            "type": "string",
+            "pattern": DATA_RELEASE_TAG_PATTERN,
+            "not": {"enum": list(MUTABLE_DATA_RELEASE_TAGS)},
+        }
+    ),
 ]
 
 
@@ -153,7 +191,13 @@ class LicenseEvidence(StrictModel):
 
 
 class DataReleaseManifest(StrictModel):
-    schema_version: Annotated[StrictInt, Field(ge=1, le=1)] = 1
+    """Immutable and independently rollbackable reference-data release."""
+
+    model_config = ConfigDict(
+        **StrictModel.model_config, json_schema_extra=TOP_LEVEL_SCHEMA_METADATA
+    )
+
+    schema_version: SchemaVersion = 1
     dataset: DatasetIdentity
     transformation: TransformationIdentity
     schema_identity: SchemaIdentity = Field(alias="schema", serialization_alias="schema")
