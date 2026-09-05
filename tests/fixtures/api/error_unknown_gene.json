@@ -1,0 +1,1 @@
+{"status":"fail","data":{"errors":[{"code":"notFound","message":"No Gene with ID 'PA_DOES_NOT_EXIST' found.","objectId":"PA_DOES_NOT_EXIST","objectType":"Gene"}]}}
