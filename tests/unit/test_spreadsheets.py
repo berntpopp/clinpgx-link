@@ -30,6 +30,23 @@ def _replace_part(raw: bytes, path: str, transform) -> bytes:
     return output.getvalue()
 
 
+def _relocate_worksheet(raw: bytes, target_name: str, target_ref: str, transform) -> bytes:
+    output = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(raw)) as source, zipfile.ZipFile(
+        output, "w", compression=zipfile.ZIP_DEFLATED
+    ) as target:
+        for info in source.infolist():
+            body = source.read(info)
+            name = info.filename
+            if name == "xl/worksheets/sheet1.xml":
+                name = target_name
+                body = transform(body)
+            elif name == "xl/_rels/workbook.xml.rels":
+                body = body.replace(b"worksheets/sheet1.xml", target_ref.encode())
+            target.writestr(name, body)
+    return output.getvalue()
+
+
 def _must_not_open(*_args, **_kwargs):
     raise AssertionError("unsafe OOXML reached openpyxl")
 
@@ -182,4 +199,30 @@ def test_xml_namespace_variants_cannot_hide_sparse_cells(
     with pytest.raises(DataValidationError, match="cell count or coordinate"):
         spreadsheets.parse_spreadsheet(
             io.BytesIO(raw), limits=spreadsheets.SpreadsheetLimits.for_tests(max_columns=2)
+        )
+
+
+@pytest.mark.parametrize(
+    ("target_name", "target_ref", "transform"),
+    [
+        ("xl/foo.xml", "foo.xml", lambda value: value),
+        ("xl/Worksheets/sheet1.xml", "Worksheets/sheet1.xml", lambda value: value),
+        ("xl/worksheets/sheet1.dat", "worksheets/sheet1.dat", _utf16_xml),
+    ],
+)
+def test_relationship_target_cannot_bypass_worksheet_admission(
+    monkeypatch: pytest.MonkeyPatch,
+    target_name: str,
+    target_ref: str,
+    transform,
+) -> None:
+    """Bind admission to the relationship target consumed by openpyxl."""
+    from clinpgx_link.exceptions import DataValidationError
+    from clinpgx_link.ingest import spreadsheets
+
+    raw = _relocate_worksheet(_workbook_bytes(), target_name, target_ref, transform)
+    monkeypatch.setattr(spreadsheets, "load_workbook", _must_not_open)
+    with pytest.raises(DataValidationError):
+        spreadsheets.parse_spreadsheet(
+            io.BytesIO(raw), limits=spreadsheets.SpreadsheetLimits.for_tests(max_cells=1)
         )

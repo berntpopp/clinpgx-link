@@ -6,7 +6,6 @@ import io
 import re
 import stat
 import zipfile
-from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Any, BinaryIO
 from xml.parsers import expat
@@ -258,20 +257,55 @@ def _validate_worksheet_xml(raw: bytes, limits: SpreadsheetLimits) -> None:
         )
 
 
-def _xml_parts(package: zipfile.ZipFile, limits: SpreadsheetLimits) -> Iterator[bytes]:
+def _worksheet_relationship_targets(raw: bytes) -> tuple[str, ...]:
+    targets: list[str] = []
+
+    def start_element(name: str, attributes: dict[str, str]) -> None:
+        if name.rsplit("}", maxsplit=1)[-1] != "Relationship":
+            return
+        relationship_type = attributes.get("Type", "")
+        if not relationship_type.endswith("/worksheet"):
+            return
+        if attributes.get("TargetMode", "Internal") != "Internal":
+            raise DataValidationError("Spreadsheet worksheet relationship must be internal")
+        target = attributes.get("Target", "")
+        relative = re.fullmatch(r"worksheets/sheet[1-9][0-9]*\.xml", target)
+        absolute = re.fullmatch(r"/xl/worksheets/sheet[1-9][0-9]*\.xml", target)
+        if relative is None and absolute is None:
+            raise DataValidationError("Spreadsheet worksheet relationship target is noncanonical")
+        targets.append(f"xl/{target}" if relative is not None else target.removeprefix("/"))
+
+    parser = expat.ParserCreate(namespace_separator="}")
+    parser.StartElementHandler = start_element
+    try:
+        parser.Parse(raw, True)
+    except DataValidationError:
+        raise
+    except expat.ExpatError as exc:
+        raise DataValidationError("Spreadsheet workbook relationships are invalid") from exc
+    if not targets:
+        raise DataValidationError("Spreadsheet does not declare a worksheet relationship")
+    if len(targets) != len(set(targets)):
+        raise DataValidationError("Spreadsheet contains duplicate worksheet relationships")
+    return tuple(targets)
+
+
+def _validate_parts(package: zipfile.ZipFile, limits: SpreadsheetLimits) -> None:
     infos = package.infolist()
     if len(infos) > limits.max_parts:
         raise DataValidationError(
             "Spreadsheet exceeds its OOXML part-count limit", subtype="resource_limit"
         )
     seen: set[str] = set()
+    part_by_name: dict[str, zipfile.ZipInfo] = {}
     total_expanded = 0
-    sheet_count = 0
+    relationship_body: bytes | None = None
     for info in infos:
         name = _safe_part_name(info)
         if name in seen:
             raise DataValidationError("Spreadsheet contains duplicate OOXML parts")
         seen.add(name)
+        part_by_name[name] = info
         total_expanded += info.file_size
         if info.file_size > limits.max_part_bytes:
             raise DataValidationError(
@@ -282,29 +316,37 @@ def _xml_parts(package: zipfile.ZipFile, limits: SpreadsheetLimits) -> Iterator[
                 "Spreadsheet OOXML package exceeds its expanded byte limit",
                 subtype="resource_limit",
             )
-        if not info.is_dir() and name.lower().endswith(".xml"):
+        if not info.is_dir() and name.lower().endswith((".xml", ".rels")):
             if info.file_size > limits.max_xml_bytes:
                 raise DataValidationError(
                     "Spreadsheet XML part exceeds its byte limit", subtype="resource_limit"
                 )
             body = _canonical_xml_bytes(_read_part(package, info))
-            if name.startswith("xl/worksheets/"):
-                sheet_count += 1
-                if sheet_count > limits.max_sheets:
-                    raise DataValidationError(
-                        "Spreadsheet exceeds its worksheet-count limit", subtype="resource_limit"
-                    )
-                _validate_worksheet_xml(body, limits)
-            yield body
-    if "[Content_Types].xml" not in seen or "xl/workbook.xml" not in seen:
+            if name == "xl/_rels/workbook.xml.rels":
+                relationship_body = body
+    required = {"[Content_Types].xml", "xl/workbook.xml", "xl/_rels/workbook.xml.rels"}
+    if not required.issubset(seen) or relationship_body is None:
         raise DataValidationError("Spreadsheet is missing required OOXML parts")
+    worksheet_targets = _worksheet_relationship_targets(relationship_body)
+    if len(worksheet_targets) > limits.max_sheets:
+        raise DataValidationError(
+            "Spreadsheet exceeds its worksheet-count limit", subtype="resource_limit"
+        )
+    for target in worksheet_targets:
+        target_info = part_by_name.get(target)
+        if target_info is None or target_info.is_dir():
+            raise DataValidationError("Spreadsheet worksheet relationship target is missing")
+        if target_info.file_size > limits.max_xml_bytes:
+            raise DataValidationError(
+                "Spreadsheet XML part exceeds its byte limit", subtype="resource_limit"
+            )
+        _validate_worksheet_xml(_canonical_xml_bytes(_read_part(package, target_info)), limits)
 
 
 def _validate_package(raw: bytes, limits: SpreadsheetLimits) -> None:
     try:
         with zipfile.ZipFile(io.BytesIO(raw)) as package:
-            for _ in _xml_parts(package, limits):
-                pass
+            _validate_parts(package, limits)
     except zipfile.BadZipFile as exc:
         raise DataValidationError("Spreadsheet OOXML package is invalid") from exc
 
