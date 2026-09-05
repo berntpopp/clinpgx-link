@@ -13,6 +13,7 @@ from typing import Any, cast
 from clinpgx_link.config import settings
 from clinpgx_link.data.coverage import field_metadata, known_filters
 from clinpgx_link.data.repository_locking import serialized_connection
+from clinpgx_link.data.repository_profiles import RepositoryProfileSupport
 from clinpgx_link.data.repository_provenance import dataset_source, snapshot_source
 from clinpgx_link.exceptions import (
     DataValidationError,
@@ -30,7 +31,7 @@ _ENTITY_TYPES = frozenset(
 _FTS_TOKEN = re.compile(r"\w+", re.UNICODE)
 
 
-class DatasetRepository:
+class DatasetRepository(RepositoryProfileSupport):
     """Repository pinned to an immutable SQLite database file and snapshot identity."""
 
     def __init__(self, database: Path) -> None:
@@ -43,6 +44,7 @@ class DatasetRepository:
         self._connection.row_factory = sqlite3.Row
         self._snapshot_id = self._metadata("snapshot_id")
         self._release_tag = self._metadata("release_tag")
+        self._load_profile_validation()
 
     @serialized_connection
     def close(self) -> None:
@@ -56,21 +58,6 @@ class DatasetRepository:
                 "Snapshot metadata is incomplete", subtype="snapshot_invalid"
             )
         return str(row[0])
-
-    def _validate_snapshot(self, expected_snapshot: str | None) -> None:
-        if expected_snapshot is not None and expected_snapshot != self._snapshot_id:
-            raise UpstreamUnavailableError(
-                "Requested snapshot does not match the open immutable snapshot",
-                subtype="snapshot_mismatch",
-            )
-
-    def status(self) -> dict[str, Any]:
-        return {
-            "snapshot_id": self._snapshot_id,
-            "release_tag": self._release_tag,
-            "database": str(self.database),
-            "ready": True,
-        }
 
     @serialized_connection
     def _dataset(self, dataset_id: str) -> sqlite3.Row:
@@ -139,6 +126,7 @@ class DatasetRepository:
                 if headers_value is not None:
                     value["sheets"] = headers_value
             value["supported_filters"] = sorted(known_filters(dataset_id, str(row["path"])))
+            value.update(self._profile_member_metadata(dataset_id, str(row["path"])))
             described_members.append(value)
         result = {
             "dataset_id": dataset["dataset_id"],
@@ -154,6 +142,7 @@ class DatasetRepository:
             "limitations": json.loads(dataset["limitations_json"]),
             "warnings": json.loads(dataset["warnings_json"]),
             "supported_filters": sorted(known_filters(dataset_id)),
+            "profile_gate_status": self._profile_validation.dataset_gate_status(dataset_id),
             "members": described_members,
         }
         return SourceResponse(
