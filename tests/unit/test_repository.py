@@ -75,6 +75,7 @@ def _repository(tmp_path: Path, *, include_pathways: bool = False):
         "relationships.zip": {"relationships.tsv": (FIXTURES / "relationships.tsv").read_bytes()},
     }
     if include_pathways:
+        definitions["genes.zip"]["zz-unsupported.bin"] = b"retained external limitation"
         definitions["pathways.json.zip"] = {
             "pathways.json": (FIXTURES / "pathways.json").read_bytes()
         }
@@ -128,6 +129,16 @@ def test_repository_lists_and_describes_only_the_pinned_snapshot(tmp_path: Path)
     assert listed.source.source_scope == "snapshot"
     assert listed.source.retrieval_time_scope == "aggregate_snapshot"
     assert listed.source.sha256 == built.snapshot_id.removeprefix("sha256:")
+    dataset_sources = listed.details["dataset_sources"]
+    assert set(dataset_sources) == {item["dataset_id"] for item in listed.value}
+    genes_source = dataset_sources["data/genes.zip"]
+    assert genes_source.url.endswith("/data/genes.zip")
+    assert genes_source.retrieved_at == GENES_RETRIEVED_AT
+    assert (
+        genes_source.sha256
+        == hashlib.sha256((tmp_path / "inputs" / "genes.zip").read_bytes()).hexdigest()
+    )
+    assert genes_source.source_scope == "dataset"
     assert described.value["dataset_id"] == "data/genes.zip"
     assert described.details["snapshot_id"] == built.snapshot_id
     assert described.value["source_date"] == "2026-09-05T00:37:36-07:00"

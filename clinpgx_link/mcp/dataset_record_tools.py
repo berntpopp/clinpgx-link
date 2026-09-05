@@ -29,6 +29,7 @@ from clinpgx_link.mcp.dataset_record_fields import (
 )
 from clinpgx_link.mcp.envelope import error_result, success_result
 from clinpgx_link.mcp.pagination import CursorCodec
+from clinpgx_link.mcp.row_provenance import row_provenance
 from clinpgx_link.mcp.untrusted_content import fence_text
 from clinpgx_link.models import SourceInfo, SourceResponse
 
@@ -283,17 +284,7 @@ def _shape_row(
     )
     result = dict(row)
     result["content_ref"] = source_ref
-    result["provenance"] = {
-        "dataset_source_url": source.url,
-        "archive_sha256": source.sha256,
-        "published_at": source.published_at,
-        "retrieved_at": source.retrieved_at,
-        "retrieval_time_kind": source.retrieval_time_kind,
-        "acquired_at": source.acquired_at,
-        "admitted_at": source.admitted_at,
-        "source_scope": source.source_scope,
-        "retrieval_time_scope": source.retrieval_time_scope,
-    }
+    result["provenance"] = row_provenance(source)
     record_id = str(row["record_id"])
     result["member"] = fence_text(str(row["member"]), source=source, record_id=record_id)
     for pointer_key in ("json_pointer", "parent_pointer"):

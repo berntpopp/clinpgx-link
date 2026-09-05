@@ -23,6 +23,7 @@ from clinpgx_link.exceptions import (
 )
 from clinpgx_link.mcp.envelope import error_result, success_result
 from clinpgx_link.mcp.pagination import CursorCodec
+from clinpgx_link.mcp.row_provenance import row_provenance
 from clinpgx_link.mcp.untrusted_content import fence_text
 from clinpgx_link.models import SourceInfo, SourceResponse
 
@@ -135,6 +136,7 @@ def _decorate_dataset(
 
 def _catalog_value(value: dict[str, Any], source: SourceInfo) -> dict[str, Any]:
     result = dict(value)
+    result["provenance"] = row_provenance(source)
     result["limitations"] = [
         _fence(item, source, str(value["dataset_id"])) for item in value.get("limitations", [])
     ]
@@ -200,6 +202,11 @@ def register_dataset_tools(
                     "The local snapshot identity changed.", subtype="snapshot_mismatch"
                 )
             needle = query.casefold() if query else None
+            dataset_sources = response.details.get("dataset_sources")
+            if not isinstance(dataset_sources, dict):
+                raise UpstreamUnavailableError(
+                    "Installed dataset provenance is incomplete.", subtype="snapshot_invalid"
+                )
             values = []
             for item in response.value:
                 if not include_legacy and str(item.get("tier", "")).casefold() in {
@@ -209,7 +216,12 @@ def register_dataset_tools(
                     continue
                 if needle and needle not in f"{item['dataset_id']} {item['file_name']}".casefold():
                     continue
-                values.append(_catalog_value(item, response.source))
+                row_source = dataset_sources.get(item["dataset_id"])
+                if not isinstance(row_source, SourceInfo):
+                    raise UpstreamUnavailableError(
+                        "Installed dataset provenance is incomplete.", subtype="snapshot_invalid"
+                    )
+                values.append(_catalog_value(item, row_source))
             total = len(values)
             if offset > total:
                 raise InvalidInputError("Offset exceeds dataset catalog.", field="offset")

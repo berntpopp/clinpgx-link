@@ -96,17 +96,26 @@ class DatasetRepository:
     @serialized_connection
     def list_datasets(self) -> SourceResponse:
         rows = self._connection.execute(
-            "SELECT dataset_id,file_name,published_at AS source_date,byte_count,sha256,"
+            "SELECT dataset_id,file_name,source_url,retrieved_at,published_at,byte_count,sha256,"
             "license_id,tier,record_count,limitations_json,warnings_json "
             "FROM dataset ORDER BY dataset_id"
         ).fetchall()
         values = []
+        dataset_sources: dict[str, SourceInfo] = {}
         for row in rows:
+            dataset_sources[str(row["dataset_id"])] = self._source(row)
             value = dict(row)
+            value.pop("source_url")
+            value.pop("retrieved_at")
+            value["source_date"] = value.pop("published_at")
             value["limitations"] = json.loads(value.pop("limitations_json"))
             value["warnings"] = json.loads(value.pop("warnings_json"))
             values.append(value)
-        return SourceResponse(value=values, source=self._source())
+        return SourceResponse(
+            value=values,
+            source=self._source(),
+            details={"dataset_sources": dataset_sources},
+        )
 
     @serialized_connection
     def describe(self, dataset_id: str) -> SourceResponse:

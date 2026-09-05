@@ -12,7 +12,13 @@ from clinpgx_link.content.assets import AssetReference
 from clinpgx_link.content.store import ContentStore
 from clinpgx_link.mcp.facade import create_mcp
 from clinpgx_link.models import SourceInfo, SourceResponse
-from tests.unit.test_repository import FIXTURES, _repository
+from tests.unit.test_repository import (
+    FIXTURES,
+    GENES_RETRIEVED_AT,
+    PATHWAYS_RETRIEVED_AT,
+    _mixed_repository,
+    _repository,
+)
 
 
 def _dataset_server(repository, store):
@@ -93,6 +99,43 @@ async def test_catalog_and_description_page_with_authenticated_cursor(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_mixed_catalog_rows_use_owning_archive_provenance_for_external_text(tmp_path):
+    repository, built = _mixed_repository(tmp_path)
+    store = ContentStore(tmp_path / "content.sqlite")
+    try:
+        async with Client(_dataset_server(repository, store)) as client:
+            call = await client.call_tool("list_datasets", {"limit": 20})
+            payload = call.structured_content
+            genes = next(
+                item for item in payload["results"] if item["dataset_id"] == "data/genes.zip"
+            )
+
+            assert payload["_meta"]["source_url"] == "https://www.clinpgx.org/downloads"
+            assert payload["_meta"]["source_sha256"] == built.snapshot_id.removeprefix("sha256:")
+            assert payload["_meta"]["retrieved_at"] == PATHWAYS_RETRIEVED_AT
+            assert genes["provenance"] == {
+                "dataset_source_url": "https://api.clinpgx.org/v1/download/file/data/genes.zip",
+                "archive_sha256": hashlib.sha256(
+                    (tmp_path / "inputs" / "genes.zip").read_bytes()
+                ).hexdigest(),
+                "published_at": "2026-09-05T00:37:36-07:00",
+                "retrieved_at": GENES_RETRIEVED_AT,
+                "retrieval_time_kind": "unknown",
+                "acquired_at": None,
+                "admitted_at": None,
+                "source_scope": "dataset",
+                "retrieval_time_scope": "source_recorded",
+            }
+            assert genes["warnings"][0]["text"] == "upstream_anomaly:genes_is_vip_all_yes"
+            assert genes["limitations"][0]["text"].startswith("zz-unsupported.bin:")
+            for item in [*genes["warnings"], *genes["limitations"]]:
+                assert item["provenance"]["retrieved_at"] == GENES_RETRIEVED_AT
+    finally:
+        repository.close()
+        store.close()
+
+
+@pytest.mark.asyncio
 async def test_catalog_defaults_to_including_legacy_and_cursor_binds_selectors(
     tmp_path, monkeypatch
 ):
@@ -104,6 +147,8 @@ async def test_catalog_defaults_to_including_legacy_and_cursor_binds_selectors(
         "2026-09-05T08:00:00Z",
         built.snapshot_id.removeprefix("sha256:"),
         "download",
+        source_scope="snapshot",
+        retrieval_time_scope="aggregate_snapshot",
     )
     catalog = [
         {
@@ -131,7 +176,22 @@ async def test_catalog_defaults_to_including_legacy_and_cursor_binds_selectors(
             "warnings": [],
         },
     ]
-    monkeypatch.setattr(repository, "list_datasets", lambda: SourceResponse(catalog, source))
+    dataset_sources = {
+        item["dataset_id"]: SourceInfo(
+            "ClinPGx local snapshot",
+            "https://api.clinpgx.org/v1/download/file/" + item["dataset_id"],
+            "2026-09-05T07:00:00Z",
+            item["sha256"],
+            "download",
+            source_scope="dataset",
+        )
+        for item in catalog
+    }
+    monkeypatch.setattr(
+        repository,
+        "list_datasets",
+        lambda: SourceResponse(catalog, source, {"dataset_sources": dataset_sources}),
+    )
     try:
         async with Client(_dataset_server(repository, store)) as client:
             default = await client.call_tool("list_datasets", {"limit": 20})
@@ -139,6 +199,10 @@ async def test_catalog_defaults_to_including_legacy_and_cursor_binds_selectors(
                 "data/current.zip",
                 "data/legacy.zip",
             ]
+            assert [
+                item["provenance"]["archive_sha256"]
+                for item in default.structured_content["results"]
+            ] == ["a" * 64, "b" * 64]
             first = await client.call_tool("list_datasets", {"limit": 1, "query": "data"})
             cursor = first.structured_content["_meta"]["pagination"]["next_cursor"]
             mismatch = await client.call_tool(
