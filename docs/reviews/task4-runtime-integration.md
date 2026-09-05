@@ -41,8 +41,14 @@ Root verification on 2026-09-05:
   `sha256:2035f90648774e41a0f260563c7852b2a61e3855107a8f753599077507c1d911`.
   The server shut down cleanly. This fixture smoke is not the real-agent benchmark.
 
-The public server now registers eight of the thirteen specified tools. Dataset
-record search/retrieval and entity/relationship tools remain incomplete. The
-identity check still validates the repository snapshot identity, not the future
-trusted release-manifest/runtime identity. Remote CI and release acceptance have
-not been run.
+At the reviewed revision, the public server registered eight of thirteen tools.
+Commit `f9522bb` subsequently wires all thirteen. The expanded HTTP fixture test
+also exercises dataset pagination, selected record fields, entity search/detail,
+exact advertised field filtering, and related evidence. Before that commit,
+`make ci-local` passed 442 tests, Ruff, strict mypy, module budgets and vendored
+schema verification. This is integration evidence, not independent approval of
+every tool or the real-agent benchmark.
+
+The identity check still validates the repository snapshot identity, not the
+future trusted release-manifest/runtime identity. Remote CI and release acceptance
+have not been run.

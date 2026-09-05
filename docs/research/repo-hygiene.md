@@ -21,7 +21,10 @@ integration files, and `git check-attr text eol` for application code and a sour
 fixture. Whole-tree checks and remote workflow execution are separate acceptance
 steps; adding a workflow does not prove GitHub CI has run.
 
+Implementation reports formerly tracked under the ignored `.superpowers` scratch
+tree now live in `docs/reviews/implementation/`, with their contents preserved.
+Historical review verdicts describe their reviewed revision, not current approval.
+
 Outstanding: release/container/conformance workflows, coverage gate, broader
-interpreter matrix tied to the eventual container, and relocation of tracked
-implementation reports out of the ignored `.superpowers` scratch tree. Those
-reports have not been deleted or silently untracked.
+interpreter matrix tied to the eventual container, and portable links in historical
+reviews. Local checks do not substitute for remote CI or the final agent benchmark.
