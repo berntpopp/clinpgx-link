@@ -26,8 +26,8 @@ source-coverage acceptance.
 - get_related_records: default source=api requires other_id, which is optional
   because source=download supports single-record joins. The probe supplies only
   top-level required record_id/result_type. Do not fabricate a default second ID or
-  change the frozen source semantics to satisfy this probe. A compatible resolution
-  of conditional argument documentation/probe coverage is still needed.
+  change the frozen source semantics to satisfy this probe. Further investigation
+  found a missing promised connected-object mode; see below.
 
 Inconclusive: get_record returned a singleton that supplied no rows for filter
 probes; get_source_content used a well-formed but absent dynamic handle and returned
@@ -51,3 +51,21 @@ Both responses decoded as JSON objects. Their captured operation contracts requi
 no path/query fields. These are suitable first examples without inventing defaults
 for parameterized calls. They have been added to the remediation scope; this direct
 upstream probe does not yet prove the revised MCP example controls pass.
+
+## Relationship-mode investigation
+
+The main design explicitly promises a connected-object **or** pair report. Current
+code only implements pairs. The registered connected-object endpoint interprets
+its `type` as a target object family, not a pair annotation type. Root confirmed:
+
+- `/v1/report/connectedObjects/PA124/Chemical`: HTTP 200, 24,094 bytes, 170 rows,
+  containing `connectedObject` and `connectionTypes`.
+- The same route with `summaryAnnotation` as type: HTTP 404, 65 bytes.
+
+The implementation assignment therefore completes the missing feature:
+`result_type=relationship` without `other_id` uses connected-object discovery for
+`other_type`; supported pair result types with `other_id` retain the existing pair
+route. Invalid combinations still fail explicitly. The first required result-type
+example becomes `relationship`, making the default-source example meaningful
+without fabricating a second identifier or altering source defaults. Completion
+and a fresh unmodified-probe rerun are still required.
