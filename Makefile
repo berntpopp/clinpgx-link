@@ -1,4 +1,4 @@
-.PHONY: install lock format format-check lint check-file-size typecheck test test-fast test-foundation check-fastmcp ci-local
+.PHONY: install lock format format-check lint check-file-size typecheck test test-fast test-foundation check-fastmcp vendor-check ci-local
 
 install:
 	uv sync --group dev
@@ -34,4 +34,7 @@ test-foundation:
 check-fastmcp:
 	uv run python -c "from fastmcp import Client, FastMCP; from mcp.types import CallToolResult; print(FastMCP, Client, CallToolResult)"
 
-ci-local: format-check lint check-file-size typecheck test-fast check-fastmcp
+vendor-check:
+	uv run --frozen python scripts/check_vendor_contract.py $(if $(GENEFOUNDRY_ROUTER_DIR),--router-dir "$(GENEFOUNDRY_ROUTER_DIR)")
+
+ci-local: format-check lint check-file-size vendor-check typecheck test-fast check-fastmcp

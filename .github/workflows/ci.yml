@@ -21,10 +21,18 @@ jobs:
     env:
       UV_PYTHON: '3.12'
       UV_FROZEN: 'true'
+      GENEFOUNDRY_ROUTER_DIR: .fleet-contracts/router
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
+          persist-credentials: false
+      - name: Checkout pinned fleet contract
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: berntpopp/genefoundry-router
+          ref: 6568a0ad7d68925440aba550a2a678282ea5bb6b
+          path: .fleet-contracts/router
           persist-credentials: false
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
