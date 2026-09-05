@@ -40,3 +40,18 @@ The current implementation_in_progress capability label is accurate.
 The root added installed asset retrieval after this review's inspected boundary;
 that addition needs its own independent review. Snapshot references alone are not
 proof of a completed release installer or historical-release resolver.
+
+## Fix progress (not independent approval)
+
+- Finding 2: 6f0bd1f removes the input-sized descriptor tuple allocation; full
+  parsing/concurrency assessment remains open.
+- Findings 3 and 4: c2e2326 preserves a top-level source reference/recovery command
+  for empty results and binds cursor expiry to both retained objects using the
+  store's wall clock. A fake-clock regression expires the older original body
+  while page state remains live and now gets cursor_expired. Focused verification:
+  33 MCP/presenter/cursor tests passed, Ruff and strict mypy clean.
+- Findings 1 and 6: adapter implementer is applying canonical MIME admission and
+  single-body retention, with capacity and hostile-header regressions.
+- Finding 5: original-body pointer composition is still open.
+
+No finding is independently approved solely because its author reports a fix.
