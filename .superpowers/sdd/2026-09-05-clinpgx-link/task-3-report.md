@@ -124,12 +124,12 @@ observation of `2026-09-05T10:30:00Z`. This is build evidence, not a checked-in 
 release. The source archives were not copied into the repository.
 
 ```text
-elapsed:       19.062 s
-SQLite bytes:  1,076,510,720
+elapsed:       18.761 s
+SQLite bytes:  1,038,249,984
 records:       452,450
 members:       521 indexed; 190 preserved; 0 quarantined
-snapshot:      sha256:19340bbe2269be8c861839d3cf1a8fa147bf75b70a54a40b4425e7fef7035a0f
-transform:     clinpgx-link-ingest-v1:sha256:494df5345920406ca0ab87681b8f4245a2c3b88dfaa89d1be5fca149b290db26
+snapshot:      sha256:8b8f522b4c510de45c69bb6bb7265c3bd8a183c52c1ce89b93d8f2b71f7d6ead
+transform:     clinpgx-link-ingest-v1:sha256:f6e64e791ee01c8c3bd6dfc0cc6239f9aae5881be3cfc104d797461941409a91
 ```
 
 | Dataset | Registry source date | Normalized rows |
@@ -167,11 +167,11 @@ performance candidate; it is correct but slower than the other indexed selectors
 The final current-code run used all six researched auxiliary archives:
 
 ```text
-elapsed:       7.600 s
-SQLite bytes:  406,626,304
+elapsed:       7.014 s
+SQLite bytes:  380,092,416
 records:       366,491
 members:       223 indexed; 56 preserved; 49 quarantined
-snapshot:      sha256:e2e37fc745dea4c33c5de0033e78c25098afb0dbe223fd7da376afe50906686c
+snapshot:      sha256:6610829d1b61ade19332c382879e23b5f0a0207025d67aa294a9cfda96821754
 ```
 
 | Dataset | Rows | Result |
@@ -197,13 +197,14 @@ deduplicated biological assertions.
 Final commands and outputs are recorded after implementation:
 
 ```text
-$ uv run pytest tests/unit/test_catalog.py tests/unit/test_acquire.py \
-    tests/unit/test_builder.py tests/unit/test_repository.py tests/unit/test_formats.py -q
-64 passed
+$ uv run pytest -q tests/unit/test_catalog.py tests/unit/test_acquire.py \
+    tests/unit/test_builder.py tests/unit/test_repository.py tests/unit/test_formats.py \
+    tests/unit/test_spreadsheets.py
+96 passed
 
 $ uv run ruff check clinpgx_link/data clinpgx_link/ingest \
     tests/unit/test_catalog.py tests/unit/test_acquire.py tests/unit/test_builder.py \
-    tests/unit/test_repository.py tests/unit/test_formats.py
+    tests/unit/test_repository.py tests/unit/test_formats.py tests/unit/test_spreadsheets.py
 All checks passed!
 
 $ uv run mypy --strict clinpgx_link/data/catalog.py clinpgx_link/data/coverage.py \
@@ -213,14 +214,53 @@ $ uv run mypy --strict clinpgx_link/data/catalog.py clinpgx_link/data/coverage.p
 Success: no issues found in 8 source files
 ```
 
-The exact final command will be rerun immediately before commit; this section is
-updated if its count differs.
+### Review remediation
+
+The independent round-one review initially rejected the implementation. Each finding
+was reproduced before its correction:
+
+- XLSX row-limit quarantine left a partial inserted row with a zero manifest count.
+  Member savepoints now roll back all partial rows; only the explicitly identified
+  legacy `data/haplotypes.zip` may quarantine ordinary workbook corruption, while
+  resource-limit and required-profile failures abort the candidate (`041fb8b`).
+- Nested OOXML originally had no package, part, XML, grid, cell, or merge-area bounds.
+  The first bounded implementation exposed three deeper parser/preflight mismatches:
+  UTF-16 XML, non-ASCII namespace prefixes, and relocated relationship targets all
+  reached `openpyxl`. The final admission path accepts only UTF-8 XML, uses streaming
+  Expat events rather than lexical tag regexes, validates `[Content_Types].xml`, binds
+  canonical workbook sheet IDs to their exact OPC relationships, and bounds the exact
+  internal worksheet parts consumed by `openpyxl` before loading. A final parser-path
+  audit found that shared strings and other XML are selected through content types as
+  well. The supported CPIC workbook profile is therefore closed and MIME-bound, every
+  parser-consumed XML part (including `.rels`) has UTF-8/declaration/element bounds,
+  and shared-string materialization has its own cap (`7009f5e`, `2e6c9cc`, `3218870`,
+  `8ef6fdd`, `1d25018`). Fourteen focused spreadsheet tests and all 171 current CPIC
+  workbooks (684 rows) pass.
+- Public `SourceInput` construction and catalog ledger parsing now validate complete
+  immutable provenance, URL/dataset binding, unique IDs, and nonnegative non-boolean
+  sizes. The builder and runtime share the exported canonical release-tag validator
+  (`b832214`; runtime wiring is owned by the server boundary).
+- Summary parent/evidence/allele identities are required at ingest, and missing
+  installed join membership fails closed instead of issuing an unfiltered child query
+  (`e6df495`).
+- Generic recursive JSON-key inference was removed. Only declared
+  dataset/member/pointer profiles create memberships, and entity searches reject
+  filters unsupported by the installed co-membership profile (`09daddc`).
+- Incremental JSON parsing no longer requests binary floats. Non-integer source
+  numbers are retained in normalized rows under the explicit JSON-safe representation
+  `{"$clinpgxJsonNumber":"<exact decimal>"}`; source integers remain integers and the
+  exact member bytes remain independently available (`391b886`).
+
+The review's unsupported-ZIP-compression minor did not reproduce as an untyped escape:
+Python's `NotImplementedError` is a `RuntimeError`, already covered by the acquisition
+translation boundary. A crafted unsupported-compression member produced the expected
+`DataValidationError`, so no speculative code change was made.
 
 ## Files and self-review
 
 Task-owned production files are `data/{catalog,coverage,repository,schema.sql}.py/sql`
 and `ingest/{acquire,builder,tabular,json_records,spreadsheets}.py`. Task-owned tests
-are the five targeted unit modules and sourced/adversarial fixtures under
+are the six targeted unit modules and sourced/adversarial fixtures under
 `tests/fixtures/exports/`.
 
 Self-review checked canonical path handling, frozen-source mutation, independent
