@@ -1,0 +1,41 @@
+# Use the same frozen tools locally and in CI, without rewriting captured evidence.
+minimum_pre_commit_version: '4.6.1'
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: Ruff lint (locked)
+        entry: uv run --frozen ruff check
+        language: system
+        types_or: [python, pyi]
+        files: ^(clinpgx_link|tests|scripts)/
+      - id: ruff-format
+        name: Ruff format check (locked)
+        entry: uv run --frozen ruff format --check
+        language: system
+        types_or: [python, pyi]
+        files: ^(clinpgx_link|tests|scripts)/
+      - id: mypy
+        name: Strict package typing (locked)
+        entry: uv run --frozen mypy clinpgx_link
+        language: system
+        pass_filenames: false
+        files: ^(clinpgx_link/|pyproject\.toml$|uv\.lock$)
+      - id: file-size-budget
+        name: Package module size budget
+        entry: uv run --frozen python scripts/check_file_size.py
+        language: system
+        pass_filenames: false
+        files: ^(clinpgx_link/|scripts/check_file_size\.py$)
+      - id: frozen-lock
+        name: Dependency lock freshness
+        entry: uv lock --check
+        language: system
+        pass_filenames: false
+        files: ^(pyproject\.toml|uv\.lock)$
+      - id: diff-whitespace
+        name: Staged whitespace and conflict markers
+        entry: git diff --cached --check
+        language: system
+        pass_filenames: false
+        always_run: true

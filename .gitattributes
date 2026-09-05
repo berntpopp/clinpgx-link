@@ -1,0 +1,12 @@
+* text=auto eol=lf
+
+# Source evidence is byte-preserving, including text with upstream CRLF.
+tests/fixtures/** -text
+clinpgx_link/api/*.json -text
+docs/research/*.json -text
+docs/research/*.tsv -text
+*.zip binary
+*.xlsx binary
+*.pdf binary
+*.sqlite binary
+*.zst binary
