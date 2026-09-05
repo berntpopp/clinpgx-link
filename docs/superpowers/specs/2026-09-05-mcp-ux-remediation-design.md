@@ -1,6 +1,6 @@
 # ClinPGx MCP UX remediation design
 
-Status: proposed; awaiting user approval before the detailed implementation plan.
+Status: approved for implementation by user direction on 2026-09-05.
 Date: 2026-09-05. Baseline revision: a4b3319.
 
 ## Objective and scope
@@ -66,6 +66,16 @@ as aggregate/local snapshot context; it cannot claim simultaneous upstream
 retrieval. Do not substitute a snapshot hash for an archive hash without declaring
 its scope. Missing upstream publication/currentness remains unknown.
 
+Preserve legacy retrieved_at and add retrieval_time_kind with values
+upstream_acquisition/local_admission/unknown. Nullable acquired_at and admitted_at
+are populated only by evidence establishing the corresponding class. Historic
+snapshots without classification report unknown; the evaluation report separately
+records the known local re-admission of batch2. Frozen acquisition evidence may
+be bundled under the existing release contract; later observations remain external.
+Never infer timestamp class from its field name or add current wall time to builds.
+retrieval_time_kind classifies only legacy retrieved_at; independent acquired_at
+and admitted_at may both be present without changing that classification.
+
 Implementation boundary: data/repository.py supplies SourceResponse identities;
 mcp/dataset_record_tools.py and mcp/record_shaping.py apply owning-row provenance.
 No source files or registry captures are rewritten to repair presentation.
@@ -107,9 +117,15 @@ Add include_fields to search_dataset and get_dataset_record: optional list of
 1–16 unique exact code-owned field names, each at most 512 characters. Reject an
 empty explicit list, duplicates, unprofiled names and incompatible pointer use.
 Projection is performed before safety shaping, but never changes row membership,
-row count, order, pagination or source completeness. Bind include_fields into the
+total count, order or source completeness. Page length may shrink under the
+existing byte budget, with a valid next cursor and unchanged total. Bind include_fields into the
 cursor selector identity. Requested fields absent from a row are explicitly
 reported as absent, not replaced with invented null source values.
+
+Projection binding intentionally protects paged-query meaning, not only membership.
+This addendum makes include_fields and pointers selectors; mode and page size remain
+excluded. Preserve selection order in the hash. Changing selection starts a new
+search; recovery states this rule without silently replaying a different selection.
 
 Projected values retain current fences and typed scalar handling, including safe
 profile-validated PharmCAT nested numeric maps. Omit redundant field_names on
@@ -117,21 +133,54 @@ projected responses. The original complete row and member remain retrievable.
 An oversized selected value returns its own bounded deferred descriptor.
 An unsafe unselected field must not force otherwise safe selected fields to defer.
 
-Add pointers to get_record, get_api_data and get_website_data: optional list of
+Add pointers to get_dataset_record, get_record, get_api_data and get_website_data:
+optional list of
 1–12 unique RFC 6901 pointers, at most 4096 characters and 128 segments each.
 Reject combination with nonempty pointer, cursor or nonzero offset. Multi-pointer
 selection requires a JSON adapter value; HTML, text and binary representations
-return invalid_input with fixed JSON-selection guidance. Use the
-adapter-relative namespace; return the corresponding original source pointer
+return invalid_input with fixed JSON-selection guidance. Use the normalized-record
+namespace for repository rows and adapter-relative namespace for API/website
+values; return the corresponding original source locator
 explicitly. Resolve all requested values from one retained adapter response,
 without one upstream call per pointer. Return scalar selections; container values
 receive a typed selection error with a usable structure-retrieval alternative.
 
-Apply the existing inline scalar budget with a combined 12,000-byte selected-value
-budget before envelope shaping; defer values that do not fit. Preserve selection
+Apply a 12,000-byte canonical-JSON selected-value budget per row, greedily in
+requested selection order. Defer a value that does not fit and continue trying
+later values, so one oversized value does not suppress later small scalars.
+The page's shaped rows, including fences and descriptors, have a 70,000-byte
+budget; the complete envelope independently remains at most 100,000 bytes. Trim
+only the page tail, providing a cursor for its first unreturned row. If even the
+first row cannot fit, return a bounded whole-row deferred descriptor. If that
+descriptor cannot fit, return a typed size error with exact-byte recovery, never
+a successful empty nonfinal page. Preserve selection
 order and explicit absent-pointer outcomes. Never canonicalize selected data and
 label it exact original-body bytes. Numeric scalars must be returned as values,
 not left for an agent to infer from SHA-256.
+
+Unprofiled repository rows use pointers for multi-scalar access without treating
+source keys as trusted output keys. Selections are ordered code-owned objects:
+pointer (fenced), status (value/absent/deferred), value only for value status, and
+fallback metadata only for deferred status. Stored null is status=value with
+value=null, not absent. Container selections fail before emitting partial output.
+Repository selections retain normalized-row and original-member references
+separately; a derived /fields path never addresses the original member.
+For JSON members, the original locator includes the source JSON pointer. For
+TSV/CSV members it includes member reference, original row ordinal and fenced column
+name; no RFC 6901 pointer pretends to address a tabular cell. If a transformation
+cannot establish a direct locator, declare it unavailable and retain normalized
+row identity plus original member bytes, never invent a pointer.
+
+| Tool | Selection language | Exclusions/namespace |
+| --- | --- | --- |
+| search_dataset | include_fields | Profiled top-level source fields; cursor-bound |
+| get_dataset_record | include_fields OR pointers OR pointer | Normalized /fields/... paths; mutually exclusive |
+| get_record | pointers OR pointer | Adapter-relative for API/website; normalized row for download |
+| get_api_data, get_website_data | pointers OR pointer | Adapter-relative JSON; no cursor/offset with pointers |
+| get_source_content | existing pointer | Namespace belongs to returned content_ref |
+
+With explicit selection, response_mode adds no unrequested values; only optional
+presentation metadata varies. Full then means full selected values, not all fields.
 
 Acceptance: two gene fields available in one call below 8,000 serialized payload
 bytes; five PharmCAT fields retain numeric allele count; large guideline title and
@@ -154,6 +203,16 @@ get_dataset for known dataset record shapes. Unknown shapes remain explicitly
 unprofiled and use retained-content discovery. This must not imply that all JSON
 members share one schema. Keep tool schema estimates within the existing per-tool
 1,200 and aggregate 10,000 estimated-token budgets.
+
+Each profile records its source member/shape, source column documentation and
+reason for default inclusion. Candidate validation checks required profiled fields
+against supported shapes and emits profile_drift for incompatible changes. Optional
+fields may be absent and are declared optional. Drift disables that profile, not
+raw-byte access or inventory accounting; required coverage/UX gates cannot pass on
+the degraded path. Every known shape is profiled or explicitly marked unprofiled.
+Detailed entity/filter matrices live in capabilities output; tool descriptions
+contain only concise route rules and valid examples. CI measures both schema
+budgets and the bounded capabilities payload.
 
 Acceptance: modes have measured size/field differences where optional fields
 exist; explicit projection is stable across modes; every mode retains all matches,
@@ -178,6 +237,20 @@ DPYD *1/*1 continues to return zero even when Reference/Reference is suggested a
 an observed stored example. Cursor recovery explains selector binding, expiry
 and offset incompatibility without modifying the cursor or concealing failures.
 
+The initial rejection rule is deliberately narrow: FTS queries containing ASCII
+asterisk (*) fail with exact-selector guidance. It does not claim to detect every
+scientific expression. Expected tests: *1/*1 and CYP2C19*2 reject; Reference/Reference,
+5-fluorouracil, N-acetyltransferase, drug combinations containing slash and rs IDs
+remain valid token queries, explicitly not exact scientific-identity matches.
+Example diagnostics select at most three distinct values in binary lexical index
+order under the remaining filters. Diagnose at most the first two present canonical
+filters in priority order id/gene/chemical/variant/name/source/annotation_id. Each
+indexed diagnostic has a 50,000-SQLite-VM-step budget plus a 50-ms safety deadline;
+tests inject the step budget deterministically rather than depending on host speed.
+Either limit yields explicit diagnostics_unavailable, never a fabricated zero
+count or changed search result. Deadline/progress hooks are scoped to the locked
+connection and restored before unrelated queries.
+
 Acceptance: positive exact queries, the negative DPYD case, tokenization loss,
 hostile examples, changed selectors, expiry and nonfinal-page progress.
 
@@ -188,12 +261,34 @@ typed errors. Define elapsed time as tool-boundary receipt through result creati
 including validation and admission but excluding HTTP serialization and network
 transit. Use a fake clock for exact timing tests. No default zero may represent
 unmeasured source execution; submillisecond rounded zero is legitimate if measured.
+Remove the implicit elapsed_ms=0 construction default. The boundary supplies a
+measured duration and timing_scope=tool_boundary on every returned envelope.
 
 Add a configurable per-process maximum of 16 active tool invocations by default,
-bounded to 1–128. Reject excess work promptly with rate_limited and a fixed retry
-hint; do not create an unbounded wait queue. Release admission on success, error
-and cancellation. Metadata tools share the bound. Preserve outbound two-RPS limits.
-No queries, source bodies, credentials or exception text enter telemetry.
+bounded to 2–128. Reserve ceil(maximum/2) slots for local/retained/metadata work
+and floor(maximum/2) for requests that may acquire upstream data. Route classification
+uses the validated source contract; uncertain auto routing uses the upstream pool.
+Outbound scheduler waiting occupies only an upstream slot. Do not borrow local
+slots for upstream work. Reject excess work promptly with rate_limited and fixed
+retry guidance; do not create an unbounded admission queue.
+
+Release admission when underlying work actually terminates, not merely when its
+awaiting client cancels. Track unfinished thread-backed work until completion.
+Prove cancellation propagation and slot recovery through the pinned real HTTP
+stack; if interruption is unsupported, expose cancellation-pending counts only in
+diagnostics/telemetry while work finishes and retains its slot, not as a response
+to the cancelled call. Metadata tools share the local pool except diagnostics
+with probe_upstream=true, which uses the upstream pool. Preserve
+outbound two-RPS limits. No query, body or exception text enters telemetry.
+
+Active work has a 60-second execution deadline; queue waiting inside an upstream
+slot counts toward it. Use bounded upstream requests and cooperative SQLite
+interruption. Work that cannot actually terminate stays accounted for and makes
+readiness degraded until completion or supervised restart; a timer must not free
+its slot while it still consumes resources. This is a fail-closed limitation,
+not a promise to kill arbitrary threads. Admission and upstream throttling retain
+the public rate_limited code with separate admission_capacity and upstream_throttle
+subtypes and cause-specific fixed retry guidance.
 
 The evaluator records monotonic tool-call send/result times in addition to total
 task time where client trace instrumentation supports them. Mark unavailable
@@ -219,6 +314,28 @@ Use the existing per-task limits: 35 instructed MCP calls, 40-call hard safeguar
 violating the 35-call task budget. Transport acceptance remains separate from
 answer acceptance. No silently substituted model or truncated trace can pass.
 
+| Suite | Instructed calls | Hard calls | Deadline/task | Purpose |
+| --- | --- | --- | --- | --- |
+| Frozen twelve, all UX repeat batches | 35 | 40 | 600 seconds | Existing development UX comparison |
+| New held-out UX tasks | 35 | 40 | 600 seconds | Generalization without answer hints |
+| Existing frozen eighteen | 30 | 30 | 180 seconds | Separate whole-project acceptance |
+
+All suites retain a 32-MiB trace ceiling. The different suites do not override
+each other's limits. Current twelve-task performance does not prove the eighteen
+will pass; optimize and test rather than relaxing the latter. In the four-session
+UX batch, any unexpected admission rate_limited result is a nonpassing environment
+capacity outcome, retained in the ledger, not discarded from the denominator.
+
+For deterministic budget gates define estimated_tokens=ceil(serialized_UTF8_bytes/4).
+Serialize with compact JSON separators, sorted keys, ensure_ascii=false and finite
+JSON values. The response ceiling applies to one serialized envelope (each mirrored
+copy independently), not the sum of the two protocol representations or framing.
+The same serialization is used for schema estimates. Exact mirroring, these budgets
+and closed domain enums are fleet decisions, not universal MCP requirements.
+This is explicitly an estimate, not model-token usage. Both the 100,000-byte and
+25,000-estimated-token ceilings apply; the stricter check wins. Model-reported
+usage stays separate. CI measures schemas with this same documented estimator.
+
 Independently check IDs, exact fields, archive/member hashes, source URLs, dates,
 negative results and reported coverage against retained source evidence. Live
 answers are audited against captured live responses, not stale installed rows.
@@ -231,6 +348,27 @@ across tasks; every aspect must have actual coverage. Null is unobserved, never
 100. Do not give the evaluator a target score or answer key. Report subjective
 ratings separately from independent correctness and measured performance.
 
+Opus assigns one self-review per trace using the existing frozen prompt rubric:
+50 substantial friction, 80 good with clear friction, 100 no observed friction;
+all integer scores 0–100 are allowed, not only multiples of five. Before a new
+candidate run, freeze and hash a supplementary judge rubric defining observed
+evidence for each aspect: 90 means the task is usable but has a concrete material
+remaining issue; 91–99 means only minor nonblocking friction, with score and
+explanation tied to the trace. This supplementary anchor does not retroactively
+edit the frozen Opus prompts or raw self-ratings. One independent Fable 5.1 judgment per trace sees the
+task, tool trace and verified source assertions, but not Opus's self-ratings,
+candidate label or desired threshold. Report both ratings and absolute per-aspect
+differences; disagreements are reviewed against concrete interactions, not averaged
+away. A passing aspect must exceed 90 in both observed judgments. Grader model,
+effort and exposed sampling settings are recorded; unavailable temperature controls
+are explicitly unconfigured, never claimed deterministic.
+
+Aspect coverage means at least one actually observed task per aspect per batch,
+not every aspect on every task. Nulls remain visible and are excluded only from
+the numerical minimum, never counted as passes. All deterministic source assertions
+must pass independently of ratings. These empirical gates make no confidence-level
+or population reliability claim.
+
 After a passing development batch, require three consecutive fresh passing
 twelve-task batches on the candidate revision, not best-of-three. Add a versioned
 held-out set of at least five tasks covering local exact retrieval, grounded
@@ -238,6 +376,21 @@ negative, live relationship, source distinction and invalid-filter/cursor recove
 Resolve task05's organization ambiguity only in that new set; retain the old task
 and report its scope limitation. A failed batch triggers a scoped reproducible
 fix and fresh verification; do not discard the failure or change its denominator.
+
+Maintain one append-only attempt ledger across candidate revisions and repeated
+batches, including timeouts, drift and discarded candidates. Each candidate gets
+exactly its declared three validation batches; any failure makes that validation
+campaign nonpassing. Do not retry unchanged code until it happens to pass. Start
+a new campaign only after an evidence-backed code/contract correction, with all
+earlier failures still reported. Rubric changes create a separately labeled series,
+not a comparable improvement. Captured upstream drift is a nonpassing outcome
+requiring a versioned source assertion update; never quietly absorb it as success.
+Allow one recorded adjudication per candidate for a disagreement unsupported by
+any concrete interaction. Keep raw scores unchanged and the campaign nonpassing;
+adjudication explains the discrepancy, not overrides the >90 gate. If no
+reproducible defect supports further changes, request user direction rather than
+make a cosmetic code change to justify another campaign. No finite stochastic
+evaluation is represented as a guarantee that all future users will score >90.
 
 Publish a concise comparison report with all per-task scores, measured counts,
 cost and limitations. Keep full traces private/ignored with digest manifests.
@@ -265,7 +418,7 @@ Repository hooks remain mandatory. Documentation includes field/mode semantics,
 source guarantees, migration notes for lossy FTS rejection and reproducible eval
 commands. No completion claim precedes fresh evidence of its exact gate.
 
-## Approval checkpoint
+## Review and execution direction
 
 The user requires Fable 5.1 adversarial review of both this spec and the subsequent
 implementation plan. Record requested and actual reviewer identity, exact reviewed
@@ -273,7 +426,8 @@ document hashes, findings and their disposition. A timeout, refusal, model fallb
 or missing verdict is an incomplete review, never approval. Review corrections
 must be independently checked; unresolved blocking findings prevent execution.
 
-Approve this design before writing the detailed implementation plan. The plan will
-map every R1–R7 requirement to concrete files, failing tests, implementation steps,
-review ownership and acceptance commands. Execution follows that approved plan;
-any material contract expansion returns to design review.
+The user explicitly directed effective implementation without iterative spec or
+plan reviews. The already completed spec reviews remain recorded as evidence;
+there will be one implementation-plan review, not another document-review loop.
+Concrete findings are resolved in implementation decisions and regression tests.
+Runtime evaluations and correctness reviews remain separate from document review.
