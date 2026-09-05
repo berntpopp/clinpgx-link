@@ -6,11 +6,13 @@ import base64
 import json
 import re
 import sqlite3
+import threading
 from pathlib import Path
 from typing import Any, cast
 
 from clinpgx_link.config import settings
 from clinpgx_link.data.coverage import field_metadata, known_filters
+from clinpgx_link.data.repository_locking import serialized_connection
 from clinpgx_link.exceptions import (
     DataValidationError,
     InvalidInputError,
@@ -34,15 +36,18 @@ class DatasetRepository:
         if not database.is_absolute() or database.is_symlink() or not database.is_file():
             raise InvalidInputError("Snapshot database must be an absolute regular file")
         self.database = database.resolve(strict=True)
+        self._connection_lock = threading.RLock()
         uri = f"file:{self.database.as_posix()}?mode=ro&immutable=1"
         self._connection = sqlite3.connect(uri, uri=True, check_same_thread=False)
         self._connection.row_factory = sqlite3.Row
         self._snapshot_id = self._metadata("snapshot_id")
         self._release_tag = self._metadata("release_tag")
 
+    @serialized_connection
     def close(self) -> None:
         self._connection.close()
 
+    @serialized_connection
     def _metadata(self, key: str) -> str:
         row = self._connection.execute("SELECT value FROM metadata WHERE key=?", (key,)).fetchone()
         if row is None:
@@ -66,6 +71,7 @@ class DatasetRepository:
             "ready": True,
         }
 
+    @serialized_connection
     def _dataset(self, dataset_id: str) -> sqlite3.Row:
         row = self._connection.execute(
             "SELECT * FROM dataset WHERE dataset_id=?", (dataset_id,)
@@ -74,6 +80,7 @@ class DatasetRepository:
             raise NotFoundError("Dataset is not installed in this snapshot", field="dataset_id")
         return cast(sqlite3.Row, row)
 
+    @serialized_connection
     def _source(
         self, dataset: sqlite3.Row | None = None, *, digest: str | None = None
     ) -> SourceInfo:
@@ -99,6 +106,7 @@ class DatasetRepository:
             warnings=warnings,
         )
 
+    @serialized_connection
     def list_datasets(self) -> SourceResponse:
         rows = self._connection.execute(
             "SELECT dataset_id,file_name,published_at AS source_date,byte_count,sha256,"
@@ -113,6 +121,7 @@ class DatasetRepository:
             values.append(value)
         return SourceResponse(value=values, source=self._source())
 
+    @serialized_connection
     def describe(self, dataset_id: str) -> SourceResponse:
         dataset = self._dataset(dataset_id)
         members = self._connection.execute(
@@ -133,6 +142,7 @@ class DatasetRepository:
                 value["fields"] = []
                 if headers_value is not None:
                     value["sheets"] = headers_value
+            value["supported_filters"] = sorted(known_filters(dataset_id, str(row["path"])))
             described_members.append(value)
         result = {
             "dataset_id": dataset["dataset_id"],
@@ -147,6 +157,7 @@ class DatasetRepository:
             "record_count": dataset["record_count"],
             "limitations": json.loads(dataset["limitations_json"]),
             "warnings": json.loads(dataset["warnings_json"]),
+            "supported_filters": sorted(known_filters(dataset_id)),
             "members": described_members,
         }
         return SourceResponse(value=result, source=self._source(dataset))
@@ -178,6 +189,7 @@ class DatasetRepository:
             return None
         return " AND ".join(f'"{token.replace(chr(34), chr(34) * 2)}"' for token in tokens)
 
+    @serialized_connection
     def _query_records(
         self,
         *,
@@ -262,6 +274,7 @@ class DatasetRepository:
             },
         )
 
+    @serialized_connection
     def search(
         self,
         dataset_id: str,
@@ -356,6 +369,7 @@ class DatasetRepository:
         )
         return self._page_response(values, total, offset, dataset)
 
+    @serialized_connection
     def get_record(self, record_id: str, *, expected_snapshot: str | None = None) -> SourceResponse:
         self._validate_snapshot(expected_snapshot)
         row = self._connection.execute(
@@ -383,6 +397,7 @@ class DatasetRepository:
             },
         )
 
+    @serialized_connection
     def search_entities(
         self,
         entity_type: str,
@@ -437,6 +452,7 @@ class DatasetRepository:
         )
         return self._page_response(values, total, offset, None)
 
+    @serialized_connection
     def related(
         self,
         record_id: str,
@@ -507,6 +523,7 @@ class DatasetRepository:
                 value["join"]["limitation"] = "citing_evidence_row_not_bibliographic_detail"
         return self._page_response(values, total, offset, dataset)
 
+    @serialized_connection
     def _asset_metadata(
         self, dataset_id: str, member: str | None
     ) -> tuple[sqlite3.Row, sqlite3.Row]:
@@ -526,6 +543,7 @@ class DatasetRepository:
             raise NotFoundError("Source asset is not installed", field="member")
         return dataset, row
 
+    @serialized_connection
     def asset_content(
         self,
         dataset_id: str,
@@ -560,6 +578,7 @@ class DatasetRepository:
             },
         )
 
+    @serialized_connection
     def read_asset(
         self,
         dataset_id: str,

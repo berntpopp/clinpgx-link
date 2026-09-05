@@ -7,12 +7,39 @@ import hashlib
 import io
 import sqlite3
 import zipfile
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from threading import Barrier, Lock
+from time import sleep
 
 import pytest
 
 FIXTURES = Path(__file__).parents[1] / "fixtures" / "exports" / "sourced"
 RELEASE_TAG = "data-clinpgx-core-0123456789abcdef"
+
+
+class _OverlapRejectingConnection:
+    """Make unsafe concurrent use deterministic while still executing real SQL."""
+
+    def __init__(self, connection: sqlite3.Connection) -> None:
+        self._connection = connection
+        self._guard = Lock()
+        self._active = False
+
+    def execute(self, *args, **kwargs):
+        with self._guard:
+            if self._active:
+                raise RuntimeError("concurrent sqlite connection use")
+            self._active = True
+        try:
+            sleep(0.005)
+            return self._connection.execute(*args, **kwargs)
+        finally:
+            with self._guard:
+                self._active = False
+
+    def close(self) -> None:
+        self._connection.close()
 
 
 def _archive(path: Path, members: dict[str, bytes]) -> None:
@@ -327,6 +354,32 @@ def test_get_record_round_trips_record_identity_and_snapshot_provenance(tmp_path
     assert fetched.value == row
     assert fetched.source.release_tag == RELEASE_TAG
     assert fetched.details["snapshot_id"] == built.snapshot_id
+
+
+def test_repository_serializes_parallel_queries_on_its_shared_connection(tmp_path: Path) -> None:
+    """Known rows cannot become false misses or mixed results under parallel MCP reads."""
+    repository, _ = _repository(tmp_path)
+    rows = repository.search("data/genes.zip", member="genes.tsv", limit=2).value
+    expected_ids = {str(row["record_id"]) for row in rows}
+    repository._connection = _OverlapRejectingConnection(repository._connection)  # type: ignore[assignment]
+    ready = Barrier(8)
+
+    def query(index: int) -> set[str]:
+        ready.wait()
+        if index % 2:
+            found = repository.search("data/genes.zip", member="genes.tsv", limit=2)
+            return {str(row["record_id"]) for row in found.value}
+        record_id = str(rows[index % len(rows)]["record_id"])
+        return {str(repository.get_record(record_id).value["record_id"])}
+
+    try:
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            results = list(executor.map(query, range(8)))
+    finally:
+        repository.close()
+
+    assert all(result <= expected_ids for result in results)
+    assert results.count(expected_ids) == 4
 
 
 @pytest.mark.parametrize(("result_type", "expected"), [("evidence", 1), ("allele", 3)])

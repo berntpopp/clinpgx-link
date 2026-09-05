@@ -23,7 +23,10 @@ from clinpgx_link.exceptions import (
     ResponseTooLargeError,
     UpstreamUnavailableError,
 )
-from clinpgx_link.mcp.dataset_record_fields import trusted_fields_for_row
+from clinpgx_link.mcp.dataset_record_fields import (
+    profiled_nested_fields_are_safe,
+    trusted_fields_for_row,
+)
 from clinpgx_link.mcp.envelope import error_result, success_result
 from clinpgx_link.mcp.pagination import CursorCodec
 from clinpgx_link.mcp.untrusted_content import fence_text
@@ -265,8 +268,10 @@ def _shape_row(
         if trusted_field_names is None
         else frozenset(trusted_field_names).intersection(owned_names)
     )
-    defer_fields = force_defer_fields or _needs_deferred_fields(
-        fields, trusted_field_names=trusted_names
+    defer_fields = (
+        force_defer_fields
+        or not profiled_nested_fields_are_safe(row)
+        or _needs_deferred_fields(fields, trusted_field_names=trusted_names)
     )
     derived_ref = (
         _retain_row(store, row, response.source)
@@ -395,6 +400,8 @@ def register_dataset_record_tools(
             dict[str, str] | None,
             Field(
                 description="ANDed filters: reserved lowercase canonical keys, or exact advertised source fields when member is explicit."
+                " For PharmCAT diplotype children, combine exact canonical gene and name"
+                " (the diplotype string) filters.",
             ),
         ] = None,
         match: Annotated[

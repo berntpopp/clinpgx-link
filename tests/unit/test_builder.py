@@ -461,7 +461,13 @@ def test_auxiliary_rows_gain_only_profiled_gene_allele_and_drug_memberships(
         "pharmcat.zip": {
             "phenotypes.json": (
                 b'[{"gene":"TPMT","namedAlleles":['
-                b'{"name":"*1","functionValue":"Normal function"}]}]'
+                b'{"name":"*1","functionValue":"Normal function"}]},'
+                b'{"gene":"DPYD","diplotypes":['
+                b'{"diplotype":"Reference/*2A","diplotypekey":'
+                b'{"Reference":1,"c.1905+1G>A (*2A)":1},'
+                b'"generesult":"Intermediate Metabolizer",'
+                b'"lookupkey":"Intermediate Metabolizer",'
+                b'"phenotype":"Intermediate Metabolizer"}]}]'
             )
         },
     }
@@ -516,6 +522,12 @@ def test_auxiliary_rows_gain_only_profiled_gene_allele_and_drug_memberships(
         for row in memberships
     )
     assert any(
+        row[0] == "data/pharmcat.zip"
+        and "/diplotypes/" in (row[2] or "")
+        and row[3:5] == ("name", "Reference/*2A")
+        for row in memberships
+    )
+    assert any(
         row[0] == "data/cpic.drug.mapping.zip" and row[3:5] == ("chemical", "clopidogrel")
         for row in memberships
     )
@@ -556,4 +568,17 @@ def test_auxiliary_rows_gain_only_profiled_gene_allele_and_drug_memberships(
         ).details["total_count"]
         == 1
     )
+    pharmcat = repository.search(
+        "data/pharmcat.zip",
+        member="phenotypes.json",
+        filters={"gene": "DPYD", "name": "Reference/*2A"},
+    )
+    assert pharmcat.details["total_count"] == 1
+    assert pharmcat.value[0]["fields"]["diplotypekey"] == {
+        "Reference": 1,
+        "c.1905+1G>A (*2A)": 1,
+    }
+    described = repository.describe("data/pharmcat.zip")
+    assert described.value["supported_filters"] == ["gene", "name"]
+    assert described.value["members"][0]["supported_filters"] == ["gene", "name"]
     repository.close()
