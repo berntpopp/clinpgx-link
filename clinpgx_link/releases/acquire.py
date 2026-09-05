@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import math
 import os
 import secrets
 import stat
@@ -98,6 +99,8 @@ def _validated_url(value: str, api_path: str, s3_path: str) -> str:
         or parsed.fragment
     ):
         raise UpstreamUnavailableError("Source redirect policy was not satisfied.")
+    if value != f"https://{parsed.netloc}{expected_path}":
+        raise UpstreamUnavailableError("Source redirect policy was not satisfied.")
     return value
 
 
@@ -153,17 +156,18 @@ def _open_parent(destination: Path) -> int:
         raise InvalidInputError("Destination parent is unavailable.", field="destination") from exc
 
 
-def _validate_destination(parent_fd: int, name: str) -> None:
+def _validate_destination(parent_fd: int, name: str) -> bool:
     try:
         info = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
     except FileNotFoundError:
-        return
+        return False
     except OSError as exc:
         raise InvalidInputError("Destination cannot be inspected.", field="destination") from exc
     if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
         raise InvalidInputError(
             "Destination must be a regular single-link file.", field="destination"
         )
+    return True
 
 
 def _create_temporary(parent_fd: int, destination_name: str) -> tuple[int, str]:
@@ -189,6 +193,33 @@ def _create_temporary(parent_fd: int, destination_name: str) -> tuple[int, str]:
             raise UpstreamUnavailableError("Local acquisition storage is unavailable.") from exc
         return descriptor, name
     raise UpstreamUnavailableError("Local acquisition storage is unavailable.")
+
+
+def _create_recovery_link(parent_fd: int, destination_name: str) -> str:
+    """Retain the admitted destination inode until publication commits."""
+    for _attempt in range(16):
+        name = f".{destination_name}.{secrets.token_hex(12)}.recovery"
+        try:
+            os.link(
+                destination_name,
+                name,
+                src_dir_fd=parent_fd,
+                dst_dir_fd=parent_fd,
+                follow_symlinks=False,
+            )
+            return name
+        except FileExistsError:
+            continue
+        except OSError as exc:
+            raise UpstreamUnavailableError("Local acquisition storage is unavailable.") from exc
+    raise UpstreamUnavailableError("Local acquisition storage is unavailable.")
+
+
+def _valid_timing(value: object, *, allow_zero: bool) -> bool:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return False
+    number = float(value)
+    return math.isfinite(number) and (number >= 0 if allow_zero else number > 0)
 
 
 def _metadata(headers: httpx.Headers, name: str) -> str | None:
@@ -226,9 +257,12 @@ class SourceDownloader:
         utcnow: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
         if (
-            (stall_timeout_seconds is not None and stall_timeout_seconds <= 0)
-            or minimum_bytes_per_second <= 0
-            or throughput_grace_seconds < 0
+            (
+                stall_timeout_seconds is not None
+                and not _valid_timing(stall_timeout_seconds, allow_zero=False)
+            )
+            or not _valid_timing(minimum_bytes_per_second, allow_zero=False)
+            or not _valid_timing(throughput_grace_seconds, allow_zero=True)
         ):
             raise InvalidInputError("Download timing policy is invalid.")
         self._settings = settings
@@ -268,6 +302,10 @@ class SourceDownloader:
         expected = _expected_digest(expected_sha256)
         if self._closed:
             raise UpstreamUnavailableError("Source downloader is closed.")
+        started = self._clock()
+        if not math.isfinite(started):
+            raise UpstreamUnavailableError("Acquisition clock is unavailable.")
+        deadline = started + self._settings.request_deadline_seconds
         parent_fd = _open_parent(destination)
         temporary_name: str | None = None
         descriptor: int | None = None
@@ -283,18 +321,20 @@ class SourceDownloader:
                         descriptor,
                         expected,
                     )
+                    self._check_deadline(deadline)
                     os.fsync(descriptor)
+                    self._check_deadline(deadline)
                     os.close(descriptor)
                     descriptor = None
-                    _validate_destination(parent_fd, destination.name)
-                    os.replace(
+                    destination_exists = _validate_destination(parent_fd, destination.name)
+                    self._publish(
+                        parent_fd,
                         temporary_name,
                         destination.name,
-                        src_dir_fd=parent_fd,
-                        dst_dir_fd=parent_fd,
+                        destination_exists=destination_exists,
+                        deadline=deadline,
                     )
                     temporary_name = None
-                    os.fsync(parent_fd)
                     return receipt
             except TimeoutError as exc:
                 raise UpstreamUnavailableError("Source download exceeded its time limit.") from exc
@@ -357,6 +397,9 @@ class SourceDownloader:
             if location is None or redirects >= self._settings.max_redirects:
                 raise UpstreamUnavailableError("Source redirect policy was not satisfied.")
             try:
+                raw_target = urlsplit(location)
+                if raw_target.scheme or raw_target.netloc:
+                    _validated_url(location, api_path, s3_path)
                 target = response.url.join(location)
             except (httpx.InvalidURL, ValueError) as exc:
                 raise UpstreamUnavailableError("Source redirect policy was not satisfied.") from exc
@@ -432,6 +475,58 @@ class SourceDownloader:
             if written <= 0:
                 raise OSError("short write")
             view = view[written:]
+
+    def _check_deadline(self, deadline: float) -> None:
+        now = self._clock()
+        if not math.isfinite(now) or now >= deadline:
+            raise UpstreamUnavailableError("Source download exceeded its time limit.")
+
+    def _publish(
+        self,
+        parent_fd: int,
+        temporary_name: str,
+        destination_name: str,
+        *,
+        destination_exists: bool,
+        deadline: float,
+    ) -> None:
+        """Publish with a recoverable old-name state until commit is admitted."""
+        recovery_name: str | None = None
+        try:
+            if destination_exists:
+                recovery_name = _create_recovery_link(parent_fd, destination_name)
+                os.fsync(parent_fd)
+            self._check_deadline(deadline)
+            os.replace(
+                temporary_name,
+                destination_name,
+                src_dir_fd=parent_fd,
+                dst_dir_fd=parent_fd,
+            )
+            try:
+                self._check_deadline(deadline)
+                os.fsync(parent_fd)
+                self._check_deadline(deadline)
+                if recovery_name is not None:
+                    os.unlink(recovery_name, dir_fd=parent_fd)
+                    recovery_name = None
+            except BaseException:
+                if recovery_name is not None:
+                    os.replace(
+                        recovery_name,
+                        destination_name,
+                        src_dir_fd=parent_fd,
+                        dst_dir_fd=parent_fd,
+                    )
+                    recovery_name = None
+                else:
+                    os.unlink(destination_name, dir_fd=parent_fd)
+                os.fsync(parent_fd)
+                raise
+        finally:
+            if recovery_name is not None:
+                with suppress(OSError):
+                    os.unlink(recovery_name, dir_fd=parent_fd)
 
     @staticmethod
     def _raise_for_status(status: int) -> None:

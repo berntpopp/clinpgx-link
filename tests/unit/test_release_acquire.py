@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import math
 import os
+import stat
 from collections.abc import AsyncIterator, Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -210,6 +212,35 @@ async def test_rejects_unsafe_or_path_changing_redirect(tmp_path: Path, location
     assert not destination.exists()
 
 
+@pytest.mark.parametrize(
+    "location",
+    [
+        "https://API.clinpgx.org/v1/download/file/data/archive.zip",
+        "https://api.clinpgx.org:443/v1/download/file/data/archive.zip",
+    ],
+)
+@pytest.mark.asyncio
+async def test_rejects_raw_absolute_redirect_alias_before_url_normalization(
+    tmp_path: Path, location: str
+) -> None:
+    calls = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return httpx.Response(302, headers={"location": location}, request=request)
+        return httpx.Response(200, stream=_BytesStream(b"data"), request=request)
+
+    destination = _parent(tmp_path) / "archive.zip"
+    async with _client(handler) as client:
+        with pytest.raises(UpstreamUnavailableError):
+            await SourceDownloader(_settings(), client=client).download(
+                "data/archive.zip", destination
+            )
+    assert calls == 1
+
+
 @pytest.mark.asyncio
 async def test_rejects_redirect_loop_at_configured_bound(tmp_path: Path) -> None:
     calls = 0
@@ -310,6 +341,76 @@ async def test_streamed_oversize_and_wrong_digest_preserve_existing_file(tmp_pat
     assert list(parent.iterdir()) == [destination]
 
 
+@pytest.mark.asyncio
+async def test_parent_fsync_failure_after_replace_restores_existing_destination(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from clinpgx_link.releases import acquire
+
+    parent = _parent(tmp_path)
+    destination = parent / "archive.zip"
+    destination.write_bytes(b"old")
+    destination.chmod(0o600)
+    real_fsync = os.fsync
+    directory_fsyncs = 0
+
+    def fail_commit_fsync(descriptor: int) -> None:
+        nonlocal directory_fsyncs
+        if stat.S_ISDIR(os.fstat(descriptor).st_mode):
+            directory_fsyncs += 1
+            if destination.read_bytes() == b"new":
+                raise OSError("injected commit fsync failure")
+        real_fsync(descriptor)
+
+    monkeypatch.setattr(acquire.os, "fsync", fail_commit_fsync)
+    async with _client(
+        lambda request: httpx.Response(200, stream=_BytesStream(b"new"), request=request)
+    ) as client:
+        with pytest.raises(UpstreamUnavailableError):
+            await SourceDownloader(_settings(), client=client).download(
+                "data/archive.zip", destination
+            )
+
+    assert directory_fsyncs >= 2
+    assert destination.read_bytes() == b"old"
+    assert list(parent.iterdir()) == [destination]
+
+
+@pytest.mark.asyncio
+async def test_deadline_elapsed_during_data_fsync_preserves_existing_destination(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from clinpgx_link.releases import acquire
+
+    parent = _parent(tmp_path)
+    destination = parent / "archive.zip"
+    destination.write_bytes(b"old")
+    destination.chmod(0o600)
+    now = 0.0
+    real_fsync = os.fsync
+
+    def advance_during_data_fsync(descriptor: int) -> None:
+        nonlocal now
+        real_fsync(descriptor)
+        if stat.S_ISREG(os.fstat(descriptor).st_mode):
+            now = 5.0
+
+    monkeypatch.setattr(acquire.os, "fsync", advance_during_data_fsync)
+    async with _client(
+        lambda request: httpx.Response(200, stream=_BytesStream(b"new"), request=request)
+    ) as client:
+        with pytest.raises(UpstreamUnavailableError):
+            await SourceDownloader(
+                _settings(request_deadline_seconds=4),
+                client=client,
+                throughput_grace_seconds=10,
+                clock=lambda: now,
+            ).download("data/archive.zip", destination)
+
+    assert destination.read_bytes() == b"old"
+    assert list(parent.iterdir()) == [destination]
+
+
 class _BlockedStream(httpx.AsyncByteStream):
     async def __aiter__(self) -> AsyncIterator[bytes]:
         await asyncio.Event().wait()
@@ -348,12 +449,12 @@ async def test_overall_deadline_includes_scheduler_wait(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_slow_stream_fails_minimum_throughput_policy(tmp_path: Path) -> None:
-    times = iter([0.0, 2.0, 2.0])
+    times = iter([0.0, 0.0, 2.0])
     destination = _parent(tmp_path) / "archive.zip"
     async with _client(
         lambda request: httpx.Response(200, stream=_BytesStream(b"data"), request=request)
     ) as client:
-        with pytest.raises(UpstreamUnavailableError):
+        with pytest.raises(UpstreamUnavailableError, match="minimum throughput"):
             await SourceDownloader(
                 _settings(),
                 client=client,
@@ -432,3 +533,22 @@ async def test_close_only_closes_owned_client(tmp_path: Path) -> None:
     owned = SourceDownloader(_settings())
     await owned.close()
     assert owned._client.is_closed
+
+
+@pytest.mark.parametrize(
+    ("keyword", "value"),
+    [
+        ("stall_timeout_seconds", True),
+        ("stall_timeout_seconds", math.nan),
+        ("stall_timeout_seconds", math.inf),
+        ("minimum_bytes_per_second", False),
+        ("minimum_bytes_per_second", math.nan),
+        ("minimum_bytes_per_second", -math.inf),
+        ("throughput_grace_seconds", True),
+        ("throughput_grace_seconds", math.nan),
+        ("throughput_grace_seconds", math.inf),
+    ],
+)
+def test_rejects_boolean_or_nonfinite_timing_policy(keyword: str, value: float) -> None:
+    with pytest.raises(InvalidInputError):
+        SourceDownloader(_settings(), **{keyword: value})  # type: ignore[arg-type]
