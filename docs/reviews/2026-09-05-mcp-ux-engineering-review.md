@@ -101,6 +101,44 @@ checks and retain unsuccessful trials.
 Source: [Demystifying agent evaluations](https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents)
 (2026-01-09).
 
+## Google guidance and independent community evidence
+
+Follow-up requested 2026-09-05. Google Cloud's MCP safety guidance recommends
+least-privilege identities, separating retrieved data from instructions, isolated
+agent state and explicit tool allowlists. Its page was updated 2026-08-28. For
+this project those principles support retaining source fences, read-only tools,
+isolated benchmark sessions and no arbitrary network targets. They do not prove
+that delimiters prevent every prompt injection, nor require adopting Google's
+commercial security services.
+Source: [Google Cloud MCP security and safety](https://docs.cloud.google.com/mcp/ai-security-safety).
+
+Google's ADK MCP documentation demonstrates client-side tool filtering and
+explicit connection cleanup. These are client/framework practices, not additional
+MCP server requirements. Keep the current benchmark's single-server isolation and
+process cleanup; do not add ADK as a dependency merely to follow its examples.
+Source: [Google ADK MCP tools](https://adk.dev/tools-custom/mcp-tools/)
+(accessed 2026-09-05; current documentation, not the project's locked SDK).
+
+Independent empirical evidence also cautions against indiscriminately expanding
+descriptions. Hasan et al.'s preprint studied 856 tools across 103 MCP servers;
+its abstract reports that augmented descriptions improved median task success but
+also increased execution steps and regressed some cases. This is study-specific
+evidence, not a universal effect size or community standard. The engineering
+implication is to test concise contract descriptions against actual task outcomes,
+not score documentation by length. Follow-up inspection of the methods and
+validity sections found that performance testing covered 202 tools from 18 servers,
+not all 856 tools. Some comparisons use previously reported baselines; step counts
+are the main cost proxy and token measurements cover a narrower subset. This
+limits direct prediction for current Opus and ClinPGx. The study was not replicated.
+Sources: [MCP Tool Descriptions Are Smelly, v3](https://arxiv.org/abs/2602.14878v3),
+[methods and validity discussion](https://arxiv.org/html/2602.14878v3)
+(2026-05-31).
+
+Together with Anthropic's tool-design and evaluation guidance above, these sources
+support bounded selections, executable examples, explicit trust boundaries and
+measured iterations. None supplies a standardized 90/100 MCP UX certification.
+Our threshold remains a user-defined acceptance criterion, not an industry seal.
+
 ## Prioritized engineering findings
 
 ### P0: Correct provenance before optimizing presentation
