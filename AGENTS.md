@@ -11,6 +11,13 @@ The binding design documents are:
 - `docs/superpowers/specs/2026-09-05-source-access-contract.md`
 - `docs/superpowers/specs/2026-09-05-clinpgx-link-design.md`
 - `docs/superpowers/plans/2026-09-05-clinpgx-link.md`
+- `docs/superpowers/specs/2026-09-05-mcp-ux-remediation-design.md`
+- `docs/superpowers/plans/2026-09-05-mcp-ux-remediation.md`
+
+The UX addendum supplements, rather than replaces, the original release,
+source-coverage and frozen eighteen-case acceptance gates. The user requires
+one spec/plan review, not iterative document-review loops; runtime verification
+and evidence-backed implementation fixes remain required.
 
 ## Architecture boundaries
 
@@ -41,4 +48,3 @@ The binding design documents are:
 - Every one of the captured 120 download registry entries remains accounted for even when unavailable, corrupt, unparsed, or catalog-only.
 - Candidate builders never activate data. The release installer alone verifies and atomically activates immutable snapshots.
 - Preserve exact source and member bytes for installed releases; parser output never substitutes for retained provenance.
-
