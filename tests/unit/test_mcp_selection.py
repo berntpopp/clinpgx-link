@@ -147,6 +147,42 @@ def test_resolve_scalars_normalizes_invalid_source_scalars(bad_value):
     assert "unsafe-source-value" not in str(caught.value)
 
 
+def test_resolve_scalars_rejects_tuple_values_instead_of_coercing_them_to_arrays():
+    from clinpgx_link.exceptions import DataValidationError
+    from clinpgx_link.mcp.selection import resolve_scalars
+
+    with pytest.raises(DataValidationError) as caught:
+        resolve_scalars({"not-json": ("coerced",)}, ("/not-json",))
+
+    assert str(caught.value) == "Source value is not finite UTF-8 JSON."
+
+
+def test_finite_json_bytes_rejects_nested_non_string_mapping_keys():
+    from clinpgx_link.exceptions import DataValidationError
+    from clinpgx_link.mcp.selection import finite_json_bytes
+
+    with pytest.raises(DataValidationError) as caught:
+        finite_json_bytes({"outer": {7: "would be coerced"}})
+
+    assert str(caught.value) == "Source value is not finite UTF-8 JSON."
+
+
+def test_finite_json_bytes_rejects_cycles_and_excessive_depth_with_typed_errors():
+    from clinpgx_link.exceptions import DataValidationError
+    from clinpgx_link.mcp.selection import finite_json_bytes
+
+    cyclic = []
+    cyclic.append(cyclic)
+    deep = None
+    for _ in range(130):
+        deep = [deep]
+
+    with pytest.raises(DataValidationError):
+        finite_json_bytes(cyclic)
+    with pytest.raises(DataValidationError):
+        finite_json_bytes(deep)
+
+
 def test_finite_json_bytes_is_sorted_compact_utf8_and_normalizes_failures():
     from clinpgx_link.exceptions import DataValidationError
     from clinpgx_link.mcp.selection import finite_json_bytes

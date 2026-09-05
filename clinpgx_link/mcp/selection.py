@@ -13,16 +13,18 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, Literal, TypeGuard
 
 from clinpgx_link.exceptions import DataValidationError, InvalidInputError
 
 _MAX_POINTERS = 12
 _MAX_POINTER_CHARACTERS = 4096
 _MAX_POINTER_SEGMENTS = 128
+_MAX_JSON_DEPTH = 128
 _ARRAY_INDEX = re.compile(r"0|[1-9][0-9]*")
 _MALFORMED_ESCAPE = re.compile(r"~(?![01])")
 _MISSING = object()
@@ -107,6 +109,7 @@ def validate_pointers(
 def finite_json_bytes(value: Any) -> bytes:
     """Return deterministic finite UTF-8 JSON or a typed source-data failure."""
     try:
+        _validate_json_domain(value)
         return json.dumps(
             value,
             ensure_ascii=False,
@@ -116,6 +119,44 @@ def finite_json_bytes(value: Any) -> bytes:
         ).encode("utf-8")
     except (TypeError, ValueError, UnicodeError, RecursionError) as exc:
         raise DataValidationError("Source value is not finite UTF-8 JSON.") from exc
+
+
+def _is_json_scalar(value: Any) -> TypeGuard[JsonScalar]:
+    return value is None or type(value) in {str, int, float, bool}
+
+
+def _validate_json_domain(value: Any) -> None:
+    """Reject Python values that json.dumps would coerce outside the JSON domain."""
+    stack: list[tuple[Any, int, bool]] = [(value, 0, False)]
+    active_containers: set[int] = set()
+    while stack:
+        item, depth, leaving = stack.pop()
+        if leaving:
+            active_containers.remove(id(item))
+            continue
+        if depth > _MAX_JSON_DEPTH:
+            raise ValueError("JSON nesting exceeds the supported depth")
+        if _is_json_scalar(item):
+            if isinstance(item, str):
+                item.encode("utf-8")
+            elif isinstance(item, float) and not math.isfinite(item):
+                raise ValueError("nonfinite JSON number")
+            continue
+        if type(item) not in {dict, list}:
+            raise TypeError("value is outside the JSON domain")
+        identity = id(item)
+        if identity in active_containers:
+            raise ValueError("cyclic JSON value")
+        active_containers.add(identity)
+        stack.append((item, depth, True))
+        if isinstance(item, dict):
+            for key, child in item.items():
+                if type(key) is not str:
+                    raise TypeError("JSON object key is not a string")
+                key.encode("utf-8")
+                stack.append((child, depth + 1, False))
+        else:
+            stack.extend((child, depth + 1, False) for child in item)
 
 
 def _resolve(value: Any, tokens: tuple[str, ...]) -> Any:
@@ -172,6 +213,8 @@ def resolve_scalars(
                 hint="Select scalar children discovered through structure retrieval.",
                 subtype="scalar_selection_required",
             )
+        if selected is not _MISSING and not _is_json_scalar(selected):
+            raise DataValidationError("Source value is not finite UTF-8 JSON.")
         resolved.append((pointer, selected))
 
     serialized = tuple(
