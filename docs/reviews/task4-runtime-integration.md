@@ -62,5 +62,21 @@ was needed for that harness error. This remains fixture evidence, not agent-benc
 or current-upstream-coverage acceptance.
 
 The identity check still validates the repository snapshot identity, not the
-future trusted release-manifest/runtime identity. Remote CI and release acceptance
-have not been run.
+future trusted release-manifest/runtime identity. Release acceptance remains
+unfinished; the first remote CI result is recorded below.
+
+## First remote CI and canonical transport probe
+
+GitHub CI run `33964085215` completed successfully for commit `620119d`
+on the private development branch. Its pinned Router checkout, frozen install,
+local quality gate and repository hooks succeeded. This is application CI, not
+container/release acceptance.
+
+Root also ran the unchanged Router transport probe
+`docs/conformance/conformance.py` from the pinned sibling checkout against an
+actual loopback Uvicorn process with the local sourced-fixture snapshot. All 12
+checks passed: HTTP status/content type, no redirect or session assignment,
+server name, tool discovery, invalid-protocol rejection and health fields.
+The probe exited 0 and the server shut down cleanly. The behaviour probe,
+checked-in conformance vendoring and container-backed conformance workflow remain
+separate unfinished requirements.
