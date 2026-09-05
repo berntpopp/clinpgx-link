@@ -174,6 +174,7 @@ def create_mcp(
                 return success_result(
                     _content_payload(asset.value, asset.source, content_ref),
                     source=asset.source,
+                    snapshot_id=asset.value["snapshot_id"],
                     elapsed_ms=(time.monotonic() - began) * 1000,
                 )
             stored = await asyncio.to_thread(content_store.get, content_ref)

@@ -34,6 +34,7 @@ async def test_installed_member_reconstructs_offline_through_mcp(tmp_path):
                     },
                 )
                 part = call.structured_content["result"]
+                assert call.structured_content["_meta"]["snapshot_id"] == built.snapshot_id
                 assert part["offline_available"] is True
                 assert part["snapshot_id"] == built.snapshot_id
                 assert part["expires_at"] is None

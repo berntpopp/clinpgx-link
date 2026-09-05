@@ -515,6 +515,7 @@ def test_http_dataset_discovery_reaches_exact_installed_bytes(tmp_path):
         assert catalog["results"][0]["dataset_id"] == "data/genes.zip"
         dataset = call("get_dataset", {"dataset_id": "data/genes.zip"})
         assert dataset["_meta"]["pagination"]["snapshot_id"] == built.snapshot_id
+        assert dataset["_meta"]["snapshot_id"] == built.snapshot_id
         member = dataset["result"]["members"][0]
         content = call(
             "get_source_content",

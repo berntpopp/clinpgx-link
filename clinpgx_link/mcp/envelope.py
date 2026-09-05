@@ -59,9 +59,19 @@ def success_result(
     collection: bool = False,
     pagination: dict[str, Any] | None = None,
     content_ref: str | None = None,
+    snapshot_id: str | None = None,
 ) -> ToolResult:
     """Build provenance without confusing source time with the time of a cache hit."""
     request_id = REQUEST_ID.get() or str(uuid.uuid4())
+    page_snapshot = pagination.get("snapshot_id") if pagination is not None else None
+    if snapshot_id is None:
+        snapshot_id = page_snapshot
+    if snapshot_id is not None and (
+        not isinstance(snapshot_id, str)
+        or re.fullmatch(r"sha256:[0-9a-f]{64}", snapshot_id) is None
+        or (page_snapshot is not None and page_snapshot != snapshot_id)
+    ):
+        raise ClinPGxError("Invalid snapshot provenance.")
     return wire_result(
         {
             "success": True,
@@ -97,6 +107,7 @@ def success_result(
                 ),
                 **({"content_ref": content_ref} if content_ref is not None else {}),
                 **({"pagination": pagination} if pagination is not None else {}),
+                **({"snapshot_id": snapshot_id} if snapshot_id is not None else {}),
             },
             "recommended_citation": f"ClinPGx source evidence. {source.url} Retrieved {source.retrieved_at}.",
             "unsafe_for_clinical_use": True,
