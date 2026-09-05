@@ -49,6 +49,18 @@ exact advertised field filtering, and related evidence. Before that commit,
 schema verification. This is integration evidence, not independent approval of
 every tool or the real-agent benchmark.
 
+An actual loopback TCP smoke at `1a15266` used Uvicorn and the FastMCP HTTP client:
+all thirteen tools were discovered; `search_records` resolved CYP2C19 to PA124;
+`get_dataset` → `get_source_content` reconstructed the original gene TSV bytes;
+and `search_dataset` using the advertised annotation ID field →
+`get_related_records` returned the expected single evidence row. Structured and
+text envelopes agreed and shutdown completed. The snapshot identity was the same
+fixture identity recorded above. The first smoke invocation used an incorrect
+harness field (`asset_ref` instead of `content_ref`) and failed; correcting the
+harness to the documented contract produced exit status 0. No production change
+was needed for that harness error. This remains fixture evidence, not agent-benchmark
+or current-upstream-coverage acceptance.
+
 The identity check still validates the repository snapshot identity, not the
 future trusted release-manifest/runtime identity. Remote CI and release acceptance
 have not been run.
