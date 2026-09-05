@@ -1,0 +1,188 @@
+{
+  "schema_version": 1,
+  "as_of": "2026-09-05",
+  "source_access_contract": "docs/superpowers/specs/2026-09-05-source-access-contract.md",
+  "website_registry": "docs/research/website-operations.json",
+  "cases": [
+    {
+      "id": "PGX-01",
+      "lane": "deterministic",
+      "prompt": "Retrieve ClinPGx guideline-annotation records for fluorouracil and capecitabine with DPYD. Return the stored title and stable ID for each source record; do not interpret it.",
+      "required_tools": ["search_records", "get_record"],
+      "coverage": ["GET /data/guidelineAnnotation"],
+      "expected": {"records": [{"source": "CPIC", "id": "PA166122686", "name": "Annotation of CPIC Guideline for fluorouracil and DPYD"}, {"source": "CPIC", "id": "PA166109594", "name": "Annotation of CPIC Guideline for capecitabine and DPYD"}], "assertions": ["both stable IDs are present", "names are copied exactly"]},
+      "source_refs": [{"kind": "fixture", "path": "/tmp/cpic_guidelines_min.json", "record_ids": ["PA166122686", "PA166109594"]}],
+      "limitations": ["This is source retrieval, not a dosing or treatment conclusion."]
+    },
+    {
+      "id": "PGX-02",
+      "lane": "deterministic",
+      "prompt": "Resolve SLCO1B1 rs4149056 and retrieve one linked clinical-annotation record. Return the stored variant name, gene, annotation accession, and annotation title without adding a classification.",
+      "required_tools": ["search_records", "get_record", "get_related_records"],
+      "coverage": ["GET /data/variantAnnotation", "GET /data/variant"],
+      "expected": {"records": [{"source": "ClinPGx", "id": "PA166233121", "name": "rs4149056 (SLCO1B1); simvastatin (level 3 Efficacy)"}], "assertions": ["query resolves to rs4149056", "annotation accession is PA166233121", "gene is SLCO1B1"]},
+      "source_refs": [{"kind": "fixture", "path": "/tmp/summary_loe3_min.json", "record_ids": ["1451356520"], "accessions": ["PA166233121"]}],
+      "limitations": ["The fixture does not authorize an inferred clinical significance label."]
+    },
+    {
+      "id": "PGX-03",
+      "lane": "deterministic",
+      "prompt": "Resolve CYP2C19*2 and report the stable ClinPGx variant ID, primary symbol, and the stored aliases. Preserve the source nomenclature.",
+      "required_tools": ["search_records", "get_record"],
+      "coverage": ["GET /data/variant"],
+      "expected": {"records": [{"source": "ClinPGx", "id": "PA166154053", "name": "rs4244285", "symbol": "rs4244285", "aliases_include": ["CYP2C19*2", "NM_000769.2:c.681G>A", "rs116940633"]}], "assertions": ["CYP2C19*2 appears as a stored synonym", "rs4244285 is the stable variant record"]},
+      "source_refs": [{"kind": "fixture", "path": "/tmp/persist_variant_3.json", "record_ids": ["PA166154053"]}],
+      "limitations": ["Alias equivalence is reported as stored; no additional normalization is required."]
+    },
+    {
+      "id": "PGX-04",
+      "lane": "deterministic",
+      "prompt": "Retrieve the PharmCAT source row for CYP2C19 *2/*2 and return its diplotype and stored phenotype fields. Do not turn the phenotype label into a patient-specific recommendation.",
+      "required_tools": ["list_datasets", "search_dataset", "get_dataset_record"],
+      "coverage": ["dataset:pharmcat.zip/phenotypes.json"],
+      "expected": {"records": [{"source": "PharmCAT", "diplotype": "*2/*2", "diplotypekey": {"*2": 2}, "generesult": "Poor Metabolizer", "lookupkey": "Poor Metabolizer", "phenotype": "Poor Metabolizer"}], "assertions": ["all five stored fields match the source row"]},
+      "source_refs": [{"kind": "archive_member", "path": "/tmp/clinpgx_archives/pharmcat.zip", "member": "phenotypes.json", "record_key": "*2/*2"}],
+      "limitations": ["The PharmCAT label is quoted as source data only."]
+    },
+    {
+      "id": "PGX-05",
+      "lane": "deterministic",
+      "prompt": "Find the CPIC guideline-annotation records linking TPMT with azathioprine, mercaptopurine, and thioguanine. Return distinct IDs and exact titles only.",
+      "required_tools": ["search_records", "get_record"],
+      "coverage": ["GET /data/guidelineAnnotation"],
+      "expected": {"records": [{"source": "CPIC", "id": "PA166104933", "name": "Annotation of CPIC Guideline for azathioprine and NUDT15, TPMT"}, {"source": "CPIC", "id": "PA166104945", "name": "Annotation of CPIC Guideline for mercaptopurine and NUDT15, TPMT"}, {"source": "CPIC", "id": "PA166104965", "name": "Annotation of CPIC Guideline for thioguanine and NUDT15, TPMT"}], "assertions": ["three distinct records are returned", "each title is exact"]},
+      "source_refs": [{"kind": "fixture", "path": "/tmp/cpic_guidelines_min.json", "record_ids": ["PA166104933", "PA166104945", "PA166104965"]}],
+      "limitations": ["No clinical action is requested or scored."]
+    },
+    {
+      "id": "PGX-06",
+      "lane": "deterministic",
+      "prompt": "Resolve DPYD c.1905+1G>A, then retrieve the source allele record and the DPYD–fluorouracil guideline annotation. Return the two stable IDs and stored names.",
+      "required_tools": ["search_records", "get_record", "get_related_records"],
+      "coverage": ["GET /data/allele", "GET /data/guidelineAnnotation"],
+      "expected": {"records": [{"source": "PharmCAT/ClinPGx", "id": "PA166171117", "name": "c.1905+1G>A (*2A)"}, {"source": "CPIC", "id": "PA166122686", "name": "Annotation of CPIC Guideline for fluorouracil and DPYD"}], "assertions": ["allele ID is PA166171117", "guideline ID is PA166122686", "DPYD is preserved across the hop"]},
+      "source_refs": [{"kind": "archive_member", "path": "/tmp/clinpgx_archives/pharmcat.zip", "member": "allele_translations.json", "record_key": "DPYD/c.1905+1G>A"}, {"kind": "fixture", "path": "/tmp/cpic_guidelines_min.json", "record_ids": ["PA166122686"]}],
+      "limitations": ["The allele source and guideline source remain separate provenance items."]
+    },
+    {
+      "id": "PGX-07",
+      "lane": "deterministic",
+      "prompt": "Submit one malformed HGVS query and one deliberately unknown ClinPGx ID. Return structured validation/not-found outcomes, including the offending input and lookup limitation; do not guess a replacement.",
+      "required_tools": ["search_records", "get_record"],
+      "coverage": ["error.invalid_argument", "error.not_found"],
+      "expected": {"outcome": "typed_errors", "assertions": ["malformed input is identified", "unknown ID is not fabricated as a record", "error code is in the closed contract"]},
+      "source_refs": [{"kind": "contract", "path": "docs/superpowers/specs/2026-09-05-source-access-contract.md", "section": "Actionable errors"}],
+      "limitations": ["This case scores error semantics, not a biomedical answer."]
+    },
+    {
+      "id": "PGX-08",
+      "lane": "deterministic",
+      "prompt": "Retrieve the compact and maximal source representations of CYP2D6. Report each response's stable gene ID, version fields, VIP ID/tier when present, and a not-reconciled limitation.",
+      "required_tools": ["get_record"],
+      "coverage": ["GET /data/gene"],
+      "expected": {"records": [{"source": "ClinPGx compact", "id": "PA128", "symbol": "CYP2D6", "vipId": "PA166170264", "vipTier": "Tier 1"}, {"source": "ClinPGx maximal", "id": "PA128", "symbol": "CYP2D6", "version": 7891, "vipId": "PA166170264", "vipTier": "Tier 1"}], "assertions": ["source-specific fields are not merged", "CYP2D6 and PA128 are stable across representations"]},
+      "source_refs": [{"kind": "fixture", "path": "/tmp/gene_base.json", "record_ids": ["PA128"]}, {"kind": "fixture", "path": "/tmp/gene_max.json", "record_ids": ["PA128"], "version": 7891}],
+      "limitations": ["Different representations are displayed, not reconciled."]
+    },
+    {
+      "id": "PGX-09",
+      "lane": "live",
+      "prompt": "Retrieve the current ClinPGx guideline annotation for clopidogrel and CYP2C19. Return stable ID, exact title, source, and retrieval timestamp; do not infer a treatment action.",
+      "required_tools": ["search_records", "get_record"],
+      "coverage": ["GET /data/guidelineAnnotation"],
+      "expected": {"records": [{"source": "CPIC", "id": "PA166104948", "name": "Annotation of CPIC Guideline for clopidogrel and CYP2C19"}], "assertions": ["stable ID and source are present", "timestamp is supplied by the runner"]},
+      "source_refs": [{"kind": "fixture_seed", "path": "/tmp/cpic_guidelines_min.json", "record_ids": ["PA166104948"]}],
+      "limitations": ["Live fields can change after the benchmark date."]
+    },
+    {
+      "id": "PGX-10",
+      "lane": "live",
+      "prompt": "Look up CYP2C19 rs4244285 and the alias CYP2C19*2 separately. Report the resolved stable ID for each, or a source-backed ambiguity if they differ.",
+      "required_tools": ["search_records", "get_record"],
+      "coverage": ["GET /data/variant"],
+      "expected": {"records": [{"source": "ClinPGx", "id": "PA166154053", "symbol": "rs4244285", "aliases_include": ["CYP2C19*2"]}], "assertions": ["both queries resolve to PA166154053 or explicitly report a live ambiguity"]},
+      "source_refs": [{"kind": "fixture_seed", "path": "/tmp/persist_variant_3.json", "record_ids": ["PA166154053"]}],
+      "limitations": ["Alias behavior is evaluated against the live response, not a hard-coded count."]
+    },
+    {
+      "id": "PGX-11",
+      "lane": "live",
+      "prompt": "Query the deliberately nonexistent ClinPGx ID PA_DOES_NOT_EXIST. Return a valid no-result or typed not-found response with no guessed alternative.",
+      "required_tools": ["get_record"],
+      "coverage": ["error.not_found"],
+      "expected": {"outcome": "no_result_or_typed_not_found", "assertions": ["no fabricated record", "input is echoed or cited in the error"]},
+      "source_refs": [{"kind": "contract", "path": "docs/superpowers/specs/2026-09-05-source-access-contract.md", "section": "No-result semantics"}],
+      "limitations": ["A valid structured negative result remains scoreable; transport outage is unavailable instead."]
+    },
+    {
+      "id": "PGX-12",
+      "lane": "live",
+      "prompt": "Retrieve the current clopidogrel/CYP2C19 guideline annotation and report its source release or version/date exactly as returned, with a live-content limitation.",
+      "required_tools": ["get_record"],
+      "coverage": ["GET /data/guidelineAnnotation"],
+      "expected": {"records": [{"source": "CPIC", "id": "PA166104948"}], "assertions": ["a returned release/version/date is copied exactly when present", "as-of timestamp is present"]},
+      "source_refs": [{"kind": "fixture_seed", "path": "/tmp/cpic_guidelines_min.json", "record_ids": ["PA166104948"]}],
+      "limitations": ["Live content is mutable and is not graded by a pinned count."]
+    },
+    {
+      "id": "PGX-13",
+      "lane": "website",
+      "prompt": "Retrieve the website allele-function table for CYP2D6 (PA128). Return the decoded row count, response content type, and evidence URL; do not infer function for any row not returned.",
+      "required_tools": ["get_website_data"],
+      "coverage": ["GET /site/alleleFunction/{geneId}"],
+      "expected": {"records": [{"source": "ClinPGx website API", "path": "/v1/site/alleleFunction/PA128", "row_count": 192}], "assertions": ["decoder handles JSON body labelled text/plain", "row count is 192"]},
+      "source_refs": [{"kind": "website_capture", "path": "/tmp/clinpgx_site_allele_function.text", "sha256": "ef1174122231f6f230a367730d1f8b276c09f7fc1d3a149c1421af95102da7e6", "operation": "GET /site/alleleFunction/{geneId}"}],
+      "limitations": ["Rows are source data; this case does not score a prescribing conclusion."]
+    },
+    {
+      "id": "PGX-14",
+      "lane": "website",
+      "prompt": "Retrieve the PA356 population-frequency data and its haplotype-frequency download. Return the parent ID, row count, TSV content disposition, and source citation.",
+      "required_tools": ["get_website_data", "get_source_content"],
+      "coverage": ["GET /site/alleleFrequency/{id}", "GET /site/haplotypeFrequency/_download/{id}"],
+      "expected": {"records": [{"source": "ClinPGx website API", "id": "PA356", "allele_frequency_rows": 849, "haplotype_download": "ClinPGx-TPMT_All_Frequency.tsv"}], "assertions": ["parent ID is PA356", "JSON row count is 849", "download is not treated as JSON"]},
+      "source_refs": [{"kind": "website_capture", "path": "/tmp/clinpgx_site_allele_frequency_PA356.json", "sha256": "d745754108749b4c3c4a9ead408b8765906d72fea51eaa0e92b8fa2d08fc71e2", "operation": "GET /site/alleleFrequency/{id}"}, {"kind": "website_capture", "path": "/tmp/clinpgx_site_haplotype_frequency_PA356.tsv", "sha256": "8e9c093c26322022cc38e9e2d48e5b2598ce830c22c961c3ad5e13d75bd3baa9", "operation": "GET /site/haplotypeFrequency/_download/{id}"}],
+      "limitations": ["A 204 no-data response is a valid alternate outcome for another gene and must not be rewritten as an empty successful table."]
+    },
+    {
+      "id": "PGX-15",
+      "lane": "website",
+      "prompt": "Retrieve the Bosutinib FDA label-annotation metadata and its linked document asset. Return the stored link, redirect outcome, PDF media type, and byte count; do not summarize clinical advice.",
+      "required_tools": ["get_website_data", "get_source_content"],
+      "coverage": ["GET /site/labelAnnotation/{id}", "asset:GET /download/file/attachment/{path}"],
+      "expected": {"records": [{"source": "ClinPGx website API", "id": "PA166114907", "highlightedLabelLink": "Bosutinib_2025_01_15_FDA.pdf", "asset_media_type": "application/pdf", "asset_bytes": 1244260}], "assertions": ["metadata link is exact", "asset begins with PDF magic and follows the 303 redirect"]},
+      "source_refs": [{"kind": "website_capture", "path": "/tmp/site_label_annotation_curl.bin", "sha256": "c5a706b100867595f337f746a7d9da0bc656da94cf835cae67ff387e211db0d4", "operation": "GET /site/labelAnnotation/{id}"}, {"kind": "asset_capture", "path": "/tmp/site_label_pdf_final.bin", "sha256": "c6cdcf7e8305308f56b3f85bc85c52d0d86cf219dd166a51a96472583904c158", "url": "https://s3.pgkb.org/attachment/Bosutinib_2025_01_15_FDA.pdf"}],
+      "limitations": ["The benchmark checks retrieval and asset integrity, not label interpretation."]
+    },
+    {
+      "id": "PGX-16",
+      "lane": "website",
+      "prompt": "Compare the PharmCAT prescribing-guidance archive with the monthly guideline archive inventory. Return the captured entry counts and overlap counts, preserving the two source boundaries.",
+      "required_tools": ["list_datasets", "search_dataset", "get_dataset_record"],
+      "coverage": ["dataset:pharmcat.zip/prescribing_guidance.json", "dataset:guidelineAnnotations.json.zip"],
+      "expected": {"records": [{"source": "PharmCAT", "guideline_entries": 356, "version": "2026-09-05-00-25"}, {"source": "monthly ClinPGx archive", "unique_guideline_ids": 219}], "assertions": ["overlap is 124", "monthly-only is 95", "PharmCAT-only is 232", "counts are not merged into one source"]},
+      "source_refs": [{"kind": "archive_member", "path": "/tmp/clinpgx_archives/pharmcat.zip", "member": "prescribing_guidance.json", "version": "2026-09-05-00-25"}, {"kind": "research_note", "path": "docs/research/auxiliary-formats.md", "section": "PharmCAT versus monthly guideline archive"}],
+      "limitations": ["Archive inventories are release-specific and do not establish that one source is clinically preferred."]
+    },
+    {
+      "id": "PGX-17",
+      "lane": "website",
+      "prompt": "Retrieve Clinical Annotation PA166134362 and report its accession, exact name, related chemical, all related disease IDs, and version. Keep the multi-valued relationships intact.",
+      "required_tools": ["get_record", "get_related_records"],
+      "coverage": ["GET /data/clinicalAnnotation"],
+      "expected": {"records": [{"source": "ClinPGx", "id": "PA166134362", "internal_id": 655386913, "name": "CYP2C19*1, CYP2C19*17; clopidogrel; Acute coronary syndrome, Coronary Artery Disease, Hemorrhage and Myocardial Infarction (level 3 Toxicity)", "chemical_id": "PA449053", "disease_ids": ["PA165108401", "PA443796", "PA444417", "PA445019"], "version": 1}], "assertions": ["four disease IDs are returned", "chemical and disease arrays are not collapsed"]},
+      "source_refs": [{"kind": "fixture", "path": "/tmp/persist_summary_3.json", "record_ids": ["PA166134362"], "internal_ids": [655386913]}],
+      "limitations": ["The stored level/evidence wording is reported without a clinical recommendation."]
+    },
+    {
+      "id": "PGX-18",
+      "lane": "website",
+      "prompt": "Retrieve one large chemical export record through continuation/chunked access. Prove that the complete largest field is reconstructed without truncation, report its source member and measured character count, and do not paraphrase the field.",
+      "required_tools": ["get_dataset_record", "get_source_content"],
+      "coverage": ["dataset:chemicals.zip/chemicals.tsv", "continuation protocol"],
+      "expected": {"records": [{"source": "ClinPGx chemicals export", "member": "chemicals.tsv", "largest_field_chars": 148743}], "assertions": ["returned character chunks reconstruct 148743 characters", "continuation has no skipped or duplicated offsets", "full-field digest is stable within the run"]},
+      "source_refs": [{"kind": "index_measurement", "path": "/tmp/clinpgx-index-experiment-20260905-v2/download-index-results.json", "member": "chemicals.zip/chemicals.tsv", "largest_field_chars": 148743}, {"kind": "research_note", "path": "docs/research/api-vs-download-decision.md", "section": "Large-content continuation"}],
+      "limitations": ["This is a transport/completeness check for a source field, not a claim about the field's clinical meaning."]
+    }
+  ]
+}

@@ -17,11 +17,10 @@ when the server has no matching record or when the evidence cannot support a
 conclusion. Prompts and expected answers must not ask for a patient-specific
 recommendation.
 
-The primary condition is one fresh Claude Code process connected to local
-Streamable HTTP MCP. A no-tool condition is useful as a sanity baseline. A
-stdio process is an optional transport-parity smoke lane only if this project
-actually exposes a supported stdio entrypoint; it must not be invented for an
-HTTP-only deployment.
+The primary condition is one fresh Claude Code process connected to the local
+Streamable HTTP MCP endpoint. A no-tool condition is useful as a sanity
+baseline. The current fleet contract is HTTP-only: this benchmark does not
+define or imply a stdio entrypoint.
 
 ## What to freeze
 
@@ -35,17 +34,19 @@ manifest hash, and the tool catalog used to create the cases. The replay lane
 is suitable for pull-request regression and must not depend on the public
 ClinPGx service.
 
-Start the local HTTP server using the fleet-standard shape:
+The runner under test must be started by the project/deployment harness and
+must expose the fleet-standard endpoint:
 
 ```bash
-uv run python server.py --transport unified --host 127.0.0.1 --port 8765
+export CLINPGX_MCP_URL=http://127.0.0.1:8765/mcp
 ```
 
-The implementation may expose an equivalent command, but the benchmark should
-always connect to `http://127.0.0.1:8765/mcp`; `--transport http` in the fleet
-is REST/health-only and is not an MCP endpoint. The replay fixture should be
-selected through an existing project configuration variable, never by changing
-the agent prompt.
+The benchmark must not assume a file named `server.py`, a Python launch
+command, or a particular port. The implementation may use any documented local
+launcher; the runner supplies its resulting `CLINPGX_MCP_URL` and always checks
+that the URL is the direct Streamable HTTP `/mcp` endpoint (not a redirect or a
+REST/health-only port). The replay fixture is selected through an existing
+project configuration variable, never by changing the agent prompt.
 
 Recommended deterministic cases are `PGX-01` through `PGX-08` below. Run each
 case in a new process and score the captured MCP trace and final answer. A case
@@ -62,9 +63,23 @@ identity, identifier, provenance, and citation reachability) rather than a
 hard-coded count or an unpinned “latest” text string.
 
 Recommended live cases are `PGX-09` through `PGX-12`. A timeout, rate limit, or
-upstream-unavailable response is reported as an availability outcome and
-excluded from the agent accuracy denominator. A valid, structured “no result”
-for a deliberately unknown identifier remains scoreable.
+upstream-unavailable response is reported as an availability outcome, not as a
+fabricated retrieval error. It is excluded from the completed-answer accuracy
+numerator/denominator but remains in the attempted availability denominator
+and prevents the 18-case acceptance gate. A valid, structured “no result” for
+a deliberately unknown identifier remains fully scoreable.
+
+### Website and asset lane
+
+Cases `PGX-13` through `PGX-18` exercise website-only JSON/TSV routes, linked
+document assets, archive members, multi-valued joins, and large-field
+continuation. Website routes are resolved only through the verified operation
+IDs in [`website-operations.json`](website-operations.json); linked PDFs,
+images, and non-site downloads are assets and are not arbitrary website paths.
+The lane is deterministic when its captures/archives are mounted locally and
+live only when the runner explicitly selects the corresponding upstream. A
+204 no-data response is a distinct, scoreable source outcome rather than an
+empty successful table.
 
 ## Agent harness and exact invocation
 
@@ -107,17 +122,6 @@ claude -p \
 only the ClinPGx MCP catalog is available. Do not use
 `--dangerously-skip-permissions` for this benchmark. The runner must redact
 authorization headers, tokens, and secrets before writing traces.
-
-If a supported stdio entrypoint is present, run a separate parity smoke with
-this ephemeral config; do not combine its results with HTTP results:
-
-```json
-{"mcpServers":{"clinpgx-link":{"type":"stdio","command":"uv","args":["run","python","mcp_server.py"]}}}
-```
-
-Use the same Claude invocation and prompts. If no `mcp_server.py` (or project-
-documented equivalent) exists, mark `stdio` as “not supported” and do not
-claim parity. The fleet’s current deployment direction is HTTP-first.
 
 The benchmark system prompt should be identical in every condition:
 
@@ -174,10 +178,12 @@ contains an inferred treatment action.
 | PGX-11 | Live: query a deliberately nonexistent gene/drug/variant. | Valid structured empty result or typed not-found/invalid-input error; no guessed alternative. | Negative-result semantics. |
 | PGX-12 | Live: retrieve a record with an explicit source release/date and report it as-of retrieval. | Record ID, release/date, URL, and a limitation that live content may change. | Temporal provenance and “latest” overclaiming. |
 
-The exact drug names, database accessions, and expected IDs should be filled from
-the ClinPGx fixture manifest when the server’s actual schema is available. This
-keeps the design grounded in typical pharmacogenomics retrieval while avoiding
-an answer key that silently assumes one upstream’s nomenclature.
+The frozen machine-readable case manifest is
+[`tests/eval/cases.json`](../../tests/eval/cases.json). It records sourced IDs,
+source members/URLs, exact assertions, required coverage, and limitations for
+all 18 cases. This keeps the design grounded in typical pharmacogenomics
+retrieval while avoiding an answer key that silently assumes one upstream’s
+nomenclature.
 
 ## Scoring
 
