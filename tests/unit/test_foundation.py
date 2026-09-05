@@ -344,7 +344,7 @@ def test_logging_keeps_only_bounded_typed_operational_values() -> None:
         "request_complete",
         cache_hit="true",
         elapsed_ms=-1,
-        record_count=10**20,
+        record_count=10**1000,
         retry_count=True,
         status_code=999,
     )
@@ -375,6 +375,10 @@ def test_logging_keeps_only_bounded_typed_operational_values() -> None:
         "café.example",
         "[::1]",
         "127.000.000.001",
+        "fe80::1%eth0",
+        "fe80::1%evil host",
+        "fe80::1%evil\\host",
+        "fe80::1%evil\nhost",
     ],
 )
 def test_allowed_hosts_reject_noncanonical_dns_and_ip_literals(host: str) -> None:

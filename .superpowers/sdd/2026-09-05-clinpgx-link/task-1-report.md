@@ -154,3 +154,37 @@ The host validator accepts only unique canonical lowercase ASCII DNS names (incl
 explicit punycode A-labels) or canonical unbracketed IPv4/IPv6 literals. Whitespace,
 ports, brackets, Unicode U-labels, case normalization, malformed labels, and ambiguous
 numeric dotted forms are rejected rather than normalized.
+
+### Second review edge-case correction
+
+Round-two review confirmed the logging secrecy boundary but found that converting an
+arbitrarily large integer through `math.isfinite` could raise `OverflowError`, and
+that Python's IP parser accepts scoped IPv6 literals. Both were captured before the
+second correction:
+
+```text
+$ uv run pytest tests/unit/test_foundation.py -q -k 'bounded_typed or allowed_hosts'
+5 failed, 12 passed, 35 deselected in 0.11s
+```
+
+The numeric validator now bounds integers without floating-point conversion and only
+uses `isfinite` for actual floats. The exact-host contract rejects every `%` scope
+identifier before IP parsing; this intentionally permits only unscoped canonical
+IPv6 literals. Fresh scoped and complete foundation verification was:
+
+```text
+$ uv run pytest tests/unit/test_foundation.py -q -k 'bounded_typed or allowed_hosts'
+17 passed, 35 deselected in 0.09s
+
+$ uv run pytest tests/unit/test_foundation.py -q
+52 passed in 0.12s
+
+$ uv run ruff format --check clinpgx_link/config.py clinpgx_link/logging_config.py tests/unit/test_foundation.py
+3 files already formatted
+
+$ uv run ruff check clinpgx_link/config.py clinpgx_link/logging_config.py tests/unit/test_foundation.py
+All checks passed!
+
+$ uv run mypy clinpgx_link/config.py clinpgx_link/logging_config.py
+Success: no issues found in 2 source files
+```

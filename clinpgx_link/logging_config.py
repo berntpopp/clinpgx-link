@@ -152,12 +152,13 @@ def _canonical_request_id(value: object) -> str | None:
 
 
 def _bounded_number(value: object, minimum: float, maximum: float) -> bool:
-    return (
-        not isinstance(value, bool)
-        and isinstance(value, (int, float))
-        and math.isfinite(value)
-        and minimum <= value <= maximum
-    )
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, int):
+        return minimum <= value <= maximum
+    if isinstance(value, float):
+        return math.isfinite(value) and minimum <= value <= maximum
+    return False
 
 
 def _safe_value(key: str, value: object) -> object:

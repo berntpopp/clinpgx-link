@@ -42,7 +42,7 @@ def _canonical_https_origin(value: str) -> str:
 
 def _canonical_host(value: str) -> str:
     """Validate one lowercase ASCII DNS name or canonical bare IP literal."""
-    if not value or value != value.strip() or not value.isascii():
+    if not value or value != value.strip() or not value.isascii() or "%" in value:
         raise ValueError("host must be a canonical ASCII DNS name or IP literal")
     try:
         address = ipaddress.ip_address(value)
