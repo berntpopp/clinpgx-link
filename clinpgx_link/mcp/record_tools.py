@@ -94,7 +94,10 @@ DetailEntityArg = Annotated[
 ]
 ResultTypeArg = Annotated[
     ResultType,
-    Field(description="Returned API pair type or declared local join type.", examples=["allele"]),
+    Field(
+        description="Connected-object report, API pair, or declared local join result type.",
+        examples=["relationship"],
+    ),
 ]
 RecordIdArg = Annotated[
     str,
@@ -462,7 +465,7 @@ def register_record_tools(
             str | None,
             Field(
                 max_length=512,
-                description="Second exact ClinPGx ID; required for the live API pair route.",
+                description="Second exact ClinPGx ID; when supplied, selects live API pair mode.",
                 examples=["PA449053"],
             ),
         ] = None,
@@ -472,11 +475,18 @@ def register_record_tools(
         ] = "Gene",
         other_type: Annotated[
             ObjectType,
-            Field(description="Object class owning other_id.", examples=["Chemical"]),
+            Field(
+                description=(
+                    "Target connected-object family without other_id; otherwise pair object class."
+                ),
+                examples=["Chemical"],
+            ),
         ] = "Chemical",
         source: Annotated[
             Literal["api", "download"],
-            Field(description="Exact live pair or installed join source.", examples=["api"]),
+            Field(
+                description="Exact live connected/pair or installed join source.", examples=["api"]
+            ),
         ] = "api",
         view: ViewArg = "base",
         limit: LimitArg = 20,
@@ -484,7 +494,7 @@ def register_record_tools(
         cursor: CursorArg = None,
         response_mode: ModeArg = "compact",
     ) -> ToolResult:
-        """Read validated live pairs or loss-preserving installed joins."""
+        """Read live connected objects or pairs, or loss-preserving installed joins."""
         began = time.monotonic()
         response: SourceResponse | None = None
         try:
@@ -501,15 +511,34 @@ def register_record_tools(
                 "view": view,
             }
             if source == "api":
-                api_type = _API_RESULT.get(result_type)
-                if api_type is None:
-                    raise InvalidInputError(
-                        "This result type has no documented API pair route.", field="result_type"
-                    )
                 if other_id is None:
-                    raise InvalidInputError(
-                        "The documented API pair route requires other_id.", field="other_id"
-                    )
+                    if result_type == "relationship":
+                        operation = "GET /report/connectedObjects/{id}/{type}"
+                        path_parameters = {"id": record_id, "type": other_type}
+                        query_parameters = None
+                    elif result_type in _API_RESULT:
+                        raise InvalidInputError(
+                            "The documented API pair route requires other_id.", field="other_id"
+                        )
+                    else:
+                        raise InvalidInputError(
+                            "This result type has no documented API report route.",
+                            field="result_type",
+                        )
+                else:
+                    api_type = _API_RESULT.get(result_type)
+                    if api_type is None:
+                        raise InvalidInputError(
+                            "This result type has no documented API pair route.",
+                            field="result_type",
+                        )
+                    operation = "GET /report/pair/{firstObjId}/{secondObjId}/{resultType}"
+                    path_parameters = {
+                        "firstObjId": record_id,
+                        "secondObjId": other_id,
+                        "resultType": api_type,
+                    }
+                    query_parameters = {"view": view}
                 state_ref = None
                 if cursor is not None:
                     response, offset, state_ref = await asyncio.to_thread(
@@ -519,13 +548,9 @@ def register_record_tools(
                     if api is None:
                         raise UpstreamUnavailableError("API service is not configured.")
                     response = await api.call(
-                        "GET /report/pair/{firstObjId}/{secondObjId}/{resultType}",
-                        path_parameters={
-                            "firstObjId": record_id,
-                            "secondObjId": other_id,
-                            "resultType": api_type,
-                        },
-                        query_parameters={"view": view},
+                        operation,
+                        path_parameters=path_parameters,
+                        query_parameters=query_parameters,
                     )
                 assert response is not None
                 return await asyncio.to_thread(

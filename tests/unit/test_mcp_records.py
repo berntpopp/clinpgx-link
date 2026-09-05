@@ -52,6 +52,10 @@ async def test_record_tool_definitions_describe_every_argument_within_budget(tmp
                 )
                 <= 4800
             )
+        related = tools["get_related_records"].parameters["properties"]
+        assert related["result_type"]["examples"] == ["relationship"]
+        assert "connected-object" in related["other_type"]["description"]
+        assert "pair" in related["other_type"]["description"]
     finally:
         store.close()
 
@@ -488,3 +492,134 @@ async def test_api_related_pair_uses_both_ids_and_registry_result_type(tmp_path)
             ]
     finally:
         await upstream.close()
+
+
+@pytest.mark.asyncio
+async def test_api_connected_objects_pages_exact_route_without_refetch(tmp_path):
+    calls = []
+    connected = [
+        {
+            "connectedObject": {"id": "PA449053", "name": "clopidogrel"},
+            "connectionTypes": ["ChemicalGeneAssociation"],
+        },
+        {
+            "connectedObject": {"id": "PA451866", "name": "omeprazole"},
+            "connectionTypes": ["ChemicalGeneAssociation", "GuidelineAnnotation"],
+        },
+    ]
+
+    def handle(request):
+        calls.append(request)
+        assert request.url.path == "/v1/report/connectedObjects/PA124/Chemical"
+        assert dict(request.url.params) == {}
+        return httpx.Response(200, json=connected)
+
+    repository, _ = _repository(tmp_path)
+    store = ContentStore(tmp_path / "content.sqlite")
+    upstream = ClinPGxClient(
+        Settings(_env_file=None, cache_root=tmp_path),
+        httpx.AsyncClient(transport=httpx.MockTransport(handle)),
+        store,
+    )
+    try:
+        async with Client(
+            _server(store, repository=repository, api=ApiService(upstream))
+        ) as client:
+            first = await client.call_tool(
+                "get_related_records",
+                {"record_id": "PA124", "result_type": "relationship", "limit": 1},
+            )
+            first_payload = first.structured_content
+            assert json.loads(first_payload["results"][0]["data"]["text"]) == connected[0]
+            assert first_payload["results"][0]["source_pointer"]["text"] == "/0"
+            assert first_payload["_meta"]["source"] == "ClinPGx REST API"
+            assert first_payload["_meta"]["source_url"].endswith(
+                "/v1/report/connectedObjects/PA124/Chemical"
+            )
+            assert first_payload["_meta"]["source_sha256"]
+            cursor = first_payload["_meta"]["pagination"]["next_cursor"]
+
+            second = await client.call_tool(
+                "get_related_records",
+                {
+                    "record_id": "PA124",
+                    "result_type": "relationship",
+                    "limit": 1,
+                    "cursor": cursor,
+                    "response_mode": "full",
+                },
+            )
+            assert (
+                json.loads(second.structured_content["results"][0]["data"]["text"]) == connected[1]
+            )
+            assert len(calls) == 1
+
+            changed_selectors = [
+                {
+                    "record_id": "PA124",
+                    "result_type": "relationship",
+                    "other_type": "Disease",
+                    "cursor": cursor,
+                },
+                {
+                    "record_id": "PA124",
+                    "other_id": "PA449053",
+                    "result_type": "summary_annotation",
+                    "cursor": cursor,
+                },
+                {
+                    "record_id": "PA124",
+                    "result_type": "relationship",
+                    "source": "download",
+                    "cursor": cursor,
+                },
+            ]
+            for arguments in changed_selectors:
+                rejected = await client.call_tool(
+                    "get_related_records", arguments, raise_on_error=False
+                )
+                assert rejected.is_error
+                assert rejected.structured_content["error_code"] == "invalid_input"
+                assert rejected.structured_content["field"] == "cursor"
+            assert len(calls) == 1
+    finally:
+        repository.close()
+        await upstream.close()
+
+
+@pytest.mark.asyncio
+async def test_api_related_rejects_wrong_conditional_mode_combinations(tmp_path):
+    store = ContentStore(tmp_path / "content.sqlite")
+    try:
+        async with Client(_server(store)) as client:
+            cases = [
+                (
+                    {
+                        "record_id": "PA124",
+                        "other_id": "PA449053",
+                        "result_type": "relationship",
+                    },
+                    "result_type",
+                ),
+                (
+                    {"record_id": "PA124", "result_type": "summary_annotation"},
+                    "other_id",
+                ),
+                (
+                    {
+                        "record_id": "PA124",
+                        "other_id": "PA449053",
+                        "result_type": "allele",
+                    },
+                    "result_type",
+                ),
+            ]
+            for arguments, field in cases:
+                rejected = await client.call_tool(
+                    "get_related_records", arguments, raise_on_error=False
+                )
+                assert rejected.is_error
+                assert rejected.structured_content["error_code"] == "invalid_input"
+                assert rejected.structured_content["field"] == field
+    finally:
+        store.close()
