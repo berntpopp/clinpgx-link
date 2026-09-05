@@ -83,6 +83,15 @@ exact reconstruction uses `base64`, not sanitized text. `base64` slices ORIGINAL
 using byte offsets, independently encodes each chunk and reports full digest. An MCP
 agent can concatenate decoded chunks to reconstruct exact bytes without external
 network access. At least one unit of progress is required on every nonfinal chunk.
+Exact-byte base64 requires the empty pointer; nonempty pointers are rejected with
+guidance to retrieve the original body. It never canonicalizes a selected object.
+Scalar structure `sha256` is the UTF-8 decoded string digest, or canonical JSON scalar
+digest for number/boolean/null (with `digest_representation` declared); `source_sha256`
+always identifies the original complete body. Scalar length follows the same declared
+representation. Structure pages have a 32 KiB serialized descriptor budget and real
+continuation. A child whose escaped pointer exceeds 4096 characters/128 segments
+causes an explicit size error with empty-pointer base64 recovery, never an unusable
+advertised pointer or silent omission. Exact original-body retrieval remains available.
 Binary documents also support text via bounded PDF extraction (page provenance),
 and XLSX via the importer; extracted content has its own digest and is explicitly a
 derived representation. Unsupported binary formats remain byte-retrievable with a
