@@ -55,6 +55,8 @@ class SpreadsheetLimits:
     max_expanded_bytes: int = 256 * 1024 * 1024
     max_part_bytes: int = 64 * 1024 * 1024
     max_xml_bytes: int = 32 * 1024 * 1024
+    max_xml_elements: int = 1_000_000
+    max_shared_strings: int = 250_000
     max_sheets: int = 256
     max_rows: int = 100_000
     max_columns: int = 512
@@ -70,6 +72,8 @@ class SpreadsheetLimits:
             "max_expanded_bytes": 4 * 1024 * 1024,
             "max_part_bytes": 2 * 1024 * 1024,
             "max_xml_bytes": 1024 * 1024,
+            "max_xml_elements": 10_000,
+            "max_shared_strings": 1_000,
             "max_sheets": 10,
             "max_rows": 1000,
             "max_columns": 100,
@@ -257,13 +261,11 @@ def _validate_worksheet_xml(raw: bytes, limits: SpreadsheetLimits) -> None:
         )
 
 
-_WORKBOOK_CONTENT_TYPES = frozenset(
-    {
-        "application/vnd.ms-excel.addin.macroEnabled.main+xml",
-        "application/vnd.ms-excel.sheet.macroEnabled.main+xml",
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml",
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.template.main+xml",
-    }
+_WORKBOOK_CONTENT_TYPE = (
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"
+)
+_SHARED_STRINGS_CONTENT_TYPE = (
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"
 )
 _WORKSHEET_RELATIONSHIP_TYPES = frozenset(
     {
@@ -273,18 +275,49 @@ _WORKSHEET_RELATIONSHIP_TYPES = frozenset(
 )
 
 
-def _validate_content_types(raw: bytes) -> None:
+def _supported_part_content_type(name: str) -> str | None:
+    exact = {
+        "_rels/.rels": "application/vnd.openxmlformats-package.relationships+xml",
+        "docProps/app.xml": "application/vnd.openxmlformats-officedocument.extended-properties+xml",
+        "docProps/core.xml": "application/vnd.openxmlformats-package.core-properties+xml",
+        "docProps/thumbnail.jpeg": "image/jpeg",
+        "xl/_rels/workbook.xml.rels": "application/vnd.openxmlformats-package.relationships+xml",
+        "xl/sharedStrings.xml": _SHARED_STRINGS_CONTENT_TYPE,
+        "xl/styles.xml": "application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml",
+        "xl/workbook.xml": _WORKBOOK_CONTENT_TYPE,
+    }
+    if name in exact:
+        return exact[name]
+    if re.fullmatch(r"xl/theme/theme[1-9][0-9]*\.xml", name):
+        return "application/vnd.openxmlformats-officedocument.theme+xml"
+    if re.fullmatch(r"xl/worksheets/sheet[1-9][0-9]*\.xml", name):
+        return "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"
+    return None
+
+
+def _validate_content_types(
+    raw: bytes, part_by_name: dict[str, zipfile.ZipInfo]
+) -> dict[str, str]:
     workbook_parts: list[str] = []
+    defaults: dict[str, str] = {}
+    overrides: dict[str, str] = {}
 
     def start_element(name: str, attributes: dict[str, str]) -> None:
         local_name = name.rsplit("}", maxsplit=1)[-1]
         content_type = attributes.get("ContentType", "")
-        if content_type not in _WORKBOOK_CONTENT_TYPES:
-            return
         if local_name == "Default":
-            raise DataValidationError("Spreadsheet has an ambiguous default workbook part")
+            extension = attributes.get("Extension", "").casefold()
+            if not extension or not content_type or extension in defaults:
+                raise DataValidationError("Spreadsheet content-type default is invalid")
+            defaults[extension] = content_type
+            return
         if local_name == "Override":
-            workbook_parts.append(attributes.get("PartName", ""))
+            part_name = attributes.get("PartName", "")
+            if not part_name.startswith("/") or not content_type or part_name in overrides:
+                raise DataValidationError("Spreadsheet content-type override is invalid")
+            overrides[part_name] = content_type
+            if content_type == _WORKBOOK_CONTENT_TYPE:
+                workbook_parts.append(part_name)
 
     parser = expat.ParserCreate(namespace_separator="}")
     parser.StartElementHandler = start_element
@@ -296,6 +329,52 @@ def _validate_content_types(raw: bytes) -> None:
         raise DataValidationError("Spreadsheet content types are invalid") from exc
     if workbook_parts != ["/xl/workbook.xml"]:
         raise DataValidationError("Spreadsheet workbook part is noncanonical or ambiguous")
+    resolved: dict[str, str] = {}
+    for name in part_by_name:
+        if name == "[Content_Types].xml":
+            continue
+        expected = _supported_part_content_type(name)
+        if expected is None:
+            raise DataValidationError("Spreadsheet contains an unsupported OOXML part")
+        extension = name.rpartition(".")[2].casefold()
+        content_type = overrides.get(f"/{name}", defaults.get(extension, ""))
+        if content_type != expected:
+            raise DataValidationError("Spreadsheet OOXML part has an unexpected content type")
+        resolved[name] = content_type
+    if any(part_name.removeprefix("/") not in part_by_name for part_name in overrides):
+        raise DataValidationError("Spreadsheet content type references a missing OOXML part")
+    return resolved
+
+
+def _validate_xml_structure(
+    raw: bytes, limits: SpreadsheetLimits, *, shared_strings: bool
+) -> None:
+    elements = 0
+    strings = 0
+
+    def start_element(name: str, _attributes: dict[str, str]) -> None:
+        nonlocal elements, strings
+        elements += 1
+        if elements > limits.max_xml_elements:
+            raise DataValidationError(
+                "Spreadsheet XML exceeds its element limit", subtype="resource_limit"
+            )
+        if shared_strings and name.rsplit("}", maxsplit=1)[-1] == "si":
+            strings += 1
+            if strings > limits.max_shared_strings:
+                raise DataValidationError(
+                    "Spreadsheet shared-string count exceeds its limit",
+                    subtype="resource_limit",
+                )
+
+    parser = expat.ParserCreate(namespace_separator="}")
+    parser.StartElementHandler = start_element
+    try:
+        parser.Parse(raw, True)
+    except DataValidationError:
+        raise
+    except expat.ExpatError as exc:
+        raise DataValidationError("Spreadsheet XML part is invalid") from exc
 
 
 def _workbook_sheet_ids(raw: bytes, limits: SpreadsheetLimits) -> tuple[str, ...]:
@@ -420,7 +499,19 @@ def _validate_parts(package: zipfile.ZipFile, limits: SpreadsheetLimits) -> None
         or relationship_body is None
     ):
         raise DataValidationError("Spreadsheet is missing required OOXML parts")
-    _validate_content_types(content_types_body)
+    content_types = _validate_content_types(content_types_body, part_by_name)
+    for name, content_type in content_types.items():
+        if not (content_type == "application/xml" or content_type.endswith("+xml")):
+            continue
+        info = part_by_name[name]
+        if info.file_size > limits.max_xml_bytes:
+            raise DataValidationError(
+                "Spreadsheet XML part exceeds its byte limit", subtype="resource_limit"
+            )
+        body = _canonical_xml_bytes(_read_part(package, info))
+        _validate_xml_structure(
+            body, limits, shared_strings=content_type == _SHARED_STRINGS_CONTENT_TYPE
+        )
     sheet_ids = _workbook_sheet_ids(workbook_body, limits)
     worksheet_targets = _worksheet_relationship_targets(relationship_body, sheet_ids)
     for target in worksheet_targets:

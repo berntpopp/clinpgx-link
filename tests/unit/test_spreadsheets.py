@@ -250,3 +250,70 @@ def test_content_types_cannot_select_an_unvalidated_workbook(
     monkeypatch.setattr(spreadsheets, "load_workbook", _must_not_open)
     with pytest.raises(DataValidationError, match="workbook part"):
         spreadsheets.parse_spreadsheet(io.BytesIO(output.getvalue()))
+
+
+def test_content_type_selected_xml_alias_cannot_bypass_admission(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Catch shared strings loaded by MIME type from a non-XML file extension."""
+    from clinpgx_link.exceptions import DataValidationError
+    from clinpgx_link.ingest import spreadsheets
+
+    output = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(_workbook_bytes())) as source, zipfile.ZipFile(
+        output, "w", compression=zipfile.ZIP_DEFLATED
+    ) as target:
+        for info in source.infolist():
+            body = source.read(info)
+            if info.filename == "[Content_Types].xml":
+                body = body.replace(
+                    b"</Types>",
+                    b'<Override PartName="/xl/shared.dat" '
+                    b'ContentType="application/vnd.openxmlformats-officedocument.'
+                    b'spreadsheetml.sharedStrings+xml" /></Types>',
+                )
+            target.writestr(info, body)
+        target.writestr(
+            "xl/shared.dat",
+            _utf16_xml(
+                b'<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+                b"<si><t>hidden</t></si></sst>"
+            ),
+        )
+    monkeypatch.setattr(spreadsheets, "load_workbook", _must_not_open)
+    with pytest.raises(DataValidationError, match="unsupported OOXML part"):
+        spreadsheets.parse_spreadsheet(io.BytesIO(output.getvalue()))
+
+
+def test_shared_string_count_is_bounded_before_openpyxl(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Catch materialization of a relationship-selected shared-string expansion."""
+    from clinpgx_link.exceptions import DataValidationError
+    from clinpgx_link.ingest import spreadsheets
+
+    output = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(_workbook_bytes())) as source, zipfile.ZipFile(
+        output, "w", compression=zipfile.ZIP_DEFLATED
+    ) as target:
+        for info in source.infolist():
+            body = source.read(info)
+            if info.filename == "[Content_Types].xml":
+                body = body.replace(
+                    b"</Types>",
+                    b'<Override PartName="/xl/sharedStrings.xml" '
+                    b'ContentType="application/vnd.openxmlformats-officedocument.'
+                    b'spreadsheetml.sharedStrings+xml" /></Types>',
+                )
+            target.writestr(info, body)
+        target.writestr(
+            "xl/sharedStrings.xml",
+            b'<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+            b"<si><t>one</t></si><si><t>two</t></si></sst>",
+        )
+    monkeypatch.setattr(spreadsheets, "load_workbook", _must_not_open)
+    with pytest.raises(DataValidationError, match="shared-string"):
+        spreadsheets.parse_spreadsheet(
+            io.BytesIO(output.getvalue()),
+            limits=spreadsheets.SpreadsheetLimits.for_tests(max_shared_strings=1),
+        )
