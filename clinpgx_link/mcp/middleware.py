@@ -10,6 +10,7 @@ from fastmcp.exceptions import ValidationError as FastMCPValidationError
 from fastmcp.server.middleware import CallNext, Middleware, MiddlewareContext
 from fastmcp.tools.base import ToolResult
 from jsonschema import Draft202012Validator
+from jsonschema.exceptions import ValidationError as JSONSchemaValidationError
 from pydantic import ValidationError
 
 from clinpgx_link.exceptions import (
@@ -28,6 +29,13 @@ class BoundaryGuard(Middleware):
         self.server = server
         self.source_access_allowed = source_access_allowed
         self.validators: dict[str, Draft202012Validator] = {}
+
+    @staticmethod
+    def _validation_field(error: JSONSchemaValidationError, properties: dict[str, Any]) -> str:
+        """Return only a developer-owned top-level property name."""
+        path = iter(error.absolute_path)
+        field = next(path, None)
+        return field if isinstance(field, str) and field in properties else "arguments"
 
     async def on_call_tool(
         self,
@@ -49,18 +57,27 @@ class BoundaryGuard(Middleware):
                         "Production snapshot is not ready.", subtype="snapshot_not_ready"
                     )
                 )
-            arguments = context.message.arguments or {}
-            if not isinstance(arguments, dict) or set(arguments) - set(
-                tool.parameters.get("properties", {})
-            ):
-                return error_result(InvalidInputError("Unknown tool argument."))
+            arguments = context.message.arguments
+            if arguments is None:
+                arguments = {}
+            properties = tool.parameters.get("properties", {})
+            if not isinstance(properties, dict):
+                return error_result(InvalidInputError("Invalid tool schema.", field="arguments"))
+            if not isinstance(arguments, dict) or set(arguments) - set(properties):
+                return error_result(InvalidInputError("Unknown tool argument.", field="arguments"))
             validator = self.validators.setdefault(tool.name, Draft202012Validator(tool.parameters))
-            if not validator.is_valid(arguments):
-                return error_result(InvalidInputError("Invalid tool arguments."))
+            validation_error = next(validator.iter_errors(arguments), None)
+            if validation_error is not None:
+                return error_result(
+                    InvalidInputError(
+                        "Invalid tool arguments.",
+                        field=self._validation_field(validation_error, properties),
+                    )
+                )
             try:
                 return await call_next(context)
             except (ValidationError, FastMCPValidationError):
-                return error_result(InvalidInputError("Invalid tool arguments."))
+                return error_result(InvalidInputError("Invalid tool arguments.", field="arguments"))
             except ClinPGxError as exc:
                 return error_result(exc)
         finally:

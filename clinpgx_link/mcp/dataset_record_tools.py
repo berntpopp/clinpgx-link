@@ -378,7 +378,12 @@ def register_dataset_record_tools(
     async def search_dataset(
         dataset_id: Annotated[
             str,
-            Field(description="Exact installed dataset identifier.", min_length=1, max_length=512),
+            Field(
+                description="Exact installed dataset identifier.",
+                min_length=1,
+                max_length=512,
+                examples=["data/genes.zip"],
+            ),
         ],
         member: Annotated[
             str | None, Field(description="Exact installed member path.", max_length=4096)
@@ -511,7 +516,13 @@ def register_dataset_record_tools(
     @server.tool(annotations=_ANNOTATIONS, tags={"dataset", "record"}, output_schema=None)
     async def get_dataset_record(
         record_id: Annotated[
-            str, Field(description="Exact indexed record identity.", min_length=1, max_length=512)
+            str,
+            Field(
+                description="Snapshot-bound record identity discovered with search_dataset.",
+                min_length=1,
+                max_length=512,
+                examples=["record:" + "0" * 64],
+            ),
         ],
         pointer: Annotated[
             str, Field(description="RFC 6901 pointer in the normalized record.", max_length=4096)

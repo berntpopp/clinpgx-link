@@ -78,11 +78,12 @@ def register_data_tools(
             str,
             Field(
                 description="Exact API operation from get_api_schema.",
-                examples=["GET /data/gene/{id}"],
+                examples=["GET /report/stats", "GET /data/gene/{id}"],
             ),
         ],
         path_parameters: Annotated[
-            dict[str, Any] | None, Field(description="Declared path fields only.")
+            dict[str, Any] | None,
+            Field(description="Declared path fields only.", examples=[{"id": "PA124"}]),
         ] = None,
         query_parameters: Annotated[
             dict[str, Any] | None, Field(description="Declared query fields only.")
@@ -138,11 +139,12 @@ def register_data_tools(
             str,
             Field(
                 description="Website or CPIC operation from get_api_schema.",
-                examples=["GET /site/gene/{id}"],
+                examples=["GET /site/pathwayCategories", "GET /site/gene/{id}"],
             ),
         ],
         path_parameters: Annotated[
-            dict[str, Any] | None, Field(description="Declared path fields only.")
+            dict[str, Any] | None,
+            Field(description="Declared path fields only.", examples=[{"id": "PA124"}]),
         ] = None,
         query_parameters: Annotated[
             dict[str, Any] | None, Field(description="Declared query fields only.")

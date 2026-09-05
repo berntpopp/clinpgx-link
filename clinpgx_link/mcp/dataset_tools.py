@@ -250,7 +250,12 @@ def register_dataset_tools(
     async def get_dataset(
         dataset_id: Annotated[
             str,
-            Field(description="Exact installed dataset identifier.", min_length=1, max_length=512),
+            Field(
+                description="Exact installed dataset identifier.",
+                min_length=1,
+                max_length=512,
+                examples=["data/genes.zip"],
+            ),
         ],
         limit: Annotated[int, Field(description="Maximum members to return.", ge=1, le=100)] = 20,
         offset: Annotated[int, Field(description="Zero-based member offset.", ge=0)] = 0,
