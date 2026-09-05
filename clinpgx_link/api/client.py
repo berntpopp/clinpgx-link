@@ -90,7 +90,9 @@ class RequestScheduler:
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
     ) -> None:
         if requests_per_second <= 0 or requests_per_second > 2:
-            raise InvalidInputError("Source request rate must be greater than zero and at most two.")
+            raise InvalidInputError(
+                "Source request rate must be greater than zero and at most two."
+            )
         self._interval = 1.0 / requests_per_second
         self._clock = clock
         self._sleep = sleep
@@ -271,9 +273,9 @@ class ClinPGxClient:
         else:
             self._raise_for_status(response.status_code)
             value = self._decode(path, response.status_code, raw, response.headers, representation)
-        media_type = response.headers.get("content-type", "application/octet-stream").split(
-            ";", 1
-        )[0]
+        media_type = response.headers.get("content-type", "application/octet-stream").split(";", 1)[
+            0
+        ]
         source = SourceInfo(
             source=source_name,
             url=str(response.url),

@@ -21,7 +21,9 @@ _CPIC_FILTER = re.compile(
 
 
 def _invalid(field: str, hint: str, *, subtype: str | None = None) -> InvalidInputError:
-    return InvalidInputError("Unsupported website request.", field=field, hint=hint, subtype=subtype)
+    return InvalidInputError(
+        "Unsupported website request.", field=field, hint=hint, subtype=subtype
+    )
 
 
 def _load_registry(path: Path) -> list[dict[str, Any]]:
@@ -128,7 +130,9 @@ class WebsiteRegistry:
             raise _invalid("query_parameters", "Use only captured query parameters.")
         path = entry["path"]
         for name, parameter in path_contract.items():
-            path = path.replace("{" + name + "}", _path_value(name, path_parameters[name], parameter))
+            path = path.replace(
+                "{" + name + "}", _path_value(name, path_parameters[name], parameter)
+            )
         params: dict[str, Any] = {}
         for name, value in query_parameters.items():
             rendered = _safe_text(value, "query_parameters")
@@ -138,10 +142,15 @@ class WebsiteRegistry:
             if allowed is not None and rendered not in allowed:
                 raise _invalid("query_parameters", "Use a value observed for this route.")
             params[name] = rendered
-        representation = "text" if entry["decoder"] in {
-            "json_body_even_if_text_plain",
-            "tsv_attachment",
-        } else "json"
+        representation = (
+            "text"
+            if entry["decoder"]
+            in {
+                "json_body_even_if_text_plain",
+                "tsv_attachment",
+            }
+            else "json"
+        )
         return BoundRequest("GET", path, params, None, representation)
 
     @staticmethod

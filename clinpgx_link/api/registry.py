@@ -41,9 +41,7 @@ _SEARCH_OPERATIONS = frozenset(
 
 
 def _invalid(field: str, hint: str, *, subtype: str | None = None) -> InvalidInputError:
-    return InvalidInputError(
-        "Unsupported API request.", field=field, hint=hint, subtype=subtype
-    )
+    return InvalidInputError("Unsupported API request.", field=field, hint=hint, subtype=subtype)
 
 
 def _load_operations(path: Path) -> list[dict[str, Any]]:
@@ -156,9 +154,7 @@ class ApiRegistry:
         if entry is None:
             raise _invalid("operation", "Choose an operation returned by get_api_schema.")
         if representation not in _representations(operation):
-            raise _invalid(
-                "representation", "Choose a representation verified for this operation."
-            )
+            raise _invalid("representation", "Choose a representation verified for this operation.")
         path_contract, query_contract = _parameter_maps(entry)
         _validate_keys(path_parameters, path_contract, "path_parameters")
         _validate_keys(query_parameters, query_contract, "query_parameters")

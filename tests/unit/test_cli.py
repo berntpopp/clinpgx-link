@@ -91,9 +91,7 @@ def test_serve_masks_startup_exception_details(monkeypatch, tmp_path):
         raise RuntimeError("secret filesystem target")
 
     monkeypatch.setattr(server_manager.UnifiedServerManager, "serve", failed_serve)
-    result = runner.invoke(
-        app, ["serve", "--cache-root", str(tmp_path / "writable-cache")]
-    )
+    result = runner.invoke(app, ["serve", "--cache-root", str(tmp_path / "writable-cache")])
     assert result.exit_code == 1
     assert "secret filesystem target" not in result.stdout
     assert "Server startup failed" in result.stdout

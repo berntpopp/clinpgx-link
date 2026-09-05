@@ -57,9 +57,7 @@ def test_bind_rejects_path_escape_without_reflecting_it(registry, hostile):
     with pytest.raises(InvalidInputError) as caught:
         registry.bind("GET /data/gene/{id}", {"id": hostile}, {})
 
-    rendered = " ".join(
-        filter(None, [str(caught.value), caught.value.field, caught.value.hint])
-    )
+    rendered = " ".join(filter(None, [str(caught.value), caught.value.field, caught.value.hint]))
     if hostile:
         assert hostile not in rendered
     assert caught.value.field == "path_parameters"
@@ -104,7 +102,9 @@ def test_bind_rejects_search_without_runtime_required_criteria(registry, operati
     from clinpgx_link.exceptions import InvalidInputError
 
     with pytest.raises(InvalidInputError) as caught:
-        registry.bind(operation, {}, query, representation="html" if "infobutton" in operation else "json")
+        registry.bind(
+            operation, {}, query, representation="html" if "infobutton" in operation else "json"
+        )
     assert caught.value.subtype == "missing_criteria"
 
 

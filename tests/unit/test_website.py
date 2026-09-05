@@ -65,9 +65,7 @@ def test_website_registry_preserves_verified_non_json_decoder():
     from clinpgx_link.api.website_operations import WebsiteRegistry
 
     registry = WebsiteRegistry()
-    allele_function = registry.bind(
-        "GET /site/alleleFunction/{geneId}", {"geneId": "PA128"}, {}
-    )
+    allele_function = registry.bind("GET /site/alleleFunction/{geneId}", {"geneId": "PA128"}, {})
     attachment = registry.bind(
         "GET /site/haplotypeFrequency/_download/{id}",
         {"id": "PA166170351"},
@@ -122,9 +120,7 @@ async def test_website_client_decodes_text_plain_json_and_sets_clinpgx_license(t
         _settings(tmp_path), http_client=http_client, content_store=_store(tmp_path)
     )
     client = WebsiteClient(source_client)
-    result = await client.call(
-        "GET /site/alleleFunction/{geneId}", {"geneId": "PA128"}, {}
-    )
+    result = await client.call("GET /site/alleleFunction/{geneId}", {"geneId": "PA128"}, {})
     assert result.value == {"gene": "CYP2D6", "alleles": []}
     assert result.source.source == "ClinPGx website API"
     assert result.details["license"]["spdx"] == "CC-BY-SA-4.0"
@@ -156,16 +152,12 @@ async def test_cpic_client_preserves_exact_206_pagination_and_separate_license(t
         _settings(tmp_path), http_client=http_client, content_store=_store(tmp_path)
     )
     client = WebsiteClient(source_client)
-    result = await client.call(
-        "CPIC GET /guideline", {}, {"clinpgxid": "eq.PA166251454"}
-    )
+    result = await client.call("CPIC GET /guideline", {}, {"clinpgxid": "eq.PA166251454"})
     assert result.value == json.loads(raw)
     assert result.source.source == "CPIC API"
     assert result.details["content_range"] == "0-0/1"
     assert result.details["license"]["spdx"] == "CC0-1.0"
-    cached = await client.call(
-        "CPIC GET /guideline", {}, {"clinpgxid": "eq.PA166251454"}
-    )
+    cached = await client.call("CPIC GET /guideline", {}, {"clinpgxid": "eq.PA166251454"})
     assert cached.source.data_source == "cache"
     await client.close()
 

@@ -151,8 +151,10 @@ def health(
         body = response.json()
         status = body.get("status") if isinstance(body, dict) else None
         ready = body.get("ready") if isinstance(body, dict) else None
-        if response.status_code != 200 or status not in {"healthy", "degraded"} or not isinstance(
-            ready, bool
+        if (
+            response.status_code != 200
+            or status not in {"healthy", "degraded"}
+            or not isinstance(ready, bool)
         ):
             raise ValueError("invalid health response")
     except (httpx.HTTPError, ValueError, json.JSONDecodeError):

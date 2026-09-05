@@ -71,9 +71,7 @@ async def test_jsend_array_is_unwrapped_and_exact_body_is_retained(tmp_path):
         return httpx.Response(200, content=raw, headers={"content-type": "application/json"})
 
     client, http_client, _ = _client(tmp_path, handler)
-    result = await client.request(
-        "GET", "/data/gene", params={"symbol": "CYP2D6", "view": "min"}
-    )
+    result = await client.request("GET", "/data/gene", params={"symbol": "CYP2D6", "view": "min"})
 
     assert result.value[0]["id"] == "PA128"
     assert result.source.sha256 == hashlib.sha256(raw).hexdigest()
@@ -133,12 +131,8 @@ async def test_numeric_text_and_204_are_distinct_valid_results(tmp_path):
         return responses.pop(0)
 
     client, http_client, _ = _client(tmp_path, handler)
-    found = await client.request(
-        "GET", "/report/literatureId/12345678", representation="text"
-    )
-    absent = await client.request(
-        "GET", "/report/literatureId/99999999", representation="text"
-    )
+    found = await client.request("GET", "/report/literatureId/12345678", representation="text")
+    absent = await client.request("GET", "/report/literatureId/99999999", representation="text")
 
     assert found.value == 7144344
     assert found.details["http_status"] == 200

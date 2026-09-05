@@ -177,9 +177,7 @@ class ExactHostOriginMiddleware:
         ]
         if len(origins) > 1 or (origins and origins[0] not in self._allowed_origins):
             self._logger.warning("request_failed", status="failed", status_code=403, source="mcp")
-            await JSONResponse({"error": "forbidden_origin"}, status_code=403)(
-                scope, receive, send
-            )
+            await JSONResponse({"error": "forbidden_origin"}, status_code=403)(scope, receive, send)
             return
         await self.app(scope, receive, send)
 
@@ -197,9 +195,9 @@ class ProtocolVersionMiddleware:
             headers = Headers(scope=scope)
             supplied = headers.getlist("mcp-protocol-version")
             if len(supplied) > 1 or (supplied and supplied[0] not in self._supported):
-                await JSONResponse(
-                    {"error": "unsupported_mcp_protocol_version"}, status_code=400
-                )(scope, receive, send)
+                await JSONResponse({"error": "unsupported_mcp_protocol_version"}, status_code=400)(
+                    scope, receive, send
+                )
                 return
         await self.app(scope, receive, send)
 

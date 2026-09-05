@@ -213,9 +213,7 @@ def test_request_id_is_canonical_uuid4_and_echoed(tmp_path, supplied, preserved)
     from clinpgx_link.server_manager import create_app
 
     with TestClient(create_app(_settings(tmp_path))) as client:
-        response = client.get(
-            "/api/live", headers={"host": "testserver", "x-request-id": supplied}
-        )
+        response = client.get("/api/live", headers={"host": "testserver", "x-request-id": supplied})
 
     actual = response.headers["x-request-id"]
     assert _uuid4(actual)
