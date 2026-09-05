@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 
 import pytest
+from jsonschema import Draft202012Validator
 
 
 def _canonical(value: object) -> bytes:
@@ -236,16 +237,35 @@ def test_quarantined_artifact_cannot_claim_an_indexed_member() -> None:
         parse_source_manifest(_canonical(value))
 
 
+def test_nonindexed_opaque_artifact_can_have_no_inspectable_members() -> None:
+    from clinpgx_link.releases.source_manifest import parse_source_manifest
+
+    value = manifest_value()
+    value["artifacts"][0].update(  # type: ignore[index,union-attr]
+        members=[],
+        status="quarantined",
+        reason="Archive could not be inspected.",
+        imported_counts={"rows": 0, "documents": 0},
+        validation_result="failed",
+    )
+    model = parse_source_manifest(_canonical(value))
+    assert model.artifacts[0].members == ()
+
+
 def test_source_manifest_rejects_noncanonical_duplicate_nonfinite_and_bounded_input() -> None:
     from clinpgx_link.exceptions import DataValidationError
     from clinpgx_link.releases.source_manifest import parse_source_manifest
 
     valid = manifest_value()
+    nested = b"[" * 10_000 + b"0" + b"]" * 10_000 + b"\n"
+    with pytest.raises(RecursionError):
+        json.loads(nested)
+
     inputs = [
         json.dumps(valid, indent=2).encode(),
         b'{"schema_version":1,"schema_version":1}\n',
         b'{"value":NaN}\n',
-        b"[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[",
+        nested,
         b"x" * (4 * 1024 * 1024 + 1),
         b"\xff",
     ]
@@ -265,6 +285,19 @@ def _assert_recursive_objects_closed(value: object) -> None:
             _assert_recursive_objects_closed(child)
 
 
+def _array_schemas(value: object) -> list[dict[str, object]]:
+    found: list[dict[str, object]] = []
+    if isinstance(value, dict):
+        if value.get("type") == "array":
+            found.append(value)
+        for child in value.values():
+            found.extend(_array_schemas(child))
+    elif isinstance(value, list):
+        for child in value:
+            found.extend(_array_schemas(child))
+    return found
+
+
 def test_source_manifest_generated_schema_matches_canonical_vendor_bytes() -> None:
     from clinpgx_link.releases.source_manifest import source_manifest_schema_bytes
 
@@ -275,3 +308,29 @@ def test_source_manifest_generated_schema_matches_canonical_vendor_bytes() -> No
     assert generated == expected
     schema = json.loads(generated)
     _assert_recursive_objects_closed(schema)
+
+
+def test_source_schema_externally_enforces_every_array_bound() -> None:
+    from clinpgx_link.releases.source_manifest import source_manifest_schema_bytes
+
+    schema = json.loads(source_manifest_schema_bytes())
+    arrays = _array_schemas(schema)
+    assert len(arrays) == 6
+    assert all("minItems" in item and "maxItems" in item for item in arrays)
+    assert all("minLength" not in item and "maxLength" not in item for item in arrays)
+
+    validator = Draft202012Validator(schema)
+    validator.validate(manifest_value())
+    value = manifest_value()
+    value["artifacts"] = []
+    errors = list(validator.iter_errors(value))
+    assert any(error.validator == "minItems" for error in errors)
+
+
+def test_source_parser_classifies_nonbytes_as_invalid_data_not_resource_limit() -> None:
+    from clinpgx_link.exceptions import DataValidationError
+    from clinpgx_link.releases.source_manifest import parse_source_manifest
+
+    with pytest.raises(DataValidationError) as caught:
+        parse_source_manifest("{}\n")  # type: ignore[arg-type]
+    assert caught.value.subtype == "data_invalid"

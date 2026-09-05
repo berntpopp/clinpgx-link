@@ -7,8 +7,9 @@ import json
 from pathlib import Path
 
 import pytest
+from jsonschema import Draft202012Validator
 
-from tests.unit.test_source_manifest import _canonical, manifest_value
+from tests.unit.test_source_manifest import _array_schemas, _canonical, manifest_value
 
 
 def decision(allowed: bool = False, *, reviewed: bool = False) -> dict[str, object | None]:
@@ -310,3 +311,41 @@ def test_licenses_generated_schema_matches_canonical_vendor_bytes() -> None:
     assert generated == expected
     schema = json.loads(generated)
     _assert_recursive_objects_closed(schema)
+
+
+def test_licenses_schema_externally_enforces_every_array_bound() -> None:
+    from clinpgx_link.releases.licenses import licenses_schema_bytes
+
+    schema = json.loads(licenses_schema_bytes())
+    arrays = _array_schemas(schema)
+    assert len(arrays) == 4
+    assert all("minItems" in item and "maxItems" in item for item in arrays)
+    assert all("minLength" not in item and "maxLength" not in item for item in arrays)
+
+    validator = Draft202012Validator(schema)
+    validator.validate(licenses_value())
+    value = licenses_value()
+    value["licenses"] = []
+    errors = list(validator.iter_errors(value))
+    assert any(error.validator == "minItems" for error in errors)
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://example.test/terms",
+        "ftp://example.test/terms",
+        "https://user@example.test/terms",
+        "https://example.test:443/terms",
+        "https://EXAMPLE.test/terms",
+        "https://example.test/terms#section",
+    ],
+)
+def test_licenses_schema_externally_rejects_noncanonical_https_urls(url: str) -> None:
+    from clinpgx_link.releases.licenses import licenses_schema_bytes
+
+    value = licenses_value()
+    value["licenses"][0]["urls"] = [url]  # type: ignore[index]
+    validator = Draft202012Validator(json.loads(licenses_schema_bytes()))
+    errors = list(validator.iter_errors(value))
+    assert any(error.validator == "pattern" for error in errors)

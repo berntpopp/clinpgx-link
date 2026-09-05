@@ -87,17 +87,21 @@ class LicenseRecord(StrictModel):
     name: ShortText
     spdx_expression: Annotated[str, Field(min_length=1, max_length=512)] | None
     urls: Annotated[
-        tuple[HttpsUrl, ...], BeforeValidator(json_array), Field(min_length=1, max_length=32)
+        tuple[HttpsUrl, ...],
+        Field(min_length=1, max_length=32),
+        BeforeValidator(json_array),
     ]
     notice: NoticeEvidence
     obligations: Annotated[
-        tuple[Obligation, ...], BeforeValidator(json_array), Field(max_length=100)
+        tuple[Obligation, ...],
+        Field(min_length=0, max_length=100),
+        BeforeValidator(json_array),
     ]
     distribution: DistributionReviews
     affected_artifacts: Annotated[
         tuple[Annotated[str, Field(min_length=6, max_length=512)], ...],
-        BeforeValidator(json_array),
         Field(min_length=1, max_length=10_000),
+        BeforeValidator(json_array),
     ]
     needs_confirmation: StrictBool
 
@@ -136,8 +140,8 @@ class LicensesManifest(StrictModel):
     schema_version: SchemaVersion
     licenses: Annotated[
         tuple[LicenseRecord, ...],
-        BeforeValidator(json_array),
         Field(min_length=1, max_length=10_000),
+        BeforeValidator(json_array),
     ]
 
     @model_validator(mode="after")

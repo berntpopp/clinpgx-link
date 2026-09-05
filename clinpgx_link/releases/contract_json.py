@@ -93,7 +93,15 @@ HttpsUrl = Annotated[
     str,
     Field(min_length=9, max_length=2048),
     AfterValidator(_https),
-    WithJsonSchema({"type": "string", "format": "uri", "minLength": 9, "maxLength": 2048}),
+    WithJsonSchema(
+        {
+            "type": "string",
+            "format": "uri",
+            "pattern": r"^https://(?![^/?#]*[@:A-Z])[^/?#]+(?:[/?][^#]*)?$",
+            "minLength": 9,
+            "maxLength": 2048,
+        }
+    ),
 ]
 Sha256Hex = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
 Sha256Identity = Annotated[str, Field(pattern=r"^sha256:[0-9a-f]{64}$")]
@@ -147,7 +155,9 @@ def json_array(value: object) -> object:
 
 def parse_canonical[ModelT: BaseModel](raw: bytes, *, maximum: int, model: type[ModelT]) -> ModelT:
     """Parse exact canonical bytes; this does not authenticate the enclosing bundle."""
-    if not isinstance(raw, bytes) or len(raw) > maximum:
+    if not isinstance(raw, bytes):
+        raise DataValidationError("Release contract must be bytes.")
+    if len(raw) > maximum:
         raise DataValidationError(
             "Release contract exceeds its byte bound.", subtype="resource_limit"
         )

@@ -151,8 +151,8 @@ class ArtifactProvenance(StrictModel):
     embedded_created_at: Timestamp | None
     members: Annotated[
         tuple[MemberProvenance, ...],
+        Field(min_length=0, max_length=10_000),
         BeforeValidator(json_array),
-        Field(min_length=1, max_length=10_000),
     ]
     parser: ParserIdentity | None
     transformation_sha256: Sha256Hex | None
@@ -163,7 +163,9 @@ class ArtifactProvenance(StrictModel):
     validation_result: ValidationResult
     license_id: Annotated[str, Field(pattern=r"^[a-z0-9][a-z0-9._-]{0,127}$")]
     coverage: Annotated[
-        tuple[CoverageEntry, ...], BeforeValidator(json_array), Field(max_length=1000)
+        tuple[CoverageEntry, ...],
+        Field(min_length=0, max_length=1000),
+        BeforeValidator(json_array),
     ]
 
     @model_validator(mode="after")
@@ -211,8 +213,8 @@ class SourceAnomaly(StrictModel):
     anomaly_id: AnomalyId
     affected_sources: Annotated[
         tuple[LogicalName, ...],
-        BeforeValidator(json_array),
         Field(min_length=1, max_length=10_000),
+        BeforeValidator(json_array),
     ]
     count: PositiveInt
 
@@ -237,14 +239,18 @@ class SourceManifest(StrictModel):
     registry: RegistryObservation
     artifacts: Annotated[
         tuple[ArtifactProvenance, ...],
-        BeforeValidator(json_array),
         Field(min_length=1, max_length=10_000),
+        BeforeValidator(json_array),
     ]
     coverage: Annotated[
-        tuple[CoverageEntry, ...], BeforeValidator(json_array), Field(max_length=10_000)
+        tuple[CoverageEntry, ...],
+        Field(min_length=0, max_length=10_000),
+        BeforeValidator(json_array),
     ]
     anomalies: Annotated[
-        tuple[SourceAnomaly, ...], BeforeValidator(json_array), Field(max_length=10_000)
+        tuple[SourceAnomaly, ...],
+        Field(min_length=0, max_length=10_000),
+        BeforeValidator(json_array),
     ]
 
     @model_validator(mode="after")
