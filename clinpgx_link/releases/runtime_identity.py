@@ -103,6 +103,7 @@ def _validate_file_stat(info: os.stat_result) -> None:
 
 
 def _open_root(root: Path) -> int:
+    descriptor = -1
     try:
         lexical = os.lstat(root)
         if not stat.S_ISDIR(lexical.st_mode) or stat.S_ISLNK(lexical.st_mode):
@@ -113,15 +114,20 @@ def _open_root(root: Path) -> int:
         descriptor = os.open(root, flags)
         opened = os.fstat(descriptor)
         if _stat_identity(lexical) != _stat_identity(opened):
-            os.close(descriptor)
             raise _error(
                 "Runtime identity root changed during verification", "runtime_identity_changed"
             )
-        return descriptor
+        result = descriptor
+        descriptor = -1
+        return result
     except DataValidationError:
         raise
     except (OSError, TypeError, ValueError) as exc:
         raise _error("Runtime identity root is not safe", "runtime_identity_unsafe") from exc
+    finally:
+        if descriptor >= 0:
+            with suppress(OSError):
+                os.close(descriptor)
 
 
 def _inventory(root_fd: int, *, manifest_required: bool) -> dict[str, tuple[int, ...]]:
@@ -155,7 +161,9 @@ def _read_regular_file(
 ) -> tuple[bytes | None, int, str | None]:
     descriptor = -1
     try:
-        flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+        flags = (
+            os.O_RDONLY | os.O_NONBLOCK | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+        )
         descriptor = os.open(name, flags, dir_fd=root_fd)
         before = os.fstat(descriptor)
         _validate_file_stat(before)

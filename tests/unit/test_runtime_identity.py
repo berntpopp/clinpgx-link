@@ -247,6 +247,69 @@ def test_special_files_are_rejected(tmp_path: Path, name: str) -> None:
         verify_runtime_identity(root, expected_digest=GOLDEN_DIGEST, expected_release_tag=TAG)
 
 
+@pytest.mark.parametrize("target_name", ["schema.json", MANIFEST_NAME])
+def test_race_to_fifo_cannot_make_descriptor_open_block(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, target_name: str
+) -> None:
+    root = _verified_tree(tmp_path)
+    original_open = identity_module.os.open
+    raced = False
+
+    def racing_open(path: str | Path, flags: int, *args: object, **kwargs: object) -> int:
+        nonlocal raced
+        if path == target_name and not raced:
+            assert flags & os.O_NONBLOCK, "unsafe potentially blocking special-file open"
+            raced = True
+            target = root / target_name
+            target.unlink()
+            os.mkfifo(target, mode=0o400)
+        return original_open(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr(identity_module.os, "open", racing_open)
+
+    with pytest.raises(DataValidationError, match="safe"):
+        if target_name == MANIFEST_NAME:
+            verify_runtime_identity(root, expected_digest=GOLDEN_DIGEST, expected_release_tag=TAG)
+        else:
+            build_runtime_identity(root, TAG)
+    assert raced
+
+
+def test_root_descriptor_closes_when_initial_fstat_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _tree(tmp_path / "version")
+    original_open = identity_module.os.open
+    original_fstat = identity_module.os.fstat
+    opened_fd = -1
+
+    def tracking_open(path: str | Path, flags: int, *args: object, **kwargs: object) -> int:
+        nonlocal opened_fd
+        descriptor = original_open(path, flags, *args, **kwargs)
+        if path == root:
+            opened_fd = descriptor
+        return descriptor
+
+    def failing_fstat(descriptor: int) -> os.stat_result:
+        if descriptor == opened_fd:
+            raise OSError("injected root fstat failure")
+        return original_fstat(descriptor)
+
+    monkeypatch.setattr(identity_module.os, "open", tracking_open)
+    monkeypatch.setattr(identity_module.os, "fstat", failing_fstat)
+
+    with pytest.raises(DataValidationError, match="root"):
+        build_runtime_identity(root, TAG)
+    assert opened_fd >= 0
+    try:
+        original_fstat(opened_fd)
+    except OSError:
+        pass
+    else:
+        os.close(opened_fd)
+        pytest.fail("root descriptor leaked after fstat failure")
+
+
 @pytest.mark.parametrize("target", ["root", "input", "input-setid", "manifest"])
 def test_unsafe_modes_are_rejected(tmp_path: Path, target: str) -> None:
     root = _verified_tree(tmp_path)
