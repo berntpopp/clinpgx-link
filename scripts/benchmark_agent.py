@@ -137,11 +137,13 @@ class EventState:
     def __init__(self) -> None:
         self.pending = bytearray()
         self.parse_errors = 0
+        self.lifecycle_errors = 0
         self.init: dict[str, Any] | None = None
         self.result: dict[str, Any] | None = None
         self.calls: list[dict[str, Any]] = []
         self._call_indexes: dict[str, int] = {}
         self.errors: list[dict[str, str]] = []
+        self.assistant_models: list[str | None] = []
 
     def feed(self, raw: bytes) -> None:
         self.pending.extend(raw)
@@ -168,17 +170,29 @@ class EventState:
         if not isinstance(value, dict):
             self.parse_errors += 1
             return
+        if self.result is not None:
+            self.lifecycle_errors += 1
+        message = value.get("message")
+        if message is not None and self.init is None:
+            self.lifecycle_errors += 1
         if value.get("type") == "system" and value.get("subtype") == "init":
             if self.init is None:
                 self.init = value
             else:
                 self.parse_errors += 1
         if value.get("type") == "result":
+            if self.init is None:
+                self.lifecycle_errors += 1
             if self.result is None:
                 self.result = value
             else:
                 self.parse_errors += 1
-        message = value.get("message")
+        if value.get("type") == "assistant":
+            if not isinstance(message, dict):
+                self.parse_errors += 1
+            else:
+                model = message.get("model")
+                self.assistant_models.append(model if isinstance(model, str) else None)
         if not isinstance(message, dict):
             return
         content = message.get("content")
@@ -334,6 +348,8 @@ def _acceptance_failures(
         failures.append("nonzero_exit")
     if state.parse_errors:
         failures.append("invalid_jsonl")
+    if state.lifecycle_errors:
+        failures.append("invalid_event_lifecycle")
     if any(not call["result_received"] for call in state.calls):
         failures.append("unmatched_tool_calls")
     if any(not call["name"].startswith(MCP_TOOL_PREFIX) for call in state.calls):
@@ -350,6 +366,8 @@ def _acceptance_failures(
         return failures
     if not _model_matches(requested_model, init.get("model")):
         failures.append("model_mismatch")
+    if any(model != init.get("model") for model in state.assistant_models):
+        failures.append("assistant_model_mismatch")
     tools = init.get("tools")
     if (
         not isinstance(tools, list)
@@ -357,6 +375,10 @@ def _acceptance_failures(
         or not all(isinstance(tool, str) and tool.startswith(MCP_TOOL_PREFIX) for tool in tools)
     ):
         failures.append("unexpected_tools")
+    elif any(call["name"] not in tools for call in state.calls) and (
+        "unexpected_tool_calls" not in failures
+    ):
+        failures.append("unexpected_tool_calls")
     servers = init.get("mcp_servers")
     if (
         not isinstance(servers, list)
@@ -444,7 +466,6 @@ def run(args: argparse.Namespace) -> bool:
                     start_new_session=True,
                     env=dict(os.environ),
                 )
-                completed = False
                 try:
                     captured = _capture(
                         process,
@@ -459,16 +480,17 @@ def run(args: argparse.Namespace) -> bool:
                     stderr_file.flush()
                     os.fsync(stdout_file.fileno())
                     os.fsync(stderr_file.fileno())
-                    completed = True
                 finally:
-                    _reap(process, force_group=not completed)
+                    _reap(process, force_group=True)
         duration = time.monotonic() - started
         state, termination, truncated, trace_hash, trace_size, stderr_hash, stderr_size = captured
         failures = _acceptance_failures(state, termination, truncated, exit_code, args.model)
         init = state.init or {}
         result = state.result or {}
-        usage = result.get("usage") if isinstance(result.get("usage"), dict) else {}
-        model_usage = result.get("modelUsage") if isinstance(result.get("modelUsage"), dict) else {}
+        raw_usage = result.get("usage")
+        usage: dict[str, Any] = raw_usage if isinstance(raw_usage, dict) else {}
+        raw_model_usage = result.get("modelUsage")
+        model_usage = raw_model_usage if isinstance(raw_model_usage, dict) else {}
         summary = {
             "schema_version": 1,
             "accepted": not failures,
@@ -484,6 +506,7 @@ def run(args: argparse.Namespace) -> bool:
             "resolved_model": init.get("model"),
             "init_tools": init.get("tools"),
             "init_mcp_servers": init.get("mcp_servers"),
+            "assistant_models": state.assistant_models,
             "git_sha": git_sha,
             "prompt_sha256": prompt_sha256,
             "prompt_size_bytes": prompt_size,

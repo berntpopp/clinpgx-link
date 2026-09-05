@@ -110,7 +110,7 @@ events = [
     {"type": "system", "subtype": "init", "model": "claude-opus-5",
      "tools": ["mcp__clinpgx__search_records", "mcp__clinpgx__get_record"],
      "mcp_servers": [{"name": "clinpgx", "status": "connected"}]},
-    {"type": "assistant", "message": {"content": [
+    {"type": "assistant", "message": {"model": "claude-opus-5", "content": [
         {"type": "tool_use", "id": "call-1", "name": "mcp__clinpgx__search_records",
          "input": {"query": "CYP2C19"}}
     ]}},
@@ -152,6 +152,7 @@ def test_success_preserves_complete_private_trace_and_resolved_metadata(tmp_path
         "mcp__clinpgx__get_record",
     ]
     assert summary["init_mcp_servers"] == [{"name": "clinpgx", "status": "connected"}]
+    assert summary["assistant_models"] == ["claude-opus-5"]
     assert summary["prompt_sha256"] == hashlib.sha256(prompt).hexdigest()
     assert len(summary["git_sha"]) == 40
     assert summary["termination_reason"] == "completed"
@@ -380,6 +381,137 @@ time.sleep(5)
         time.sleep(0.01)
     with pytest.raises(ProcessLookupError):
         os.kill(child_pid, 0)
+
+
+def test_success_kills_residual_process_group_children(tmp_path: Path) -> None:
+    child_pid_path = tmp_path / "child.pid"
+    body = f"""
+child = os.fork()
+if child == 0:
+    os.close(0)
+    os.close(1)
+    os.close(2)
+    time.sleep(5)
+    os._exit(0)
+pathlib.Path({str(child_pid_path)!r}).write_text(str(child))
+print(json.dumps({{"type": "system", "subtype": "init", "model": "claude-opus-5",
+ "tools": ["mcp__clinpgx__get_record"],
+ "mcp_servers": [{{"name": "clinpgx", "status": "connected"}}]}}))
+print(json.dumps({{"type": "assistant", "message": {{"model": "claude-opus-5", "content": []}}}}))
+print(json.dumps({{"type": "result", "subtype": "success", "is_error": False,
+ "result": "answer", "usage": {{}}, "total_cost_usd": 0}}))
+"""
+
+    result, output, _ = _run(tmp_path, body)
+
+    assert result.returncode == 0, result.stderr
+    assert _summary(output)["accepted"] is True
+    child_pid = int(child_pid_path.read_text())
+    deadline = time.monotonic() + 1
+    while Path(f"/proc/{child_pid}").exists() and time.monotonic() < deadline:
+        time.sleep(0.01)
+    with pytest.raises(ProcessLookupError):
+        os.kill(child_pid, 0)
+
+
+@pytest.mark.parametrize(
+    "events",
+    [
+        [
+            {"type": "result", "subtype": "success", "is_error": False, "result": "early"},
+            {
+                "type": "system",
+                "subtype": "init",
+                "model": "claude-opus-5",
+                "tools": ["mcp__clinpgx__get_record"],
+                "mcp_servers": [{"name": "clinpgx", "status": "connected"}],
+            },
+        ],
+        [
+            {
+                "type": "assistant",
+                "message": {"model": "claude-opus-5", "content": []},
+            },
+            {
+                "type": "system",
+                "subtype": "init",
+                "model": "claude-opus-5",
+                "tools": ["mcp__clinpgx__get_record"],
+                "mcp_servers": [{"name": "clinpgx", "status": "connected"}],
+            },
+            {"type": "result", "subtype": "success", "is_error": False, "result": "answer"},
+        ],
+        [
+            {
+                "type": "system",
+                "subtype": "init",
+                "model": "claude-opus-5",
+                "tools": ["mcp__clinpgx__get_record"],
+                "mcp_servers": [{"name": "clinpgx", "status": "connected"}],
+            },
+            {"type": "result", "subtype": "success", "is_error": False, "result": "answer"},
+            {
+                "type": "assistant",
+                "message": {"model": "claude-opus-5", "content": []},
+            },
+        ],
+    ],
+)
+def test_event_lifecycle_requires_init_then_messages_then_final_result(
+    tmp_path: Path, events: list[dict[str, Any]]
+) -> None:
+    body = f"""
+for event in {events!r}:
+    print(json.dumps(event))
+"""
+
+    result, output, _ = _run(tmp_path, body)
+
+    assert result.returncode == 1
+    assert "invalid_event_lifecycle" in _summary(output)["acceptance_failures"]
+
+
+@pytest.mark.parametrize("assistant_model", [None, "claude-sonnet-5"])
+def test_every_assistant_message_model_must_match_resolved_init_model(
+    tmp_path: Path, assistant_model: str | None
+) -> None:
+    message: dict[str, Any] = {"content": []}
+    if assistant_model is not None:
+        message["model"] = assistant_model
+    body = f"""
+print(json.dumps({{"type": "system", "subtype": "init", "model": "claude-opus-5",
+ "tools": ["mcp__clinpgx__get_record"],
+ "mcp_servers": [{{"name": "clinpgx", "status": "connected"}}]}}))
+print(json.dumps({{"type": "assistant", "message": {message!r}}}))
+print(json.dumps({{"type": "result", "subtype": "success", "is_error": False,
+ "result": "answer", "usage": {{}}, "total_cost_usd": 0}}))
+"""
+
+    result, output, _ = _run(tmp_path, body)
+
+    assert result.returncode == 1
+    assert "assistant_model_mismatch" in _summary(output)["acceptance_failures"]
+
+
+def test_observed_mcp_tool_must_be_published_by_init(tmp_path: Path) -> None:
+    body = """
+print(json.dumps({"type": "system", "subtype": "init", "model": "claude-opus-5",
+ "tools": ["mcp__clinpgx__get_record"],
+ "mcp_servers": [{"name": "clinpgx", "status": "connected"}]}))
+print(json.dumps({"type": "assistant", "message": {"model": "claude-opus-5", "content": [
+ {"type": "tool_use", "id": "a", "name": "mcp__clinpgx__search_records", "input": {}}
+]}}))
+print(json.dumps({"type": "user", "message": {"content": [
+ {"type": "tool_result", "tool_use_id": "a", "is_error": False, "content": "x"}
+]}}))
+print(json.dumps({"type": "result", "subtype": "success", "is_error": False,
+ "result": "answer", "usage": {}, "total_cost_usd": 0}))
+"""
+
+    result, output, _ = _run(tmp_path, body)
+
+    assert result.returncode == 1
+    assert "unexpected_tool_calls" in _summary(output)["acceptance_failures"]
 
 
 def test_existing_output_directory_is_never_reused(tmp_path: Path) -> None:
