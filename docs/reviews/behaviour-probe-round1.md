@@ -69,3 +69,38 @@ route. Invalid combinations still fail explicitly. The first required result-typ
 example becomes `relationship`, making the default-source example meaningful
 without fabricating a second identifier or altering source defaults. Completion
 and a fresh unmodified-probe rerun are still required.
+
+## Scoped error/example remediation review
+
+Commit `ac99fe7` supplies safe argument fields, the three missing required examples
+and both parameter-free source examples. Independent reviewer
+`release_contract_review` (GPT-5.6 Sol) approved spec and quality with no scoped
+findings. Tests exercise all thirteen tools with hostile unknown names/values,
+declared/nested field failures, actual schemas and real fixture-backed adapters.
+The reviewer did not rerun suites; the implementer reported 34 focused tests, Ruff
+and strict mypy passing. Root's subsequent runtime/boundary run passed 58 tests.
+The connected-object mode and full behaviour rerun remain outside this approval.
+
+## Rerun after connected-object implementation
+
+At `5e699b1`, root reran the same unchanged Router behaviour probe against an actual
+loopback Uvicorn server with the sourced-fixture snapshot and live adapters.
+Result: **CONFORMANT — 170 passed, 0 failed, 0 UNGATED, 5 inconclusive**. The probe
+exited 0 and the server shut down cleanly. No probe logic or thresholds changed.
+
+The five inconclusive checks remain visible: filter probes for singleton/control
+results from get_api_data, get_dataset and get_record; absent static example handles
+for get_dataset_record and get_source_content. These are not data-coverage passes.
+Root also ran `make ci-local` at this revision: 511 tests passed plus formatting,
+lint, strict mypy, module-size, vendor and FastMCP-import checks. Two third-party
+TestClient deprecation warnings remain.
+
+Independent connected-mode review approved routing, provenance, pagination and
+selector behavior but requested a minor tool-schema clarification: view is sent
+only for pair reports, not connected-object reports. Commit `a581384` applies that
+clarification locally to this tool's parameter so other entity tools retain their
+correct view descriptions. The implementer reported 12 record tests, scoped mypy
+and all commit hooks passing. The original reviewer could not be resumed because
+the platform thread limit was reached; root independently read the exact two-file
+fix and accepted the clarification with no remaining scoped issue. This was a
+schema-description change, not a change to the live route behavior tested above.
