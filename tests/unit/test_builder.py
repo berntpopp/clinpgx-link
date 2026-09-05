@@ -468,7 +468,10 @@ def test_auxiliary_rows_gain_only_profiled_gene_allele_and_drug_memberships(
                 b'"generesult":"Intermediate Metabolizer",'
                 b'"lookupkey":"Intermediate Metabolizer",'
                 b'"phenotype":"Intermediate Metabolizer"}]}]'
-            )
+            ),
+            "unprofiled.json": (
+                b'[{"gene":"DPYD","diplotypes":[{"diplotype":"not-a-profiled-name"}]}]'
+            ),
         },
     }
     workbook = Workbook()
@@ -519,6 +522,12 @@ def test_auxiliary_rows_gain_only_profiled_gene_allele_and_drug_memberships(
         row[0] == "data/pharmcat.zip"
         and "/namedAlleles/" in (row[2] or "")
         and row[3:5] == ("gene", "TPMT")
+        for row in memberships
+    )
+    assert not any(
+        row[0] == "data/pharmcat.zip"
+        and row[1] == "unprofiled.json"
+        and row[3:5] == ("name", "not-a-profiled-name")
         for row in memberships
     )
     assert any(
@@ -580,5 +589,8 @@ def test_auxiliary_rows_gain_only_profiled_gene_allele_and_drug_memberships(
     }
     described = repository.describe("data/pharmcat.zip")
     assert described.value["supported_filters"] == ["gene", "name"]
-    assert described.value["members"][0]["supported_filters"] == ["gene", "name"]
+    phenotypes = next(
+        member for member in described.value["members"] if member["path"] == "phenotypes.json"
+    )
+    assert phenotypes["supported_filters"] == ["gene", "name"]
     repository.close()

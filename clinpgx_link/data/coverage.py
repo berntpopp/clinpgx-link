@@ -275,7 +275,7 @@ def contextual_json_memberships(
         if isinstance(allele, str) and allele:
             memberships.append(Membership("allele", allele, "exact", "/name"))
             memberships.append(Membership("name", allele, "exact", "/name"))
-    if "/diplotypes/" in pointer and isinstance(value, dict):
+    if member == "phenotypes.json" and "/diplotypes/" in pointer and isinstance(value, dict):
         diplotype = value.get("diplotype")
         if isinstance(diplotype, str) and diplotype:
             memberships.append(Membership("name", diplotype, "exact", "/diplotype"))

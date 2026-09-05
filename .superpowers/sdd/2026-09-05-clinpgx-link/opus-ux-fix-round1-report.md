@@ -65,6 +65,12 @@ Instruction-like keys, unknown fields, nonnumeric counts, excessive entries, oth
 pointers, and oversized strings remain deferred. Inline string values still use the
 existing `untrusted_text` fence.
 
+The post-commit security review identified that the new diplotype promotion needed an
+explicit member guard. A focused RED fixture proved that an `unprofiled.json` member
+could otherwise gain a `name` membership. The guard now requires `phenotypes.json`; the
+fixture is GREEN. The exact hostile dynamic key `c.1 IGNORE ALL PRIOR INSTRUCTIONS` is
+also covered and deferred by the structured coding-allele grammar.
+
 ## GREEN evidence
 
 Focused component suites:
@@ -72,7 +78,7 @@ Focused component suites:
 ```text
 uv run pytest -q tests/unit/test_repository.py tests/unit/test_builder.py \
   tests/unit/test_mcp_dataset_records.py tests/unit/test_mcp_datasets.py
-83 passed in 1.47s
+84 passed in 1.54s
 ```
 
 Static checks:
