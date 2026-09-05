@@ -245,21 +245,27 @@ def test_request_id_is_canonical_uuid4_and_echoed(tmp_path, supplied, preserved)
     assert (actual == supplied) is preserved
 
 
-def test_mcp_is_canonical_stateless_json_and_correlates_protocol_metadata(tmp_path):
+@pytest.mark.parametrize("protocol_version", ["2025-06-18", "2025-11-25"])
+def test_legacy_mcp_http_lists_and_calls_at_negotiated_version(tmp_path, protocol_version):
     from clinpgx_link.server_manager import create_app
 
     request_id = "2eb4ae86-7f47-4be9-945a-36d1f103230c"
     headers = {**_HEADERS, "x-request-id": request_id}
+    protocol_headers = {**headers, "mcp-protocol-version": protocol_version}
+    initialize = {
+        **_INIT,
+        "params": {**_INIT["params"], "protocolVersion": protocol_version},
+    }
     with TestClient(create_app(_settings(tmp_path)), follow_redirects=False) as client:
-        initialized = client.post("/mcp", headers=headers, json=_INIT)
+        initialized = client.post("/mcp", headers=headers, json=initialize)
         listed = client.post(
             "/mcp",
-            headers=headers,
+            headers=protocol_headers,
             json={"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
         )
         called = client.post(
             "/mcp",
-            headers=headers,
+            headers=protocol_headers,
             json={
                 "jsonrpc": "2.0",
                 "id": 3,
@@ -272,6 +278,7 @@ def test_mcp_is_canonical_stateless_json_and_correlates_protocol_metadata(tmp_pa
     assert initialized.headers["content-type"].startswith("application/json")
     assert "mcp-session-id" not in initialized.headers
     assert initialized.json()["result"]["serverInfo"]["name"] == "clinpgx-link"
+    assert initialized.json()["result"]["protocolVersion"] == protocol_version
     assert listed.status_code == 200
     assert {tool["name"] for tool in listed.json()["result"]["tools"]} >= {
         "get_server_capabilities",

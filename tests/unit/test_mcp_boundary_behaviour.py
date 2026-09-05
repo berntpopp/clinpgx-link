@@ -155,6 +155,24 @@ async def test_unknown_arguments_are_actionable_without_reflecting_hostile_input
 
 
 @pytest.mark.asyncio
+async def test_in_memory_legacy_client_negotiates_2025_11_25_and_calls_tools(tmp_path):
+    store = ContentStore(tmp_path / "legacy-client.sqlite")
+    try:
+        async with Client(create_mcp(content_store=store), mode="legacy") as client:
+            assert client.protocol_version == "2025-11-25"
+            tools = {tool.name for tool in await client.list_tools()}
+            called = await client.call_tool("get_server_capabilities", {})
+            unknown = await client.call_tool("unknown-tool-never-reflect", {}, raise_on_error=False)
+
+        assert "get_server_capabilities" in tools
+        assert called.structured_content["success"] is True
+        assert unknown.structured_content["error_code"] == "not_found"
+        assert "unknown-tool-never-reflect" not in json.dumps(unknown.structured_content)
+    finally:
+        store.close()
+
+
+@pytest.mark.asyncio
 async def test_schema_validation_reports_only_declared_top_level_field(tmp_path):
     store = ContentStore(tmp_path / "content.sqlite")
     try:
