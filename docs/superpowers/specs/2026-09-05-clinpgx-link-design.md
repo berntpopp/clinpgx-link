@@ -102,9 +102,9 @@ must come from the catalog or an explicit operator-only local path. Archive memb
 are read without extracting arbitrary paths; reject absolute/traversal names,
 symlinks, encrypted members, and archive expansion beyond configured limits.
 
-`ingest/builder.py` creates a new SQLite snapshot beside the current one and atomically
-publishes it after integrity checks. A failed refresh preserves the previous usable
-snapshot. Store source/member identity, exact row ordinal, original field names,
+`ingest/builder.py` creates and validates a candidate SQLite snapshot without activating
+it. The release installer exclusively owns atomic activation. A failed refresh
+preserves the previous usable snapshot. Store source/member identity, exact row ordinal, original field names,
 JSON payload, searchable text, schema and source metadata. Index TSV/CSV and JSON
 records; recursively identify array records without silently dropping other JSON
 structure. Inventory non-tabular members with content type, size and access location.
@@ -164,7 +164,7 @@ These are functional boundaries; final parameter schemas are frozen in the plan.
 |---|---|
 | `get_server_capabilities` | Identity, tools/signatures, sources, supported families, workflows, limits, licenses and coverage |
 | `get_diagnostics` | Local index/cache state, source dates and optional bounded upstream health |
-| `search_records` | Typed common entity collections and supported exact upstream filters, locally paged |
+| `search_records` | Local aliases/membership/broad discovery or explicit live filters; source selection and paging are visible |
 | `get_record` | Gene, chemical, disease, variant, literature, annotations, pathway and other supported entity by ID |
 | `get_related_records` | Connected-object or pair report, with declared result-type enum |
 | `get_api_schema` | Discover supported read operation schemas and examples, paged when necessary |
@@ -192,8 +192,10 @@ but must not remove rows or conceal sources/limitations. Full data remains reach
 
 Paged tools accept limit/offset/cursor. `_meta.pagination` contains total_count
 (null if unknown), has_more and next_cursor. Budget trimming must preserve a usable
-continuation and correct counts. An oversized indivisible object returns a typed
-size error with a smaller field/pointer request; never truncate silently or loop
+continuation and correct counts. An oversized object exposes explicit deferred-content
+descriptors with a usable get_source_content reference for structure, scalar or exact-byte
+chunks. Acquisition cap failures require a verified narrower filter/download alternative
+or remain an explicit incomplete coverage requirement. Never truncate silently or loop
 forever on a zero-progress cursor. Soft response budget: 25,000 estimated tokens.
 
 External free text is fenced at the MCP boundary as kind=untrusted_text, sanitized
@@ -223,8 +225,10 @@ bind 127.0.0.1. Container binding to 0.0.0.0 is limited to its network namespace
 
 Typer commands serve/config/health/version and data subcommands use environment
 prefix CLINPGX_. Logging is JSON in production, readable in development, with request
-correlation and no query payloads. Health describes process liveness; diagnostics
-describes data readiness, rather than treating a missing optional mirror as a crash.
+correlation and no query payloads. Development API-only health reports missing mirror
+readiness explicitly without failing liveness. Production /health requires the exact
+configured data identity; /api/live supplies process-only liveness. A data upgrade or
+rollback requires restart with its matching expected runtime digest.
 
 Provide Docker multi-stage build, frozen dependencies, non-root fixed UID, code-only
 runtime, healthcheck, hardened base/prod/npm Compose, read-only rootfs, explicit
