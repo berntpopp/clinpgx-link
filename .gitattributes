@@ -6,6 +6,11 @@ clinpgx_link/api/*.json -text
 docs/research/*.json -text
 docs/research/*.tsv -text
 vendor/** -text
+tests/conformance/__init__.py -text
+tests/conformance/behaviour.py -text
+tests/conformance/conformance.py -text
+tests/conformance/test_behaviour_v1.py -text
+tests/conformance/test_transport_v1.py -text
 *.zip binary
 *.xlsx binary
 *.pdf binary

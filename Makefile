@@ -36,5 +36,6 @@ check-fastmcp:
 
 vendor-check:
 	uv run --frozen python scripts/check_vendor_contract.py $(if $(GENEFOUNDRY_ROUTER_DIR),--router-dir "$(GENEFOUNDRY_ROUTER_DIR)")
+	uv run --frozen python scripts/check_conformance_vendor.py $(if $(GENEFOUNDRY_ROUTER_DIR),--router-dir "$(GENEFOUNDRY_ROUTER_DIR)")
 
 ci-local: format-check lint check-file-size vendor-check typecheck test-fast check-fastmcp
