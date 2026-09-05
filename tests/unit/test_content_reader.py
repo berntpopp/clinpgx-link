@@ -334,3 +334,19 @@ def test_late_structure_page_does_not_materialize_all_child_descriptors():
     assert result["returned"] == 1
     assert result["has_more"] is False
     assert peak < len(raw) * 20
+
+
+def test_wide_json_validation_does_not_duplicate_all_child_references():
+    import tracemalloc
+
+    from clinpgx_link.content.reader import read_content
+
+    raw = b"[" + b"0," * 499999 + b"0]"
+    tracemalloc.start()
+    try:
+        result = read_content(raw, media_type="application/json", start=499999, length=1)
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    assert result["items"][0]["key"] == 499999
+    assert peak < 7_000_000

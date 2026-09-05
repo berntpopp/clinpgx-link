@@ -46,17 +46,21 @@ def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
 
 def _decode_json(raw: bytes) -> Any:
     value: Any = json.loads(raw, object_pairs_hook=_unique_object)
-    pending = [value]
+    pending: list[Iterator[Any]] = [iter((value,))]
     while pending:
-        item = pending.pop()
+        try:
+            item = next(pending[-1])
+        except StopIteration:
+            pending.pop()
+            continue
         if isinstance(item, str):
             item.encode("utf-8")
         elif isinstance(item, float) and not math.isfinite(item):
             raise ValueError("Nonfinite JSON number.")
         elif isinstance(item, dict):
-            pending.extend(item.values())
+            pending.append(iter(item.values()))
         elif isinstance(item, list):
-            pending.extend(item)
+            pending.append(iter(item))
     return value
 
 
