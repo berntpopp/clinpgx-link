@@ -257,23 +257,91 @@ def _validate_worksheet_xml(raw: bytes, limits: SpreadsheetLimits) -> None:
         )
 
 
-def _worksheet_relationship_targets(raw: bytes) -> tuple[str, ...]:
-    targets: list[str] = []
+_WORKBOOK_CONTENT_TYPES = frozenset(
+    {
+        "application/vnd.ms-excel.addin.macroEnabled.main+xml",
+        "application/vnd.ms-excel.sheet.macroEnabled.main+xml",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.template.main+xml",
+    }
+)
+_WORKSHEET_RELATIONSHIP_TYPES = frozenset(
+    {
+        "http://purl.oclc.org/ooxml/officeDocument/relationships/worksheet",
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet",
+    }
+)
+
+
+def _validate_content_types(raw: bytes) -> None:
+    workbook_parts: list[str] = []
+
+    def start_element(name: str, attributes: dict[str, str]) -> None:
+        local_name = name.rsplit("}", maxsplit=1)[-1]
+        content_type = attributes.get("ContentType", "")
+        if content_type not in _WORKBOOK_CONTENT_TYPES:
+            return
+        if local_name == "Default":
+            raise DataValidationError("Spreadsheet has an ambiguous default workbook part")
+        if local_name == "Override":
+            workbook_parts.append(attributes.get("PartName", ""))
+
+    parser = expat.ParserCreate(namespace_separator="}")
+    parser.StartElementHandler = start_element
+    try:
+        parser.Parse(raw, True)
+    except DataValidationError:
+        raise
+    except expat.ExpatError as exc:
+        raise DataValidationError("Spreadsheet content types are invalid") from exc
+    if workbook_parts != ["/xl/workbook.xml"]:
+        raise DataValidationError("Spreadsheet workbook part is noncanonical or ambiguous")
+
+
+def _workbook_sheet_ids(raw: bytes, limits: SpreadsheetLimits) -> tuple[str, ...]:
+    identifiers: list[str] = []
+
+    def start_element(name: str, attributes: dict[str, str]) -> None:
+        if name.rsplit("}", maxsplit=1)[-1] != "sheet":
+            return
+        relationship_ids = [
+            value for key, value in attributes.items() if key.endswith("}id") and value
+        ]
+        if len(relationship_ids) != 1:
+            raise DataValidationError("Spreadsheet sheet has an invalid relationship identity")
+        identifiers.append(relationship_ids[0])
+        if len(identifiers) > limits.max_sheets:
+            raise DataValidationError(
+                "Spreadsheet exceeds its worksheet-count limit", subtype="resource_limit"
+            )
+
+    parser = expat.ParserCreate(namespace_separator="}")
+    parser.StartElementHandler = start_element
+    try:
+        parser.Parse(raw, True)
+    except DataValidationError:
+        raise
+    except expat.ExpatError as exc:
+        raise DataValidationError("Spreadsheet workbook XML is invalid") from exc
+    if not identifiers or len(identifiers) != len(set(identifiers)):
+        raise DataValidationError("Spreadsheet sheet relationship identities are missing or duplicate")
+    return tuple(identifiers)
+
+
+def _worksheet_relationship_targets(raw: bytes, sheet_ids: tuple[str, ...]) -> tuple[str, ...]:
+    relationships: dict[str, tuple[str, str, str]] = {}
 
     def start_element(name: str, attributes: dict[str, str]) -> None:
         if name.rsplit("}", maxsplit=1)[-1] != "Relationship":
             return
-        relationship_type = attributes.get("Type", "")
-        if not relationship_type.endswith("/worksheet"):
-            return
-        if attributes.get("TargetMode", "Internal") != "Internal":
-            raise DataValidationError("Spreadsheet worksheet relationship must be internal")
-        target = attributes.get("Target", "")
-        relative = re.fullmatch(r"worksheets/sheet[1-9][0-9]*\.xml", target)
-        absolute = re.fullmatch(r"/xl/worksheets/sheet[1-9][0-9]*\.xml", target)
-        if relative is None and absolute is None:
-            raise DataValidationError("Spreadsheet worksheet relationship target is noncanonical")
-        targets.append(f"xl/{target}" if relative is not None else target.removeprefix("/"))
+        identifier = attributes.get("Id", "")
+        if not identifier or identifier in relationships:
+            raise DataValidationError("Spreadsheet relationship identity is missing or duplicate")
+        relationships[identifier] = (
+            attributes.get("Type", ""),
+            attributes.get("Target", ""),
+            attributes.get("TargetMode", "Internal"),
+        )
 
     parser = expat.ParserCreate(namespace_separator="}")
     parser.StartElementHandler = start_element
@@ -283,8 +351,22 @@ def _worksheet_relationship_targets(raw: bytes) -> tuple[str, ...]:
         raise
     except expat.ExpatError as exc:
         raise DataValidationError("Spreadsheet workbook relationships are invalid") from exc
-    if not targets:
-        raise DataValidationError("Spreadsheet does not declare a worksheet relationship")
+
+    targets: list[str] = []
+    for identifier in sheet_ids:
+        relationship = relationships.get(identifier)
+        if relationship is None:
+            raise DataValidationError("Spreadsheet sheet relationship target is missing")
+        relationship_type, target, target_mode = relationship
+        if relationship_type not in _WORKSHEET_RELATIONSHIP_TYPES:
+            raise DataValidationError("Spreadsheet sheet relationship type is unsupported")
+        if target_mode != "Internal":
+            raise DataValidationError("Spreadsheet worksheet relationship must be internal")
+        relative = re.fullmatch(r"worksheets/sheet[1-9][0-9]*\.xml", target)
+        absolute = re.fullmatch(r"/xl/worksheets/sheet[1-9][0-9]*\.xml", target)
+        if relative is None and absolute is None:
+            raise DataValidationError("Spreadsheet worksheet relationship target is noncanonical")
+        targets.append(f"xl/{target}" if relative is not None else target.removeprefix("/"))
     if len(targets) != len(set(targets)):
         raise DataValidationError("Spreadsheet contains duplicate worksheet relationships")
     return tuple(targets)
@@ -299,6 +381,8 @@ def _validate_parts(package: zipfile.ZipFile, limits: SpreadsheetLimits) -> None
     seen: set[str] = set()
     part_by_name: dict[str, zipfile.ZipInfo] = {}
     total_expanded = 0
+    content_types_body: bytes | None = None
+    workbook_body: bytes | None = None
     relationship_body: bytes | None = None
     for info in infos:
         name = _safe_part_name(info)
@@ -322,16 +406,23 @@ def _validate_parts(package: zipfile.ZipFile, limits: SpreadsheetLimits) -> None
                     "Spreadsheet XML part exceeds its byte limit", subtype="resource_limit"
                 )
             body = _canonical_xml_bytes(_read_part(package, info))
-            if name == "xl/_rels/workbook.xml.rels":
+            if name == "[Content_Types].xml":
+                content_types_body = body
+            elif name == "xl/workbook.xml":
+                workbook_body = body
+            elif name == "xl/_rels/workbook.xml.rels":
                 relationship_body = body
     required = {"[Content_Types].xml", "xl/workbook.xml", "xl/_rels/workbook.xml.rels"}
-    if not required.issubset(seen) or relationship_body is None:
+    if (
+        not required.issubset(seen)
+        or content_types_body is None
+        or workbook_body is None
+        or relationship_body is None
+    ):
         raise DataValidationError("Spreadsheet is missing required OOXML parts")
-    worksheet_targets = _worksheet_relationship_targets(relationship_body)
-    if len(worksheet_targets) > limits.max_sheets:
-        raise DataValidationError(
-            "Spreadsheet exceeds its worksheet-count limit", subtype="resource_limit"
-        )
+    _validate_content_types(content_types_body)
+    sheet_ids = _workbook_sheet_ids(workbook_body, limits)
+    worksheet_targets = _worksheet_relationship_targets(relationship_body, sheet_ids)
     for target in worksheet_targets:
         target_info = part_by_name.get(target)
         if target_info is None or target_info.is_dir():

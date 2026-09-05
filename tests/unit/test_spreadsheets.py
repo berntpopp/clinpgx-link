@@ -226,3 +226,27 @@ def test_relationship_target_cannot_bypass_worksheet_admission(
         spreadsheets.parse_spreadsheet(
             io.BytesIO(raw), limits=spreadsheets.SpreadsheetLimits.for_tests(max_cells=1)
         )
+
+
+def test_content_types_cannot_select_an_unvalidated_workbook(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Bind preflight to the same workbook part selected by openpyxl's manifest reader."""
+    from clinpgx_link.exceptions import DataValidationError
+    from clinpgx_link.ingest import spreadsheets
+
+    raw = _workbook_bytes()
+    output = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(raw)) as source, zipfile.ZipFile(
+        output, "w", compression=zipfile.ZIP_DEFLATED
+    ) as target:
+        workbook = source.read("xl/workbook.xml")
+        for info in source.infolist():
+            body = source.read(info)
+            if info.filename == "[Content_Types].xml":
+                body = body.replace(b'/xl/workbook.xml"', b'/xl/alias.xml"')
+            target.writestr(info, body)
+        target.writestr("xl/alias.xml", workbook)
+    monkeypatch.setattr(spreadsheets, "load_workbook", _must_not_open)
+    with pytest.raises(DataValidationError, match="workbook part"):
+        spreadsheets.parse_spreadsheet(io.BytesIO(output.getvalue()))
