@@ -203,10 +203,16 @@ than silently inflating `core`.
 
 Produce deterministic bytes: sort tar paths; normalize file modes to `0444`,
 directory modes to `0555`, uid/gid to zero, owner/group names to empty, and mtimes to
-a documented `SOURCE_DATE_EPOCH`; use fixed zstd parameters. Pin the Python, SQLite,
-zstd, archive/XML/spreadsheet parser versions in `uv.lock` and record their effective
-versions in the validation report. Build SQLite in a
-stable insertion order, create indexes in a fixed order, set `user_version`, run
+a documented `SOURCE_DATE_EPOCH`; use fixed zstd parameters. Run builds in an OCI
+toolchain image pinned by manifest digest; that image pins the Python interpreter,
+SQLite runtime/CLI, zstd implementation and system libraries. `uv.lock` pins only
+the Python dependencies, including archive/XML/spreadsheet libraries—it does not pin
+Python or system SQLite. At startup, `build`, `validate`, and `pack` compare their
+effective Python, `sqlite3.sqlite_version`, zstd and native-library versions with the
+reviewed toolchain contract and abort before producing release outputs on any
+mismatch. Record the image digest and all effective versions in the validation
+report. Build SQLite in a stable insertion order, create indexes in a fixed order,
+set `user_version`, run
 deterministic finalization (`ANALYZE` policy fixed and `VACUUM`), close/checkpoint it,
 and reopen it immutable for validation. Two builds from identical source bytes,
 the same frozen acquisition receipt, transform/rights contracts, toolchain and epoch
@@ -240,7 +246,7 @@ Each `artifacts[]` item contains:
 - local content SHA-256 and acquisition timestamp;
 - embedded creation marker and its parsed timestamp when available;
 - sorted member inventory with path, compressed/uncompressed sizes and content
-  digest for every consumed member;
+  digest for every retained member, plus its consumed/indexed status;
 - parser name/version or transformation-contract digest;
 - `indexed`, `metadata_only`, `quarantined`, or `excluded` status and reason;
 - imported row/document counts, rejected-row count, and validation result;
@@ -466,8 +472,10 @@ digest. It does not accept `latest` in production. A convenience resolution of t
 newest tag may exist only for interactive local development and must print the
 resolved exact identity before acting. Predecessor tag and manifest digest are both
 present or both absent; they are required when the direct predecessor is not already
-retained. The workflow performs publication; do not put GitHub-token publication
-logic in the ordinary application CLI.
+retained. `install` likewise requires all three predecessor path/digest arguments or
+none, and rejects a supplied predecessor whose artifact digest is not the
+candidate's `previous_known_good_digest`. The workflow performs publication; do not
+put GitHub-token publication logic in the ordinary application CLI.
 
 The router's existing equivalent commands are
 `validate-data-manifest`, `materialize-data`, and `rollback-data`
@@ -576,8 +584,10 @@ predecessor/clinpgx-core.tar.zst
 The predecessor directory is omitted only when its digest is already retained and
 reverified, or for the initial empty-root self-reference bootstrap. Extra seed files,
 wrong profile/tag, and absent or mismatched manifest/artifact identities fail closed.
-The networked preparation step and offline init both verify the seed-index digest;
-the init container still has `network_mode: none`.
+The networked preparation step and offline init both verify the seed-index digest,
+pinned as `CLINPGX_LINK_DATA_SEED_INDEX_SHA256` in Compose and
+`container-release.json.smoke_environment`; the init container still has
+`network_mode: none`.
 
 Internally, installation separates **stage** from **activate**:
 
@@ -776,6 +786,9 @@ and `597-689`, and `../clingen-link/.github/workflows/data-refresh.yml:32-36` an
   local model; unknown fields and mutable tags fail;
 - project `source-manifest` and `licenses` schemas reject missing, extra, duplicate,
   mistyped and noncanonical fields;
+- the build workflow uses the reviewed digest-pinned toolchain image, while
+  `uv.lock` reproducibly installs its Python dependencies; an interpreter, SQLite,
+  zstd or native-library version mismatch fails before any release output is sealed;
 - two builds with identical source bytes, frozen acquisition receipt, transform,
   rights, schema/toolchain pins and epoch produce identical SQLite, tree, tar/zstd,
   outer manifest, release-key and published validation-report bytes;
@@ -918,14 +931,23 @@ The main specification should make these choices explicit:
 4. Publish four exact assets and use content-/contract-addressed immutable tags.
    No `latest`, mutable assets or overwrite path.
 5. Pin production to one exact core runtime identity. Keep API cache and optional
-   profiles outside that identity.
+   profiles outside that identity. The fleet controller alone activates production
+   data by replacement/restart; `/health` is identity-bound readiness.
 6. Schedule candidate polling during days 6-12 monthly, with manual protected
    publication initially. A stable source-set no-op avoids duplicate releases.
 7. Require independently trusted manifest digest, safe bounded extraction, atomic
    activation, retained previous-known-good and offline rollback before deployment.
+   A clean/skipped upgrade seeds and stages only the exact direct predecessor before
+   candidate activation; it never recursively installs release history.
 8. Keep data releases independent of application SemVer. After a data release is
    actually available, update `container-release.json`, Compose defaults and smoke
    digests together in an application PR; never predeclare unbuilt release facts.
+9. Retain exact archive and member bytes for every admitted profile source inside
+   SQLite BLOB tables so historical source access survives cache loss and upstream
+   replacement while keeping the tar inventory fixed at four files.
+10. Freeze the first accepted acquisition receipt into a new release. Later checks
+    of identical bytes are separate observations and take an `unchanged` path before
+    packing; reproducibility always names the frozen receipt as an input.
 
 The only policy decision that cannot be made technically is where ClinPGx data may
 be redistributed. The implementation should not block on that decision: it can
