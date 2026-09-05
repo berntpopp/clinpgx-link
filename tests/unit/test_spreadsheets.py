@@ -159,3 +159,27 @@ def test_utf16_worksheet_cannot_hide_doctype(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setattr(spreadsheets, "load_workbook", _must_not_open)
     with pytest.raises(DataValidationError):
         spreadsheets.parse_spreadsheet(io.BytesIO(raw))
+
+
+def test_xml_namespace_variants_cannot_hide_sparse_cells(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Catch valid non-ASCII namespace prefixes that defeat byte-regex matching."""
+    from clinpgx_link.exceptions import DataValidationError
+    from clinpgx_link.ingest import spreadsheets
+
+    raw = _replace_part(
+        _workbook_bytes(),
+        "xl/worksheets/sheet1.xml",
+        lambda body: body.replace(
+            b'<c r="A1"',
+            '<é:c xmlns:é="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+            'r="C1"'.encode(),
+            1,
+        ).replace(b"</c>", "</é:c>".encode(), 1),
+    )
+    monkeypatch.setattr(spreadsheets, "load_workbook", _must_not_open)
+    with pytest.raises(DataValidationError, match="cell count or coordinate"):
+        spreadsheets.parse_spreadsheet(
+            io.BytesIO(raw), limits=spreadsheets.SpreadsheetLimits.for_tests(max_columns=2)
+        )

@@ -9,6 +9,7 @@ import zipfile
 from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Any, BinaryIO
+from xml.parsers import expat
 
 from openpyxl import load_workbook  # type: ignore[import-untyped]
 from openpyxl.utils import get_column_letter, range_boundaries  # type: ignore[import-untyped]
@@ -150,9 +151,6 @@ def _range_bounds(reference: str, *, context: str) -> tuple[int, int, int, int]:
     return tuple(int(value) for value in bounds)  # type: ignore[return-value]
 
 
-_WORKSHEET_TAG = re.compile(
-    rb"<(?:[A-Za-z_][A-Za-z0-9_.-]*:)?(dimension|row|c|mergeCell)\b([^<>]*)/?>"
-)
 _XML_DECLARATION = re.compile(r"^\s*<\?xml\b([^?]*)\?>", re.IGNORECASE)
 _XML_ENCODING = re.compile(r"(?:^|\s)encoding\s*=\s*(['\"])(.*?)\1", re.IGNORECASE)
 
@@ -177,28 +175,19 @@ def _canonical_xml_bytes(raw: bytes) -> bytes:
     return canonical
 
 
-def _xml_attribute(attributes: bytes, name: bytes) -> str:
-    match = re.search(rb"(?:^|\s)" + name + rb"\s*=\s*(['\"])(.*?)\1", attributes)
-    if match is None:
-        return ""
-    try:
-        return match.group(2).decode("ascii")
-    except UnicodeDecodeError:
-        return ""
-
-
 def _validate_worksheet_xml(raw: bytes, limits: SpreadsheetLimits) -> None:
     max_row = 0
     max_column = 0
     cell_count = 0
     merge_count = 0
     merged_cells = 0
-    for matched in _WORKSHEET_TAG.finditer(raw):
-        name = matched.group(1)
-        attributes = matched.group(2)
-        if name == b"dimension":
+
+    def start_element(name: str, attributes: dict[str, str]) -> None:
+        nonlocal cell_count, max_column, max_row, merge_count, merged_cells
+        local_name = name.rsplit("}", maxsplit=1)[-1]
+        if local_name == "dimension":
             minimum_column, minimum_row, maximum_column, maximum_row = _range_bounds(
-                _xml_attribute(attributes, b"ref"), context="dimension"
+                attributes.get("ref", ""), context="dimension"
             )
             if minimum_column < 1 or minimum_row < 1:
                 raise DataValidationError("Spreadsheet dimension is invalid")
@@ -212,16 +201,16 @@ def _validate_worksheet_xml(raw: bytes, limits: SpreadsheetLimits) -> None:
                 )
             max_row = max(max_row, maximum_row)
             max_column = max(max_column, maximum_column)
-        elif name == b"row":
-            row = _xml_attribute(attributes, b"r")
+        elif local_name == "row":
+            row = attributes.get("r", "")
             if not row.isascii() or not row.isdecimal() or int(row) > limits.max_rows:
                 raise DataValidationError(
                     "Spreadsheet row dimension exceeds its bounds", subtype="resource_limit"
                 )
             max_row = max(max_row, int(row))
-        elif name == b"c":
+        elif local_name == "c":
             minimum_column, minimum_row, maximum_column, maximum_row = _range_bounds(
-                _xml_attribute(attributes, b"r"), context="cell coordinate"
+                attributes.get("r", ""), context="cell coordinate"
             )
             cell_count += 1
             max_row = max(max_row, maximum_row)
@@ -235,9 +224,9 @@ def _validate_worksheet_xml(raw: bytes, limits: SpreadsheetLimits) -> None:
                     "Spreadsheet cell count or coordinate exceeds its bounds",
                     subtype="resource_limit",
                 )
-        elif name == b"mergeCell":
+        elif local_name == "mergeCell":
             minimum_column, minimum_row, maximum_column, maximum_row = _range_bounds(
-                _xml_attribute(attributes, b"ref"), context="merge range"
+                attributes.get("ref", ""), context="merge range"
             )
             merge_count += 1
             merged_cells += (maximum_row - minimum_row + 1) * (
@@ -254,6 +243,15 @@ def _validate_worksheet_xml(raw: bytes, limits: SpreadsheetLimits) -> None:
                 )
             max_row = max(max_row, maximum_row)
             max_column = max(max_column, maximum_column)
+
+    parser = expat.ParserCreate(namespace_separator="}")
+    parser.StartElementHandler = start_element
+    try:
+        parser.Parse(raw, True)
+    except DataValidationError:
+        raise
+    except expat.ExpatError as exc:
+        raise DataValidationError("Spreadsheet worksheet XML is invalid") from exc
     if max_row * max_column > limits.max_cells:
         raise DataValidationError(
             "Spreadsheet dimension exceeds its cell bounds", subtype="resource_limit"
