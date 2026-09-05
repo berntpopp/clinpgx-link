@@ -10,6 +10,7 @@ from fastmcp import Client
 
 from clinpgx_link.content.store import ContentStore
 from clinpgx_link.models import SourceInfo
+from tests.unit.mcp_assertions import fence_count
 
 
 @pytest.mark.asyncio
@@ -108,16 +109,6 @@ async def test_real_mcp_structure_inlines_typed_short_scalars_and_fences_strings
     assert base64.b64decode(exact.structured_content["result"]["base64"]) == raw
 
 
-def _fence_count(value):
-    if isinstance(value, dict):
-        return int(value.get("kind") == "untrusted_text") + sum(
-            _fence_count(child) for child in value.values()
-        )
-    if isinstance(value, list):
-        return sum(_fence_count(child) for child in value)
-    return 0
-
-
 @pytest.mark.asyncio
 async def test_real_mcp_structure_pages_for_fence_and_mirrored_envelope_limits(content_store):
     from clinpgx_link.mcp.facade import create_mcp
@@ -150,7 +141,7 @@ async def test_real_mcp_structure_pages_for_fence_and_mirrored_envelope_limits(c
             payload = envelope["result"]
             assert json.loads(call.content[0].text) == envelope
             assert len(call.content[0].text.encode()) <= 100_000
-            assert _fence_count(envelope) <= 128
+            assert fence_count(envelope) <= 128
             assert payload["returned"] > 0
             returned_keys.extend(item["key"]["text"] for item in payload["items"])
             if not payload["has_more"]:
@@ -161,6 +152,35 @@ async def test_real_mcp_structure_pages_for_fence_and_mirrored_envelope_limits(c
 
     assert returned_keys == list(values)
     assert len(returned_keys) == len(set(returned_keys))
+
+
+@pytest.mark.asyncio
+async def test_real_mcp_structure_inlines_immediate_array_scalar_children(content_store):
+    from clinpgx_link.mcp.facade import create_mcp
+
+    raw = b'["evidence",7,true,null]'
+    source = SourceInfo(
+        "ClinPGx",
+        "https://api.clinpgx.org/v1/data/gene/PA124",
+        "2026-09-05T10:00:00Z",
+        hashlib.sha256(raw).hexdigest(),
+        "api",
+    )
+    ref = content_store.put(raw, source, "application/json")
+    async with Client(create_mcp(content_store=content_store)) as client:
+        call = await client.call_tool(
+            "get_source_content", {"content_ref": ref, "representation": "structure"}
+        )
+
+    assert json.loads(call.content[0].text) == call.structured_content
+    items = call.structured_content["result"]["items"]
+    assert items[0]["key"] == 0
+    assert items[0]["value"]["kind"] == "untrusted_text"
+    assert items[0]["value"]["text"] == "evidence"
+    assert items[1]["value"] == 7
+    assert items[2]["value"] is True
+    assert "value" in items[3]
+    assert items[3]["value"] is None
 
 
 @pytest.mark.asyncio

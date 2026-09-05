@@ -25,7 +25,7 @@ from clinpgx_link.mcp.data_tools import register_data_tools
 from clinpgx_link.mcp.dataset_record_tools import register_dataset_record_tools
 from clinpgx_link.mcp.dataset_tools import register_dataset_tools
 from clinpgx_link.mcp.diagnostics import register_diagnostics
-from clinpgx_link.mcp.envelope import error_result, success_result
+from clinpgx_link.mcp.envelope import MAX_ENVELOPE_BYTES, error_result, success_result
 from clinpgx_link.mcp.middleware import BoundaryGuard
 from clinpgx_link.mcp.record_tools import register_record_tools
 from clinpgx_link.mcp.schema_tools import register_schema_tool
@@ -41,7 +41,6 @@ _ANNOTATIONS = {
     "idempotentHint": True,
     "openWorldHint": True,
 }
-_CONTENT_ENVELOPE_LIMIT_BYTES = 100_000
 _BOUNDARY_TIMING_RESERVE_BYTES = 100
 
 
@@ -117,7 +116,7 @@ def _content_result(
             separators=(",", ":"),
             allow_nan=False,
         ).encode("utf-8")
-        if len(serialized) <= _CONTENT_ENVELOPE_LIMIT_BYTES - _BOUNDARY_TIMING_RESERVE_BYTES:
+        if len(serialized) <= MAX_ENVELOPE_BYTES - _BOUNDARY_TIMING_RESERVE_BYTES:
             return result
     raise ResponseTooLargeError("A structure item cannot fit in the MCP response envelope.")
 

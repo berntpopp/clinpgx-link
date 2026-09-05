@@ -11,6 +11,7 @@ from clinpgx_link.content.assets import AssetReference
 from clinpgx_link.content.store import ContentStore
 from clinpgx_link.mcp.facade import create_mcp
 from clinpgx_link.models import SourceInfo, SourceResponse
+from tests.unit.mcp_assertions import fence_count
 from tests.unit.test_repository import FIXTURES, _repository
 
 
@@ -35,16 +36,6 @@ class _LongReferenceJsonRepository:
             ),
             {"media_type": "application/json"},
         )
-
-
-def _fence_count(value):
-    if isinstance(value, dict):
-        return int(value.get("kind") == "untrusted_text") + sum(
-            _fence_count(child) for child in value.values()
-        )
-    if isinstance(value, list):
-        return sum(_fence_count(child) for child in value)
-    return 0
 
 
 @pytest.mark.asyncio
@@ -135,7 +126,7 @@ async def test_long_asset_reference_structure_pages_stay_mirrored_and_progress(t
                 payload = envelope["result"]
                 assert json.loads(call.content[0].text) == envelope
                 assert len(call.content[0].text.encode()) <= 100_000
-                assert _fence_count(envelope) <= 128
+                assert fence_count(envelope) <= 128
                 assert payload["returned"] > 0
                 returned_keys.extend(item["key"]["text"] for item in payload["items"])
                 if not payload["has_more"]:

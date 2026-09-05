@@ -23,6 +23,7 @@ from clinpgx_link.mcp.untrusted_content import UntrustedText, enforce_limits, fe
 from clinpgx_link.models import SourceInfo
 
 REQUEST_ID: ContextVar[str] = ContextVar("clinpgx_request_id", default="")
+MAX_ENVELOPE_BYTES = 100_000
 _MESSAGES = {
     "invalid_input": "The request is outside the supported input contract.",
     "not_found": "The requested record or tool is unavailable.",
@@ -54,7 +55,7 @@ def wire_result(payload: dict[str, Any], *, is_error: bool = False) -> ToolResul
             pending.extend(item)
     enforce_limits(fences)
     serialized = json.dumps(payload, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
-    if len(serialized.encode("utf-8")) > 100_000:
+    if len(serialized.encode("utf-8")) > MAX_ENVELOPE_BYTES:
         raise ResponseTooLargeError("The response exceeds its token budget.")
     return ToolResult(
         content=[TextContent(type="text", text=serialized)],
