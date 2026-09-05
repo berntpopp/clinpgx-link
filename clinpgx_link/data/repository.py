@@ -12,6 +12,7 @@ from typing import Any, cast
 from clinpgx_link.config import settings
 from clinpgx_link.data.coverage import field_metadata, known_filters
 from clinpgx_link.exceptions import (
+    DataValidationError,
     InvalidInputError,
     NotFoundError,
     ResponseTooLargeError,
@@ -396,6 +397,10 @@ class DatasetRepository:
                 "AND m.match_mode='exact' LIMIT 1",
                 (record_id,),
             ).fetchone()
+            if annotation is None:
+                raise DataValidationError(
+                    "Summary annotation identity is unavailable for this installed row"
+                )
             target = (
                 "summary_ann_evidence.tsv"
                 if result_type == "evidence"
@@ -403,7 +408,7 @@ class DatasetRepository:
             )
             clauses = ["r.dataset_id=?", "r.member=?"]
             parameters: list[Any] = [parent["dataset_id"], target]
-            filters = {"annotation_id": str(annotation[0])} if annotation else {}
+            filters = {"annotation_id": str(annotation[0])}
         elif result_type == "relationship" and parent["member"] == "relationships.tsv":
             clauses = ["r.dataset_id=?", "r.member='relationships.tsv'", "r.record_id=?"]
             parameters = [parent["dataset_id"], record_id]

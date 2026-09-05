@@ -363,6 +363,28 @@ def test_quarantined_member_rolls_back_rows_inserted_before_late_parse_failure(
     assert dataset == 0
 
 
+@pytest.mark.parametrize(
+    ("member", "body"),
+    [
+        ("summary_annotations.tsv", b"Summary Annotation ID\tGene\n\tCYP2C19\n"),
+        ("summary_ann_evidence.tsv", b"Summary Annotation ID\tEvidence ID\n\tE1\n"),
+        ("summary_ann_alleles.tsv", b"Summary Annotation ID\tGenotype/Allele\n\t*1\n"),
+    ],
+)
+def test_summary_join_members_require_nonempty_annotation_identity(
+    tmp_path: Path, member: str, body: bytes
+) -> None:
+    """Catch source rows that cannot participate in the declared identity join."""
+    from clinpgx_link.exceptions import DataValidationError
+    from clinpgx_link.ingest.builder import build_snapshot
+
+    path = tmp_path / "summaryAnnotations.zip"
+    _archive(path, {member: body})
+
+    with pytest.raises(DataValidationError, match="annotation identity"):
+        build_snapshot([_source(path)], tmp_path / "out", RELEASE_TAG)
+
+
 def test_auxiliary_rows_gain_only_profiled_gene_allele_and_drug_memberships(
     tmp_path: Path,
 ) -> None:

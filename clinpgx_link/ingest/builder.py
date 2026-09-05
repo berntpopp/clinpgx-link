@@ -42,6 +42,9 @@ _TRANSFORM_FILES = (
     "ingest/tabular.py",
 )
 _QUARANTINED_LEGACY_DATASET = "data/haplotypes.zip"
+_SUMMARY_JOIN_MEMBERS = frozenset(
+    {"summary_annotations.tsv", "summary_ann_evidence.tsv", "summary_ann_alleles.tsv"}
+)
 
 
 @dataclass(frozen=True)
@@ -159,10 +162,22 @@ def _tabular_records(
     dataset_id: str, member: AcquiredMember, delimiter: str
 ) -> tuple[tuple[str, ...], Iterable[_ParsedRecord]]:
     reader = TabularReader(io.BytesIO(member.raw), delimiter=delimiter)
+    requires_annotation = (
+        dataset_id == "data/summaryAnnotations.zip" and member.path in _SUMMARY_JOIN_MEMBERS
+    )
+    if requires_annotation and "Summary Annotation ID" not in reader.headers:
+        raise DataValidationError("Summary join member omits its annotation identity header")
 
     def records() -> Iterator[_ParsedRecord]:
         for row in reader:
             memberships = tabular_memberships(dataset_id, member.path, row.fields)
+            if requires_annotation and not any(
+                membership.kind == "annotation_id"
+                and membership.match_mode == "exact"
+                and membership.value
+                for membership in memberships
+            ):
+                raise DataValidationError("Summary join row omits its annotation identity")
             yield _ParsedRecord(row.ordinal, None, None, row.fields, memberships)
 
     return reader.headers, records()

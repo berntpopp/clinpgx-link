@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import io
+import sqlite3
 import zipfile
 from pathlib import Path
 
@@ -241,6 +242,50 @@ def test_summary_annotation_joins_return_each_original_child_once_with_provenanc
     assert all(row["join"]["relation_kind"] == result_type for row in joined.value)
     assert all(row["join"]["source_row_ids"] == [row["record_id"]] for row in joined.value)
     assert all(row["fields"]["Summary Annotation ID"] == "655384602" for row in joined.value)
+
+
+def test_summary_join_without_parent_annotation_identity_fails_closed(tmp_path: Path) -> None:
+    """Catch an incomplete installed join key broadening into every evidence row."""
+    from clinpgx_link.data.catalog import SourceInput
+    from clinpgx_link.data.repository import DatasetRepository
+    from clinpgx_link.exceptions import DataValidationError
+    from clinpgx_link.ingest.builder import build_snapshot
+
+    archive = tmp_path / "summaryAnnotations.zip"
+    _archive(
+        archive,
+        {
+            "summary_annotations.tsv": b"Summary Annotation ID\tGene\nparent\tCYP2C19\n",
+            "summary_ann_evidence.tsv": (
+                b"Summary Annotation ID\tEvidence ID\tPMID\n"
+                b"one\tE1\t1\n"
+                b"two\tE2\t2\n"
+            ),
+        },
+    )
+    source = SourceInput.from_path(
+        dataset_id="data/summaryAnnotations.zip",
+        path=archive,
+        source_url="https://api.clinpgx.org/v1/download/file/data/summaryAnnotations.zip",
+        retrieved_at="2026-09-05T08:00:00Z",
+        published_at=None,
+        media_type="application/zip",
+        license_id="operator-local-only",
+        tier="approved_registry",
+    )
+    built = build_snapshot([source], tmp_path / "out", RELEASE_TAG)
+    with sqlite3.connect(built.database) as connection:
+        connection.execute(
+            "DELETE FROM membership WHERE kind='annotation_id' AND value='parent'"
+        )
+    repository = DatasetRepository(built.database)
+    parent = repository.search(
+        "data/summaryAnnotations.zip", member="summary_annotations.tsv"
+    ).value[0]
+
+    with pytest.raises(DataValidationError, match="identity"):
+        repository.related(parent["record_id"], result_type="evidence")
+    repository.close()
 
 
 def test_reverse_relationship_result_preserves_published_endpoint_direction(tmp_path: Path) -> None:
