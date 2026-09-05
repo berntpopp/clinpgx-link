@@ -218,7 +218,10 @@ def _create_recovery_link(parent_fd: int, destination_name: str) -> str:
 def _valid_timing(value: object, *, allow_zero: bool) -> bool:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return False
-    number = float(value)
+    try:
+        number = float(value)
+    except OverflowError:
+        return False
     return math.isfinite(number) and (number >= 0 if allow_zero else number > 0)
 
 
@@ -297,7 +300,13 @@ class SourceDownloader:
         *,
         expected_sha256: str | None = None,
     ) -> DownloadReceipt:
-        """Stream, validate, and atomically publish one official source file."""
+        """Stream, validate, and atomically publish one official source file.
+
+        Publication is accepted after the replacement directory fsync and final
+        monotonic deadline check. Cleanup after that commit point is best effort:
+        failure can retain a hidden recovery link but cannot turn a durable accepted
+        destination into a falsely reported failed acquisition.
+        """
         api_path, s3_path = _dataset_path(dataset_id)
         expected = _expected_digest(expected_sha256)
         if self._closed:
@@ -492,6 +501,7 @@ class SourceDownloader:
     ) -> None:
         """Publish with a recoverable old-name state until commit is admitted."""
         recovery_name: str | None = None
+        replaced = False
         try:
             if destination_exists:
                 recovery_name = _create_recovery_link(parent_fd, destination_name)
@@ -503,28 +513,35 @@ class SourceDownloader:
                 src_dir_fd=parent_fd,
                 dst_dir_fd=parent_fd,
             )
+            replaced = True
             try:
                 self._check_deadline(deadline)
                 os.fsync(parent_fd)
                 self._check_deadline(deadline)
-                if recovery_name is not None:
+            except BaseException:
+                try:
+                    if recovery_name is not None:
+                        os.replace(
+                            recovery_name,
+                            destination_name,
+                            src_dir_fd=parent_fd,
+                            dst_dir_fd=parent_fd,
+                        )
+                        recovery_name = None
+                    else:
+                        os.unlink(destination_name, dir_fd=parent_fd)
+                    os.fsync(parent_fd)
+                except BaseException as exc:
+                    raise UpstreamUnavailableError("Source publication recovery failed.") from exc
+                raise
+            if recovery_name is not None:
+                try:
                     os.unlink(recovery_name, dir_fd=parent_fd)
                     recovery_name = None
-            except BaseException:
-                if recovery_name is not None:
-                    os.replace(
-                        recovery_name,
-                        destination_name,
-                        src_dir_fd=parent_fd,
-                        dst_dir_fd=parent_fd,
-                    )
-                    recovery_name = None
-                else:
-                    os.unlink(destination_name, dir_fd=parent_fd)
-                os.fsync(parent_fd)
-                raise
+                except OSError:
+                    pass
         finally:
-            if recovery_name is not None:
+            if recovery_name is not None and not replaced:
                 with suppress(OSError):
                     os.unlink(recovery_name, dir_fd=parent_fd)
 

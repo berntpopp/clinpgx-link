@@ -411,6 +411,154 @@ async def test_deadline_elapsed_during_data_fsync_preserves_existing_destination
     assert list(parent.iterdir()) == [destination]
 
 
+@pytest.mark.asyncio
+async def test_failed_recovery_replace_retains_old_inode_under_recovery_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from clinpgx_link.releases import acquire
+
+    parent = _parent(tmp_path)
+    destination = parent / "archive.zip"
+    destination.write_bytes(b"old")
+    destination.chmod(0o600)
+    real_fsync = os.fsync
+    real_replace = os.replace
+
+    def fail_commit_fsync(descriptor: int) -> None:
+        if stat.S_ISDIR(os.fstat(descriptor).st_mode) and destination.read_bytes() == b"new":
+            raise OSError("injected commit failure")
+        real_fsync(descriptor)
+
+    def fail_recovery_replace(source: str, target: str, **kwargs: object) -> None:
+        if source.endswith(".recovery"):
+            raise OSError("injected recovery failure")
+        real_replace(source, target, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(acquire.os, "fsync", fail_commit_fsync)
+    monkeypatch.setattr(acquire.os, "replace", fail_recovery_replace)
+    async with _client(
+        lambda request: httpx.Response(200, stream=_BytesStream(b"new"), request=request)
+    ) as client:
+        with pytest.raises(UpstreamUnavailableError, match="recovery failed") as caught:
+            await SourceDownloader(_settings(), client=client).download(
+                "data/archive.zip", destination
+            )
+
+    recovery = [path for path in parent.iterdir() if path.name.endswith(".recovery")]
+    assert "injected" not in str(caught.value)
+    assert destination.read_bytes() == b"new"
+    assert len(recovery) == 1
+    assert recovery[0].read_bytes() == b"old"
+
+
+@pytest.mark.asyncio
+async def test_failed_absent_destination_rollback_unlink_is_reported(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from clinpgx_link.releases import acquire
+
+    parent = _parent(tmp_path)
+    destination = parent / "archive.zip"
+    real_fsync = os.fsync
+    real_unlink = os.unlink
+
+    def fail_commit_fsync(descriptor: int) -> None:
+        if stat.S_ISDIR(os.fstat(descriptor).st_mode) and destination.exists():
+            raise OSError("injected commit failure")
+        real_fsync(descriptor)
+
+    def fail_destination_unlink(path: str, **kwargs: object) -> None:
+        if path == destination.name:
+            raise OSError("injected recovery failure")
+        real_unlink(path, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(acquire.os, "fsync", fail_commit_fsync)
+    monkeypatch.setattr(acquire.os, "unlink", fail_destination_unlink)
+    async with _client(
+        lambda request: httpx.Response(200, stream=_BytesStream(b"new"), request=request)
+    ) as client:
+        with pytest.raises(UpstreamUnavailableError, match="recovery failed") as caught:
+            await SourceDownloader(_settings(), client=client).download(
+                "data/archive.zip", destination
+            )
+
+    assert "injected" not in str(caught.value)
+    assert destination.read_bytes() == b"new"
+
+
+@pytest.mark.asyncio
+async def test_deadline_elapsed_during_commit_fsync_restores_existing_destination(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from clinpgx_link.releases import acquire
+
+    parent = _parent(tmp_path)
+    destination = parent / "archive.zip"
+    destination.write_bytes(b"old")
+    destination.chmod(0o600)
+    now = 0.0
+    real_fsync = os.fsync
+
+    def advance_after_commit_fsync(descriptor: int) -> None:
+        nonlocal now
+        real_fsync(descriptor)
+        if stat.S_ISDIR(os.fstat(descriptor).st_mode) and destination.read_bytes() == b"new":
+            now = 5.0
+
+    monkeypatch.setattr(acquire.os, "fsync", advance_after_commit_fsync)
+    async with _client(
+        lambda request: httpx.Response(200, stream=_BytesStream(b"new"), request=request)
+    ) as client:
+        with pytest.raises(UpstreamUnavailableError):
+            await SourceDownloader(
+                _settings(request_deadline_seconds=4),
+                client=client,
+                throughput_grace_seconds=10,
+                clock=lambda: now,
+            ).download("data/archive.zip", destination)
+
+    assert destination.read_bytes() == b"old"
+    assert list(parent.iterdir()) == [destination]
+
+
+@pytest.mark.asyncio
+async def test_post_commit_cleanup_failure_returns_success_and_retains_recovery(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from clinpgx_link.releases import acquire
+
+    parent = _parent(tmp_path)
+    destination = parent / "archive.zip"
+    destination.write_bytes(b"old")
+    destination.chmod(0o600)
+    now = 0.0
+    real_unlink = os.unlink
+
+    def fail_recovery_cleanup(path: str, **kwargs: object) -> None:
+        nonlocal now
+        if path.endswith(".recovery"):
+            now = 10.0
+            raise OSError("injected post-commit cleanup failure")
+        real_unlink(path, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(acquire.os, "unlink", fail_recovery_cleanup)
+    async with _client(
+        lambda request: httpx.Response(200, stream=_BytesStream(b"new"), request=request)
+    ) as client:
+        receipt = await SourceDownloader(
+            _settings(request_deadline_seconds=4),
+            client=client,
+            throughput_grace_seconds=10,
+            clock=lambda: now,
+        ).download("data/archive.zip", destination)
+
+    recovery = [path for path in parent.iterdir() if path.name.endswith(".recovery")]
+    assert receipt.byte_count == 3
+    assert destination.read_bytes() == b"new"
+    assert len(recovery) == 1
+    assert recovery[0].read_bytes() == b"old"
+
+
 class _BlockedStream(httpx.AsyncByteStream):
     async def __aiter__(self) -> AsyncIterator[bytes]:
         await asyncio.Event().wait()
@@ -552,3 +700,8 @@ async def test_close_only_closes_owned_client(tmp_path: Path) -> None:
 def test_rejects_boolean_or_nonfinite_timing_policy(keyword: str, value: float) -> None:
     with pytest.raises(InvalidInputError):
         SourceDownloader(_settings(), **{keyword: value})  # type: ignore[arg-type]
+
+
+def test_rejects_timing_policy_integer_too_large_for_float() -> None:
+    with pytest.raises(InvalidInputError):
+        SourceDownloader(_settings(), minimum_bytes_per_second=10**1000)
