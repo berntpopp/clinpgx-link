@@ -132,6 +132,41 @@ def test_unknown_filter_is_not_successful_empty(tmp_path: Path) -> None:
         repository.search("data/genes.zip", member="genes.tsv", filters={"Symobl": "CYP2C19"})
 
 
+def test_unknown_json_shape_cannot_create_or_advertise_guessed_entities(tmp_path: Path) -> None:
+    """Catch generic id/name keys and path substrings becoming undeclared search semantics."""
+    from clinpgx_link.data.catalog import SourceInput
+    from clinpgx_link.data.repository import DatasetRepository
+    from clinpgx_link.exceptions import InvalidInputError
+    from clinpgx_link.ingest.builder import build_snapshot
+
+    path = tmp_path / "unknown.json.zip"
+    _archive(
+        path,
+        {
+            "unknown.json": (
+                b'{"id":"PA1","name":"not an entity","relatedGenes":[{"id":"PA2"}]}'
+            )
+        },
+    )
+    source = SourceInput.from_path(
+        dataset_id="data/unknown.json.zip",
+        path=path,
+        source_url="https://api.clinpgx.org/v1/download/file/data/unknown.json.zip",
+        retrieved_at="2026-09-05T08:00:00Z",
+        published_at=None,
+        media_type="application/zip",
+        license_id="operator-local-only",
+        tier="approved_registry",
+    )
+    built = build_snapshot([source], tmp_path / "out", RELEASE_TAG)
+    repository = DatasetRepository(built.database)
+
+    with pytest.raises(InvalidInputError):
+        repository.search("data/unknown.json.zip", filters={"gene": "PA2"})
+    assert repository.search_entities("gene").details["total_count"] == 0
+    repository.close()
+
+
 @pytest.mark.parametrize(
     "kwargs",
     [

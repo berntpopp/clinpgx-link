@@ -392,6 +392,7 @@ def test_auxiliary_rows_gain_only_profiled_gene_allele_and_drug_memberships(
     from openpyxl import Workbook
 
     from clinpgx_link.data.repository import DatasetRepository
+    from clinpgx_link.exceptions import InvalidInputError
     from clinpgx_link.ingest.builder import build_snapshot
 
     inputs = tmp_path / "inputs"
@@ -504,6 +505,8 @@ def test_auxiliary_rows_gain_only_profiled_gene_allele_and_drug_memberships(
         ).details["total_count"]
         == 1
     )
+    with pytest.raises(InvalidInputError):
+        repository.search_entities("allele", filters={"chemical": "clopidogrel"})
     assert (
         repository.search(
             "data/pharmgkb_haplotype_frequencies_UKBB.zip",

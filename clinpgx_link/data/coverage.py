@@ -274,42 +274,81 @@ def contextual_json_memberships(
         allele = value.get("name")
         if isinstance(allele, str) and allele:
             memberships.append(Membership("allele", allele, "exact", "/name"))
+            memberships.append(Membership("name", allele, "exact", "/name"))
     return tuple(memberships)
 
 
-def _walk_json(value: Any, path: str = "") -> Iterable[tuple[str, str, str]]:
-    if isinstance(value, dict):
-        for key, child in value.items():
-            child_path = f"{path}/{key}"
-            if isinstance(child, (str, int)) and not isinstance(child, bool):
-                lowered = key.lower()
-                text = str(child)
-                if lowered == "id":
-                    kind = "id"
-                    if "relatedgenes" in path.lower():
-                        kind = "gene"
-                    elif "relatedchemicals" in path.lower() or "chemicals" in path.lower():
-                        kind = "chemical"
-                    yield kind, text, child_path
-                elif lowered in {"gene", "symbol", "genesymbol"}:
-                    yield "gene", text, child_path
-                elif lowered in {"name", "title"}:
-                    yield "name", text, child_path
-                elif lowered == "source":
-                    yield "source", text, child_path
-            else:
-                yield from _walk_json(child, child_path)
-    elif isinstance(value, list):
-        for index, child in enumerate(value):
-            yield from _walk_json(child, f"{path}/{index}")
+def _member(
+    memberships: list[Membership], value: Any, kind: str, source_field: str
+) -> None:
+    if isinstance(value, (str, int)) and not isinstance(value, bool) and str(value):
+        memberships.append(Membership(kind, str(value), "exact", source_field))
 
 
-def json_memberships(value: Any) -> tuple[Membership, ...]:
-    return tuple(
-        dict.fromkeys(
-            Membership(kind, text, "exact", path) for kind, text, path in _walk_json(value)
-        )
-    )
+def _guideline_memberships(pointer: str, value: Any) -> tuple[Membership, ...]:
+    memberships: list[Membership] = []
+    if pointer == "" and isinstance(value, dict):
+        guideline = value.get("guideline")
+        if isinstance(guideline, dict):
+            _member(memberships, guideline.get("id"), "id", "/guideline/id")
+            _member(memberships, guideline.get("name"), "name", "/guideline/name")
+            _member(memberships, guideline.get("source"), "source", "/guideline/source")
+            for field, kind in (("relatedGenes", "gene"), ("relatedChemicals", "chemical")):
+                related = guideline.get(field)
+                if isinstance(related, list):
+                    for index, item in enumerate(related):
+                        if isinstance(item, dict):
+                            _member(
+                                memberships,
+                                item.get("id"),
+                                kind,
+                                f"/guideline/{field}/{index}/id",
+                            )
+                            _member(
+                                memberships,
+                                item.get("name"),
+                                "name",
+                                f"/guideline/{field}/{index}/name",
+                            )
+    elif pointer.startswith("/citations/") and isinstance(value, dict):
+        _member(memberships, value.get("id"), "literature", f"{pointer}/id")
+        _member(memberships, value.get("title"), "name", f"{pointer}/title")
+    return tuple(dict.fromkeys(memberships))
+
+
+def _pathway_memberships(value: Any) -> tuple[Membership, ...]:
+    if not isinstance(value, dict):
+        return ()
+    memberships: list[Membership] = []
+    _member(memberships, value.get("id"), "id", "/id")
+    _member(memberships, value.get("name"), "name", "/name")
+    for field, kind in (("genes", "gene"), ("chemicals", "chemical")):
+        related = value.get(field)
+        if isinstance(related, list):
+            for index, item in enumerate(related):
+                if isinstance(item, dict):
+                    _member(memberships, item.get("id"), kind, f"/{field}/{index}/id")
+                    _member(memberships, item.get("name"), "name", f"/{field}/{index}/name")
+    return tuple(dict.fromkeys(memberships))
+
+
+def json_memberships(
+    dataset_id: str, member: str, pointer: str, value: Any
+) -> tuple[Membership, ...]:
+    """Project only dataset/pointer combinations backed by an explicit source profile."""
+    if dataset_id in {
+        "data/guidelineAnnotations.json.zip",
+        "data/guidelineAnnotations.extended.json.zip",
+    } and member.endswith(".json"):
+        return _guideline_memberships(pointer, value)
+    if dataset_id == "data/pathways.json.zip" and member == "pathways.json":
+        return _pathway_memberships(value)
+    if dataset_id == "data/pharmcat.zip" and member == "phenotypes.json":
+        memberships: list[Membership] = []
+        if isinstance(value, dict):
+            _member(memberships, value.get("gene"), "gene", f"{pointer}/gene")
+        return tuple(memberships)
+    return ()
 
 
 def primary_identifier(memberships: Iterable[Membership]) -> str | None:
@@ -331,16 +370,31 @@ def known_filters(dataset_id: str, member: str | None = None) -> frozenset[str]:
             keys.add("name")
         if any(field == "Summary Annotation ID" for field in profile):
             keys.add("id")
-    if dataset_id.endswith(".json.zip"):
-        keys.update({"id", "name", "gene", "chemical", "source"})
+    json_filters = {
+        "data/guidelineAnnotations.json.zip": {
+            "id",
+            "name",
+            "gene",
+            "chemical",
+            "source",
+        },
+        "data/guidelineAnnotations.extended.json.zip": {
+            "id",
+            "name",
+            "gene",
+            "chemical",
+            "source",
+        },
+        "data/pathways.json.zip": {"id", "name", "gene", "chemical"},
+        "data/pharmcat.zip": {"name", "gene"},
+    }
+    keys.update(json_filters.get(dataset_id, set()))
     if dataset_id in {"data/relationships.zip", "data/occurrences.zip"}:
         keys.update({"id", "name", "gene", "chemical", "variant"})
-    if dataset_id == "data/pharmcat.zip":
-        keys.update({"id", "name", "gene", "chemical", "source"})
     if dataset_id == "data/cpic.drug.mapping.zip":
         keys.update({"id", "name", "chemical", "source"})
     if dataset_id.startswith("data/pharmgkb_haplotype_frequencies_"):
-        keys.update({"name", "gene", "source"})
+        keys.update({"name", "gene"})
     return frozenset(keys)
 
 

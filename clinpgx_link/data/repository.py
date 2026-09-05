@@ -349,6 +349,21 @@ class DatasetRepository:
             raise InvalidInputError("Unknown local entity type", field="entity_type")
         selected_filters = filters or {}
         self._validate_filters(selected_filters)
+        supported_rows = self._connection.execute(
+            "SELECT DISTINCT candidate.kind FROM membership entity "
+            "JOIN membership candidate ON candidate.record_pk=entity.record_pk "
+            "WHERE entity.kind=?",
+            (entity_type,),
+        ).fetchall()
+        supported_filters = {
+            str(row[0]) for row in supported_rows if str(row[0]) in _FILTERS
+        } | {"id"}
+        unsupported = set(selected_filters) - supported_filters
+        if unsupported:
+            raise InvalidInputError(
+                "Filter semantics are not installed for this entity type",
+                field=sorted(unsupported)[0],
+            )
         clauses = [
             "r.record_pk IN (SELECT entity.record_pk FROM membership entity WHERE entity.kind=?)"
         ]

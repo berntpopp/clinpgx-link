@@ -195,7 +195,7 @@ def _json_records(dataset_id: str, member: AcquiredMember) -> Iterable[_ParsedRe
         root_pointer = "/" + row.pointer.split("/", maxsplit=2)[1] if row.pointer else ""
         context_gene = root_genes.get(root_pointer)
         memberships = (
-            *json_memberships(row.value),
+            *json_memberships(dataset_id, member.path, row.pointer, row.value),
             *contextual_json_memberships(
                 dataset_id, member.path, row.pointer, row.value, context_gene
             ),
