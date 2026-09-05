@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import re
 import time
 from typing import Annotated, Any, Literal
 
@@ -36,6 +37,8 @@ _ANNOTATIONS = {
     "openWorldHint": False,
 }
 _MAX_INLINE_FIELD_BYTES = 12_000
+_MAX_POINTER_CHARACTERS = 4096
+_MAX_POINTER_SEGMENTS = 128
 
 
 def _json(value: Any) -> bytes:
@@ -73,6 +76,69 @@ def _has_oversized_string(value: Any) -> bool:
     return False
 
 
+def _pointer_is_safe(pointer: str) -> bool:
+    return (
+        pointer.startswith("/")
+        and len(pointer) <= _MAX_POINTER_CHARACTERS
+        and pointer.count("/") <= _MAX_POINTER_SEGMENTS
+        and re.search(r"~(?![01])", pointer) is None
+    )
+
+
+def _has_unsafe_field_key(value: Any, *, depth: int = 0) -> bool:
+    if isinstance(value, dict):
+        if depth >= _MAX_POINTER_SEGMENTS:
+            return True
+        for key, item in value.items():
+            key_text = str(key)
+            if (
+                not key_text
+                or len(key_text) > 512
+                or any(ord(char) < 0x20 or ord(char) == 0x7F for char in key_text)
+                or "/" in key_text
+                or "~" in key_text
+            ):
+                return True
+            if _has_unsafe_field_key(item, depth=depth + 1):
+                return True
+    elif isinstance(value, list):
+        if depth >= _MAX_POINTER_SEGMENTS:
+            return True
+        return any(_has_unsafe_field_key(item, depth=depth + 1) for item in value)
+    return False
+
+
+def _has_overlong_field_pointer(value: Any, pointer: str = "/fields") -> bool:
+    if not _pointer_is_safe(pointer):
+        return True
+    if isinstance(value, dict):
+        for key, item in value.items():
+            child = f"{pointer}/{_escape_pointer_token(str(key))}"
+            if _has_overlong_field_pointer(item, child):
+                return True
+    elif isinstance(value, list):
+        for index, item in enumerate(value):
+            if _has_overlong_field_pointer(item, f"{pointer}/{index}"):
+                return True
+    return False
+
+
+def _field_fence_count(value: Any) -> int:
+    if isinstance(value, str):
+        return 1
+    if isinstance(value, dict):
+        return sum(_field_fence_count(item) for item in value.values())
+    if isinstance(value, list):
+        return sum(_field_fence_count(item) for item in value)
+    return 0
+
+
+def _needs_deferred_fields(value: Any) -> bool:
+    if _has_unsafe_field_key(value) or _field_fence_count(value) > 100:
+        return True
+    return len(_json(value)) > 60_000
+
+
 def _escape_pointer_token(value: str) -> str:
     return value.replace("~", "~0").replace("/", "~1")
 
@@ -80,6 +146,8 @@ def _escape_pointer_token(value: str) -> str:
 def _deferred_field(
     value: str, pointer: str, derived_ref: str, source: SourceInfo, record_id: str
 ) -> dict[str, Any]:
+    if not _pointer_is_safe(pointer):
+        return _fields_descriptor(derived_ref, pointer="", representation="base64")
     return {
         "deferred_content": True,
         "content_ref": derived_ref,
@@ -99,6 +167,25 @@ def _deferred_field(
             "source": source.source,
             "record_id": record_id,
             "retrieved_at": source.retrieved_at,
+        },
+    }
+
+
+def _fields_descriptor(
+    derived_ref: str, *, pointer: str = "/fields", representation: str = "structure"
+) -> dict[str, Any]:
+    return {
+        "deferred_content": True,
+        "content_ref": derived_ref,
+        "pointer": pointer,
+        "representation": "normalized_record_json",
+        "derived": True,
+        "recovery_representation": representation,
+        "fallback_tool": "get_source_content",
+        "fallback_args": {
+            "content_ref": derived_ref,
+            "pointer": pointer,
+            "representation": representation,
         },
     }
 
@@ -168,16 +255,42 @@ def _shape_row(
     asset_response: SourceResponse | None = None,
 ) -> dict[str, Any]:
     source_ref = _asset_reference(asset_response or response, snapshot_id)
-    derived_ref = _retain_row(store, row, response.source) if _has_oversized_string(row) else None
+    fields = row.get("fields", {})
+    defer_fields = _needs_deferred_fields(fields)
+    derived_ref = (
+        _retain_row(store, row, response.source)
+        if defer_fields or _has_oversized_string(row)
+        else None
+    )
     result = dict(row)
     result["content_ref"] = source_ref
-    result["fields"] = _shape_fields(
-        row.get("fields", {}),
-        pointer="/fields",
-        derived_ref=derived_ref,
-        source=response.source,
-        record_id=str(row["record_id"]),
-    )
+    record_id = str(row["record_id"])
+    result["member"] = fence_text(str(row["member"]), source=response.source, record_id=record_id)
+    for pointer_key in ("json_pointer", "parent_pointer"):
+        if pointer_key in result and result[pointer_key] is not None:
+            result[pointer_key] = fence_text(
+                str(result[pointer_key]), source=response.source, record_id=record_id
+            )
+    if defer_fields:
+        root_ref = derived_ref or _retain_row(store, row, response.source)
+        result["fields"] = _fields_descriptor(
+            root_ref,
+            pointer="" if _has_overlong_field_pointer(fields) else "/fields",
+            representation="base64" if _has_overlong_field_pointer(fields) else "structure",
+        )
+    else:
+        result["fields"] = _shape_fields(
+            fields,
+            pointer="/fields",
+            derived_ref=derived_ref,
+            source=response.source,
+            record_id=record_id,
+        )
+        if isinstance(fields, dict):
+            result["field_names"] = [
+                fence_text(str(name), source=response.source, record_id=record_id)
+                for name in fields
+            ]
     return result
 
 
@@ -371,6 +484,7 @@ def register_dataset_record_tools(
             return success_result(
                 result,
                 source=response.source,
+                snapshot_id=snapshot_id,
                 elapsed_ms=(time.monotonic() - began) * 1000,
             )
         except ClinPGxError as exc:

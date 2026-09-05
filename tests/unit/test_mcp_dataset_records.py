@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import hashlib
+import base64
 
 import pytest
 from fastmcp import Client, FastMCP
@@ -36,7 +36,7 @@ async def test_search_returns_complete_standard_rows_and_two_pages(tmp_path):
             row = payload["results"][0]
             assert {"record_id", "dataset_id", "member", "ordinal", "fields", "id"} <= row.keys()
             assert row["dataset_id"] == "data/genes.zip"
-            assert row["member"] == "genes.tsv"
+            assert row["member"]["text"] == "genes.tsv"
             assert row["id"] == "PA124"
             assert payload["_meta"]["pagination"]["total_count"] == 2
             assert payload["_meta"]["pagination"]["snapshot_id"] == built.snapshot_id
@@ -117,7 +117,7 @@ async def test_search_rejects_typo_filter_and_cursor_offset(tmp_path):
 
 @pytest.mark.asyncio
 async def test_get_record_preserves_row_and_pointer_is_explicitly_derived(tmp_path):
-    repository, _ = _repository(tmp_path)
+    repository, built = _repository(tmp_path)
     store = ContentStore(tmp_path / "content.sqlite")
     try:
         row = repository.search("data/genes.zip", member="genes.tsv", limit=1).value[0]
@@ -128,6 +128,7 @@ async def test_get_record_preserves_row_and_pointer_is_explicitly_derived(tmp_pa
             assert result["fields"]["Symbol"]["text"] == row["fields"]["Symbol"]
             assert result["fields"].keys() == row["fields"].keys()
             assert result["content_ref"].startswith("asset:")
+            assert call.structured_content["_meta"]["snapshot_id"] == built.snapshot_id
             selected = await client.call_tool(
                 "get_dataset_record",
                 {"record_id": row["record_id"], "pointer": "/fields/Symbol"},
@@ -167,23 +168,114 @@ async def test_oversized_field_is_a_progressing_recoverable_descriptor(tmp_path,
         async with Client(server) as client:
             call = await client.call_tool("get_dataset_record", {"record_id": row["record_id"]})
             result = call.structured_content["result"]
-            descriptor = result["fields"]["Evidence"]
+            descriptor = result["fields"]
             assert descriptor["deferred_content"] is True
+            assert descriptor["pointer"] == "/fields"
             assert descriptor["representation"] == "normalized_record_json"
             assert descriptor["content_ref"].startswith("content:")
-            assert descriptor["pointer"] == "/fields/Evidence"
             recovered = await client.call_tool(
                 "get_source_content",
                 {
                     "content_ref": descriptor["content_ref"],
                     "pointer": descriptor["pointer"],
-                    "representation": "text",
+                    "representation": "structure",
                     "length": 8192,
                 },
             )
-            assert recovered.structured_content["result"]["text"]["text"] == "x" * 8192
-            assert recovered.structured_content["result"]["total"] == 148_743
-            assert descriptor["sha256"] == hashlib.sha256(("x" * 148_743).encode()).hexdigest()
+            assert recovered.structured_content["result"]["type"] == "object"
+            assert recovered.structured_content["result"]["length"] == len(oversized["fields"])
+    finally:
+        repository.close()
+        store.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {f"F{i}": "short" for i in range(150)},
+        {f"F{i}": "aggregate" * 125 for i in range(120)},
+    ],
+)
+async def test_aggregate_field_budget_uses_progressing_fields_descriptor(
+    tmp_path, monkeypatch, fields
+):
+    repository, _ = _repository(tmp_path)
+    store = ContentStore(tmp_path / "content.sqlite")
+    original = repository.get_record
+    row = repository.search("data/genes.zip", member="genes.tsv", limit=1).value[0]
+    response = original(row["record_id"])
+    oversized = dict(response.value)
+    oversized["fields"] = fields
+    monkeypatch.setattr(
+        repository,
+        "get_record",
+        lambda record_id, expected_snapshot=None: SourceResponse(
+            oversized, response.source, response.details
+        ),
+    )
+    try:
+        server = create_mcp(content_store=store, repository=repository)
+        from clinpgx_link.mcp.dataset_record_tools import register_dataset_record_tools
+
+        register_dataset_record_tools(server, repository, store)
+        async with Client(server) as client:
+            call = await client.call_tool("get_dataset_record", {"record_id": row["record_id"]})
+            descriptor = call.structured_content["result"]["fields"]
+            assert descriptor["deferred_content"] is True
+            assert descriptor["pointer"] == "/fields"
+            assert descriptor["fallback_args"]["representation"] == "structure"
+            recovered = await client.call_tool("get_source_content", descriptor["fallback_args"])
+            assert recovered.structured_content["result"]["type"] == "object"
+            assert recovered.structured_content["result"]["length"] == len(fields)
+    finally:
+        repository.close()
+        store.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("field_name", ["hostile/name~key", "x" * 5000])
+async def test_hostile_field_key_is_fenced_and_recovered_without_raw_pointer(
+    tmp_path, monkeypatch, field_name
+):
+    repository, _ = _repository(tmp_path)
+    store = ContentStore(tmp_path / "content.sqlite")
+    original = repository.get_record
+    row = repository.search("data/genes.zip", member="genes.tsv", limit=1).value[0]
+    response = original(row["record_id"])
+    oversized = dict(response.value)
+    oversized["fields"] = {field_name: "value"}
+    monkeypatch.setattr(
+        repository,
+        "get_record",
+        lambda record_id, expected_snapshot=None: SourceResponse(
+            oversized, response.source, response.details
+        ),
+    )
+    try:
+        server = create_mcp(content_store=store, repository=repository)
+        from clinpgx_link.mcp.dataset_record_tools import register_dataset_record_tools
+
+        register_dataset_record_tools(server, repository, store)
+        async with Client(server) as client:
+            call = await client.call_tool("get_dataset_record", {"record_id": row["record_id"]})
+            descriptor = call.structured_content["result"]["fields"]
+            assert descriptor["deferred_content"] is True
+            if len(field_name) > 4096:
+                assert descriptor["pointer"] == ""
+                assert descriptor["fallback_args"]["representation"] == "base64"
+                recovered = await client.call_tool(
+                    "get_source_content", {**descriptor["fallback_args"], "length": 8192}
+                )
+                raw = base64.b64decode(recovered.structured_content["result"]["base64"])
+                assert field_name.encode() in raw
+            else:
+                assert descriptor["pointer"] == "/fields"
+                recovered = await client.call_tool(
+                    "get_source_content", descriptor["fallback_args"]
+                )
+                item = recovered.structured_content["result"]["items"][0]
+                assert item["key"]["text"] == field_name
     finally:
         repository.close()
         store.close()
