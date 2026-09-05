@@ -1,0 +1,23 @@
+{
+  "citations": [
+    {
+      "id": 15172248,
+      "title": "Dutch Pharmacogenetics Working Group (DPWG) guideline for the gene-drug interaction between SLCO1B1 and statins and CYP2C9 and sulfonylureas.",
+      "_sameAs": "https://www.ncbi.nlm.nih.gov/pubmed/39676086"
+    }
+  ],
+  "guideline": {
+    "id": "PA166363221",
+    "name": "Annotation of DPWG Guideline for rosuvastatin and SLCO1B1",
+    "objCls": "Guideline Annotation",
+    "source": "DPWG",
+    "relatedGenes": [
+      {"id": "PA134865839", "symbol": "SLCO1B1"}
+    ],
+    "relatedChemicals": [
+      {"id": "PA451428", "name": "rosuvastatin"}
+    ],
+    "recommendation": true,
+    "summaryMarkdown": "The annotation preserves source markdown."
+  }
+}

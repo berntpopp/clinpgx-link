@@ -1,0 +1,30 @@
+[
+  {
+    "gene": "TPMT",
+    "version": "2026-09-05-00-25",
+    "diplotypes": [
+      {
+        "diplotype": "*1/*1",
+        "diplotypekey": {"*1": 2},
+        "generesult": "Normal Metabolizer",
+        "lookupkey": "Normal Metabolizer",
+        "phenotype": "Normal Metabolizer"
+      },
+      {
+        "diplotype": "*1/*2",
+        "diplotypekey": {"*1": 1, "*2": 1},
+        "generesult": "Intermediate Metabolizer",
+        "lookupkey": "Intermediate Metabolizer",
+        "phenotype": "Intermediate Metabolizer"
+      }
+    ],
+    "diplotypeFunctions": [
+      {
+        "activityScore": "n/a",
+        "lookupKey": {"Unknown function": 1, "Decreased function": 1},
+        "name": "TPMT one Decreased function allele and one Unknown function allele",
+        "phenotype": "Indeterminate"
+      }
+    ]
+  }
+]

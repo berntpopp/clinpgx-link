@@ -1,0 +1,3 @@
+PharmGKB Accession Id	NCBI Gene ID	HGNC ID	Ensembl Id	Name	Symbol	Alternate Names	Alternate Symbols	Is VIP	Has Variant Annotation
+PA124	1557	2625	ENSG00000165841	cytochrome P450 family 2 subfamily C member 19	CYP2C19	CPCJ;CYPIIC17;P450C2C	CYP2C;CYP2C17	Yes	Yes
+PA165884561	1	5	ENSG00000121410	alpha-1-B glycoprotein	A1BG		A1B;ABG;GAB	Yes	No

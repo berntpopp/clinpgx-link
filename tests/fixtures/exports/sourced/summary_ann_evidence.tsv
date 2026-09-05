@@ -1,0 +1,4 @@
+Summary Annotation ID	Evidence ID	Evidence Type	Evidence URL	PMID	Summary	Score
+655384602	655387128	Variant Phenotype Annotation	https://www.clinpgx.org/variantAnnotation/655387128	17588543	Genotype TT is associated with increased likelihood of response when treated with risperidone in people with Schizophrenia as compared to genotypes CC + CT.	1.75
+655384607	655387127	Variant Phenotype Annotation	https://www.clinpgx.org/variantAnnotation/655387127	17588543	Genotype CC is associated with increased likelihood of positive response when treated with olanzapine and perphenazine in people with Schizophrenia as compared to genotypes CT + TT.	2.5
+655384607	655387138	Variant Drug Annotation	https://www.clinpgx.org/variantAnnotation/655387138	17588543	Genotype TT is associated with increased response to quetiapine and ziprasidone in people with Schizophrenia as compared to genotype CC.	0.0

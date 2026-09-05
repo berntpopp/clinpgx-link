@@ -1,0 +1,20 @@
+[
+  {
+    "objCls": "Pathway",
+    "id": "PA166163705",
+    "name": "Diclofenac Pathway, Pharmacokinetics",
+    "alternateViews": [],
+    "authors": "Caroline F. Thorn.",
+    "biopaxLink": "submission/PS216707-1450820291.owl",
+    "chemicals": [{"objCls": "Chemical", "id": "PA449098", "name": "diclofenac"}]
+  },
+  {
+    "objCls": "Pathway",
+    "id": "PA166160830",
+    "name": "Atomoxetine Pathway, Pharmacokinetics",
+    "alternateViews": [],
+    "authors": "ClinPGx.",
+    "biopaxLink": "submission/example.owl",
+    "chemicals": [{"objCls": "Chemical", "id": "PA448375", "name": "atomoxetine"}]
+  }
+]
