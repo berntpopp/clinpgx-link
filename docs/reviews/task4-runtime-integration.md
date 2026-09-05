@@ -33,6 +33,13 @@ Root verification on 2026-09-05:
 - Combined HTTP/catalog/asset checks: 38 passed. Two third-party TestClient
   deprecation warnings remain; they were not suppressed.
 - Strict typing, Ruff and all tracked-file pre-commit checks passed.
+- Actual loopback TCP smoke after commit `0c6a930`: Uvicorn started, a FastMCP
+  HTTP client listed eight tools and followed `list_datasets` → `get_dataset` →
+  `get_source_content`. The returned base64 reconstructed the sourced `genes.tsv`
+  fixture byte-for-byte, with matching structured/text envelopes and
+  `offline_available=true`. Snapshot identity was
+  `sha256:2035f90648774e41a0f260563c7852b2a61e3855107a8f753599077507c1d911`.
+  The server shut down cleanly. This fixture smoke is not the real-agent benchmark.
 
 The public server now registers eight of the thirteen specified tools. Dataset
 record search/retrieval and entity/relationship tools remain incomplete. The
