@@ -56,6 +56,11 @@ async def test_record_tool_definitions_describe_every_argument_within_budget(tmp
         assert related["result_type"]["examples"] == ["relationship"]
         assert "connected-object" in related["other_type"]["description"]
         assert "pair" in related["other_type"]["description"]
+        view_description = related["view"]["description"]
+        assert "API pair" in view_description
+        assert "upstream projection" in view_description
+        assert "not sent upstream" in view_description
+        assert "cursor-bound" in view_description
     finally:
         store.close()
 

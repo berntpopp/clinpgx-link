@@ -488,7 +488,16 @@ def register_record_tools(
                 description="Exact live connected/pair or installed join source.", examples=["api"]
             ),
         ] = "api",
-        view: ViewArg = "base",
+        view: Annotated[
+            View,
+            Field(
+                description=(
+                    "API pair upstream projection; not sent upstream in connected-object mode, "
+                    "but remains cursor-bound."
+                ),
+                examples=["base"],
+            ),
+        ] = "base",
         limit: LimitArg = 20,
         offset: OffsetArg = 0,
         cursor: CursorArg = None,
