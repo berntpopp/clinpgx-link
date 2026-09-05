@@ -15,8 +15,10 @@ from pydantic import Field
 from clinpgx_link import __version__
 from clinpgx_link.api.website import WebsiteClient
 from clinpgx_link.content.reader import read_content
+from clinpgx_link.content.repository_assets import read_repository_content
 from clinpgx_link.content.store import ContentStore, StoredContent
-from clinpgx_link.exceptions import ClinPGxError
+from clinpgx_link.data.repository import DatasetRepository
+from clinpgx_link.exceptions import ClinPGxError, UpstreamUnavailableError
 from clinpgx_link.mcp.data_tools import register_data_tools
 from clinpgx_link.mcp.envelope import error_result, success_result
 from clinpgx_link.mcp.middleware import BoundaryGuard
@@ -62,6 +64,7 @@ def create_mcp(
     content_store: ContentStore,
     api_service: ApiService | None = None,
     website_client: WebsiteClient | None = None,
+    repository: DatasetRepository | None = None,
 ) -> FastMCP:
     """Create the MCP boundary with caller-owned source-content lifetime."""
     server = FastMCP(
@@ -145,6 +148,24 @@ def create_mcp(
         began = time.monotonic()
         stored: StoredContent | None = None
         try:
+            if content_ref.startswith("asset:"):
+                if repository is None:
+                    raise UpstreamUnavailableError("No local snapshot is configured.")
+                asset = await asyncio.to_thread(
+                    read_repository_content,
+                    repository,
+                    content_ref,
+                    pointer=pointer,
+                    representation=representation,
+                    start=start,
+                    length=min(length, 40) if representation == "structure" else length,
+                )
+                asset.value["response_mode"] = response_mode
+                return success_result(
+                    _content_payload(asset.value, asset.source, content_ref),
+                    source=asset.source,
+                    elapsed_ms=(time.monotonic() - began) * 1000,
+                )
             stored = await asyncio.to_thread(content_store.get, content_ref)
             payload = await asyncio.to_thread(
                 read_content,
