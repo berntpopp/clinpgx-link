@@ -1,0 +1,301 @@
+"""Unified HTTP-only host, transport, safety and readiness contracts."""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import sqlite3
+import uuid
+from pathlib import Path
+
+import pytest
+from fastapi.testclient import TestClient
+
+_INIT = {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "initialize",
+    "params": {
+        "protocolVersion": "2025-06-18",
+        "capabilities": {},
+        "clientInfo": {"name": "clinpgx-host-test", "version": "1.0.0"},
+    },
+}
+_HEADERS = {
+    "accept": "application/json, text/event-stream",
+    "content-type": "application/json",
+    "host": "testserver",
+}
+
+
+def _settings(tmp_path: Path, **overrides):
+    from clinpgx_link.config import Settings
+
+    return Settings(
+        _env_file=None,
+        cache_root=tmp_path / "cache",
+        data_root=tmp_path / "data",
+        snapshot_path=tmp_path / "data/current/clinpgx.sqlite",
+        allowed_hosts=("testserver", "localhost", "127.0.0.1", "::1"),
+        allowed_origins=("https://client.example",),
+        **overrides,
+    )
+
+
+def _snapshot(path: Path, identity: str) -> None:
+    path.parent.mkdir(parents=True)
+    with sqlite3.connect(path) as connection:
+        connection.execute("CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+        connection.executemany(
+            "INSERT INTO metadata VALUES (?, ?)",
+            [("snapshot_id", identity), ("release_tag", "data-clinpgx-core-0123456789abcdef")],
+        )
+        connection.execute(
+            "CREATE TABLE dataset (dataset_id TEXT, file_name TEXT, published_at TEXT, "
+            "byte_count INTEGER, sha256 TEXT, license_id TEXT, tier TEXT, record_count INTEGER, "
+            "limitations_json TEXT, warnings_json TEXT, source_url TEXT, retrieved_at TEXT)"
+        )
+        connection.execute(
+            "INSERT INTO dataset VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            (
+                "data/genes.zip",
+                "genes.zip",
+                "2026-09-05T00:00:00Z",
+                1,
+                "a" * 64,
+                "CC-BY-SA-4.0",
+                "core",
+                1,
+                "[]",
+                "[]",
+                "https://api.clinpgx.org/v1/download/file/data/genes.zip",
+                "2026-09-05T08:00:00Z",
+            ),
+        )
+
+
+def _uuid4(value: str) -> bool:
+    parsed = uuid.UUID(value)
+    return parsed.version == 4 and str(parsed) == value
+
+
+def test_development_health_is_live_but_explicitly_not_ready_without_snapshot(tmp_path):
+    from clinpgx_link.server_manager import create_app
+
+    with TestClient(create_app(_settings(tmp_path))) as client:
+        health = client.get("/health", headers={"host": "testserver"})
+        alias = client.get("/api/health", headers={"host": "testserver"})
+        live = client.get("/api/live", headers={"host": "testserver"})
+
+    assert health.status_code == 200
+    assert health.json() == alias.json()
+    assert health.json()["status"] == "degraded"
+    assert health.json()["ready"] is False
+    assert health.json()["data_available"] is False
+    assert health.json()["transport"] == "streamable-http-stateless"
+    assert live.status_code == 200
+    assert live.json()["status"] == "alive"
+
+
+@pytest.mark.parametrize("matching", [True, False])
+def test_production_health_requires_exact_pinned_snapshot(tmp_path, matching):
+    from clinpgx_link.server_manager import create_app
+
+    actual = "sha256:" + "a" * 64
+    expected = actual if matching else "sha256:" + "b" * 64
+    settings = _settings(tmp_path, runtime_mode="production", expected_snapshot=expected)
+    _snapshot(settings.snapshot_path, actual)
+
+    with TestClient(create_app(settings)) as client:
+        response = client.get("/health", headers={"host": "testserver"})
+
+    assert response.status_code == (200 if matching else 503)
+    assert response.json()["ready"] is matching
+    assert response.json()["data_available"] is matching
+    if matching:
+        assert response.json()["snapshot_id"] == actual
+        assert response.json()["dataset_count"] == 1
+    else:
+        assert actual not in response.text and expected not in response.text
+
+
+def test_production_health_rejects_identity_only_database(tmp_path):
+    from clinpgx_link.server_manager import create_app
+
+    identity = "sha256:" + "a" * 64
+    settings = _settings(tmp_path, runtime_mode="production", expected_snapshot=identity)
+    settings.snapshot_path.parent.mkdir(parents=True)
+    with sqlite3.connect(settings.snapshot_path) as connection:
+        connection.execute("CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+        connection.executemany(
+            "INSERT INTO metadata VALUES (?, ?)",
+            [("snapshot_id", identity), ("release_tag", "data-clinpgx-core-0123456789abcdef")],
+        )
+
+    with TestClient(create_app(settings)) as client:
+        response = client.get("/health", headers={"host": "testserver"})
+        live = client.get("/api/live", headers={"host": "testserver"})
+
+    assert response.status_code == 503
+    assert response.json()["ready"] is False
+    assert live.status_code == 200
+
+
+@pytest.mark.parametrize("path", ["/health", "/api/live", "/mcp"])
+def test_exact_host_guard_rejects_lookalikes_on_every_route(tmp_path, path):
+    from clinpgx_link.server_manager import create_app
+
+    with TestClient(create_app(_settings(tmp_path))) as client:
+        response = client.get(path, headers={"host": "testserver.evil"})
+
+    assert response.status_code == 421
+    assert response.json() == {"error": "misdirected_request"}
+    assert _uuid4(response.headers["x-request-id"])
+
+
+def test_rejected_host_is_not_reflected_and_structured_log_stays_on_stderr(tmp_path, capsys):
+    from clinpgx_link.server_manager import create_app
+
+    hostile = "secret.attacker.example"
+    with TestClient(create_app(_settings(tmp_path))) as client:
+        response = client.get("/health", headers={"host": hostile})
+
+    captured = capsys.readouterr()
+    assert response.status_code == 421
+    assert hostile not in response.text + captured.out + captured.err
+    assert captured.out == ""
+    assert "request_failed" in captured.err
+
+
+@pytest.mark.parametrize("path", ["/health", "/api/live", "/mcp"])
+def test_exact_origin_guard_rejects_unlisted_origin_on_every_route(tmp_path, path):
+    from clinpgx_link.server_manager import create_app
+
+    with TestClient(create_app(_settings(tmp_path))) as client:
+        response = client.get(
+            path,
+            headers={"host": "testserver", "origin": "https://client.example.evil"},
+        )
+
+    assert response.status_code == 403
+    assert response.json() == {"error": "forbidden_origin"}
+    assert _uuid4(response.headers["x-request-id"])
+
+
+def test_allowed_origin_preflight_is_granted_without_credentials(tmp_path):
+    from clinpgx_link.server_manager import create_app
+
+    with TestClient(create_app(_settings(tmp_path))) as client:
+        response = client.options(
+            "/mcp",
+            headers={
+                "host": "testserver",
+                "origin": "https://client.example",
+                "access-control-request-method": "POST",
+                "access-control-request-headers": "content-type,mcp-protocol-version",
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "https://client.example"
+    assert "access-control-allow-credentials" not in response.headers
+
+
+@pytest.mark.parametrize(
+    ("supplied", "preserved"),
+    [
+        ("2eb4ae86-7f47-4be9-945a-36d1f103230c", True),
+        ("not-a-request-id", False),
+        ("6ba7b810-9dad-11d1-80b4-00c04fd430c8", False),
+    ],
+)
+def test_request_id_is_canonical_uuid4_and_echoed(tmp_path, supplied, preserved):
+    from clinpgx_link.server_manager import create_app
+
+    with TestClient(create_app(_settings(tmp_path))) as client:
+        response = client.get(
+            "/api/live", headers={"host": "testserver", "x-request-id": supplied}
+        )
+
+    actual = response.headers["x-request-id"]
+    assert _uuid4(actual)
+    assert (actual == supplied) is preserved
+
+
+def test_mcp_is_canonical_stateless_json_and_correlates_protocol_metadata(tmp_path):
+    from clinpgx_link.server_manager import create_app
+
+    request_id = "2eb4ae86-7f47-4be9-945a-36d1f103230c"
+    headers = {**_HEADERS, "x-request-id": request_id}
+    with TestClient(create_app(_settings(tmp_path)), follow_redirects=False) as client:
+        initialized = client.post("/mcp", headers=headers, json=_INIT)
+        called = client.post(
+            "/mcp",
+            headers=headers,
+            json={
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "tools/call",
+                "params": {"name": "get_server_capabilities", "arguments": {}},
+            },
+        )
+
+    assert initialized.status_code == 200
+    assert initialized.headers["content-type"].startswith("application/json")
+    assert "mcp-session-id" not in initialized.headers
+    assert initialized.json()["result"]["serverInfo"]["name"] == "clinpgx-link"
+    assert called.status_code == 200
+    assert called.headers["x-request-id"] == request_id
+    structured = called.json()["result"]["structuredContent"]
+    assert structured["_meta"]["request_id"] == request_id
+
+
+def test_mcp_trailing_slash_does_not_redirect(tmp_path):
+    from clinpgx_link.server_manager import create_app
+
+    with TestClient(create_app(_settings(tmp_path)), follow_redirects=False) as client:
+        response = client.post("/mcp/", headers=_HEADERS, json=_INIT)
+
+    assert response.status_code == 404
+    assert "location" not in response.headers
+
+
+def test_unsupported_post_initialize_protocol_header_is_fixed_400(tmp_path):
+    from clinpgx_link.server_manager import create_app
+
+    with TestClient(create_app(_settings(tmp_path))) as client:
+        response = client.post(
+            "/mcp",
+            headers={**_HEADERS, "mcp-protocol-version": "1999-01-01"},
+            json={"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
+        )
+
+    assert response.status_code == 400
+    assert response.json() == {"error": "unsupported_mcp_protocol_version"}
+    assert "1999" not in json.dumps(response.json())
+
+
+def test_content_store_is_closed_by_application_lifespan(tmp_path):
+    from clinpgx_link.server_manager import create_app
+
+    app = create_app(_settings(tmp_path))
+    store = app.state.content_store
+    with TestClient(app):
+        pass
+    with pytest.raises(sqlite3.ProgrammingError):
+        store.get("content:" + "0" * 64)
+
+
+def test_source_client_and_shared_store_have_one_application_lifetime(tmp_path):
+    from clinpgx_link.exceptions import UpstreamUnavailableError
+    from clinpgx_link.server_manager import create_app
+
+    app = create_app(_settings(tmp_path))
+    source_client = app.state.source_client
+    assert source_client.content_store is app.state.content_store
+
+    with TestClient(app):
+        pass
+
+    with pytest.raises(UpstreamUnavailableError, match="closed"):
+        asyncio.run(source_client.request("GET", "/report/stats"))
