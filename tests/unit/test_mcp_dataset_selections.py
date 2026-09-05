@@ -7,6 +7,7 @@ import json
 import pytest
 from fastmcp import Client
 
+from clinpgx_link.content.assets import AssetReference
 from clinpgx_link.content.store import ContentStore
 from clinpgx_link.data.repository import DatasetRepository
 from clinpgx_link.mcp.facade import create_mcp
@@ -559,6 +560,53 @@ async def test_search_trims_only_page_tail_and_cursor_resumes_first_omitted_row(
         assert second_payload["results"][0]["ordinal"] == pagination["returned"] + 1
         assert second_payload["_meta"]["pagination"]["total_count"] == 12
         assert pagination["returned"] + second_payload["_meta"]["pagination"]["returned"] == 12
+    finally:
+        repository.close()
+        store.close()
+
+
+@pytest.mark.asyncio
+async def test_search_rejects_row_when_forced_field_deferral_cannot_meet_row_budget(tmp_path):
+    """Long normalized metadata must not bypass the 70 KiB shaped-row bound."""
+    long_key = "k" * 72_000
+    body = json.dumps({long_key: [{"small": "value"}]}, separators=(",", ":")).encode()
+    built, _ = _pharmcat_candidate(tmp_path, body)
+    repository = DatasetRepository(built.database)
+    store = ContentStore(tmp_path / "content.sqlite")
+    try:
+        child = next(
+            row
+            for row in repository.search(
+                "data/pharmcat.zip", member="phenotypes.json", limit=10
+            ).value
+            if row.get("json_pointer", "").endswith("/0")
+        )
+        assert len(child["json_pointer"].encode()) > 70_000
+        async with Client(create_mcp(content_store=store, repository=repository)) as client:
+            call = await client.call_tool(
+                "search_dataset",
+                {
+                    "dataset_id": "data/pharmcat.zip",
+                    "member": "phenotypes.json",
+                    "limit": 1,
+                    "offset": child["ordinal"] - 1,
+                    "response_mode": "full",
+                },
+                raise_on_error=False,
+            )
+
+        assert call.is_error
+        payload = call.structured_content
+        assert payload["error_code"] == "invalid_input"
+        assert payload["subtype"] == "response_too_large"
+        assert payload["recovery_action"] == "read_original_bytes"
+        assert payload["fallback_args"]["pointer"] == ""
+        assert payload["fallback_args"]["representation"] == "base64"
+        asset = AssetReference.decode(payload["fallback_args"]["content_ref"])
+        assert asset.snapshot_id == built.snapshot_id
+        assert asset.dataset_id == "data/pharmcat.zip"
+        assert asset.member == "phenotypes.json"
+        assert repository.asset_content("data/pharmcat.zip", member="phenotypes.json").value == body
     finally:
         repository.close()
         store.close()

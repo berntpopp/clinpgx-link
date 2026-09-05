@@ -435,9 +435,10 @@ def register_dataset_record_tools(
             total = int(response.details["total_count"])
             while True:
                 visible_inputs = row_inputs[:visible_count]
-                rows = [
-                    profiled_row(
-                        row,
+                rows: list[dict[str, Any]] = []
+                for raw_row, asset_response in visible_inputs:
+                    shaped = profiled_row(
+                        raw_row,
                         response,
                         snapshot_id,
                         store,
@@ -448,25 +449,27 @@ def register_dataset_record_tools(
                         asset_response=asset_response,
                         force_defer_fields=force_defer_fields,
                     )
-                    for row, asset_response in visible_inputs
-                ]
-                rows = [
-                    row
-                    if len(_json(row)) <= 70_000
-                    else profiled_row(
-                        raw,
-                        response,
-                        snapshot_id,
-                        store,
-                        repository,
-                        response_mode,
-                        selected_field_names,
-                        shape_dataset_row,
-                        asset_response=asset_response,
-                        force_defer_fields=True,
-                    )
-                    for row, (raw, asset_response) in zip(rows, visible_inputs, strict=True)
-                ]
+                    if len(_json(shaped)) > 70_000:
+                        shaped = profiled_row(
+                            raw_row,
+                            response,
+                            snapshot_id,
+                            store,
+                            repository,
+                            response_mode,
+                            selected_field_names,
+                            shape_dataset_row,
+                            asset_response=asset_response,
+                            force_defer_fields=True,
+                        )
+                    if len(_json(shaped)) > 70_000:
+                        return error_result(
+                            ResponseTooLargeError(
+                                "The indexed row exceeds its bounded descriptor size."
+                            ),
+                            content_ref=_asset_reference(asset_response, snapshot_id),
+                        )
+                    rows.append(shaped)
                 next_offset = offset + len(rows)
                 next_cursor = (
                     cursors.encode(selectors, identity=snapshot_id, offset=next_offset)

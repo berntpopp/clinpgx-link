@@ -11,6 +11,7 @@ from typing import Any, cast
 from fastmcp.tools.base import ToolResult
 from mcp.types import TextContent
 
+from clinpgx_link.content.assets import AssetReference
 from clinpgx_link.exceptions import ClinPGxError, ResponseTooLargeError
 from clinpgx_link.mcp.recovery import RecoveryPlan, recovery_payload
 from clinpgx_link.mcp.untrusted_content import UntrustedText, enforce_limits, fence_text
@@ -151,7 +152,14 @@ def error_result(
     for key, value in (("field", error.field), ("subtype", error.subtype)):
         if value and re.fullmatch(r"[a-z_]{1,40}", value):
             result[key] = value
-    if content_ref and re.fullmatch(r"content:[0-9a-f]{64}", content_ref):
+    recoverable_ref = bool(content_ref and re.fullmatch(r"content:[0-9a-f]{64}", content_ref))
+    if content_ref and not recoverable_ref:
+        try:
+            AssetReference.decode(content_ref)
+            recoverable_ref = True
+        except ClinPGxError:
+            pass
+    if content_ref and recoverable_ref:
         arguments = {"content_ref": content_ref, "pointer": "", "representation": "base64"}
         result["recovery_action"] = "read_original_bytes"
         result["fallback_tool"] = "get_source_content"
