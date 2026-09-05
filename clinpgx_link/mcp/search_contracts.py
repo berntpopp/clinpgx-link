@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, Literal, NamedTuple
 
+from clinpgx_link.data.search_diagnostics import CANONICAL_FILTER_PRIORITY
 from clinpgx_link.exceptions import InvalidInputError
 
 SearchSource = Literal["api"]
@@ -90,7 +91,7 @@ _CONTRACT_ROWS = (
         "literature",
         "api",
         "GET /data/literature",
-        (("id", "id"),),
+        (("id", "id"), ("resource_id", "resourceId")),
         (("id", "15178564"),),
     ),
     SearchContract(
@@ -141,6 +142,7 @@ API_SEARCH_CONTRACTS: Mapping[str, SearchContract] = MappingProxyType(
 LOCAL_SEARCH_ENTITIES = frozenset(
     {"allele", "annotation_id", "chemical", "disease", "gene", "literature", "variant"}
 )
+DOWNLOAD_FILTERS = tuple(sorted(CANONICAL_FILTER_PRIORITY))
 CANONICAL_FILTERS = tuple(
     sorted(
         {"name"}
@@ -273,7 +275,7 @@ def capabilities_payload() -> dict[str, Any]:
         },
         "download": {
             "entities": sorted(LOCAL_SEARCH_ENTITIES),
-            "filters": list(CANONICAL_FILTERS),
+            "filters": list(DOWNLOAD_FILTERS),
             "semantics": DOWNLOAD_SEMANTICS,
         },
     }
@@ -282,6 +284,7 @@ def capabilities_payload() -> dict[str, Any]:
 __all__ = [
     "API_SEARCH_CONTRACTS",
     "CANONICAL_FILTERS",
+    "DOWNLOAD_FILTERS",
     "DOWNLOAD_SEMANTICS",
     "FILTER_DESCRIPTION",
     "LOCAL_SEARCH_ENTITIES",

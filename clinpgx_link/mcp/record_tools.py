@@ -20,6 +20,10 @@ from clinpgx_link.exceptions import (
     NotFoundError,
     UpstreamUnavailableError,
 )
+from clinpgx_link.identity_contracts import (
+    numeric_detail_argument_is_valid,
+    numeric_identity_contract,
+)
 from clinpgx_link.mcp import recovery as recovery_help
 from clinpgx_link.mcp.adapter_selection import adapter_profile, adapter_selection_result
 from clinpgx_link.mcp.admission import run_sync
@@ -64,7 +68,10 @@ RecordIdArg = Annotated[
     Field(
         min_length=1,
         max_length=512,
-        description="Exact ClinPGx identifier or returned local record_id.",
+        description=(
+            "Exact ClinPGx identifier or returned local record_id; numeric-detail families "
+            "reuse the decimal id returned by search_records."
+        ),
         examples=["PA124"],
     ),
 ]
@@ -303,6 +310,15 @@ def register_record_tools(
                     "Variant symbols require collection search.", field="record_id"
                 )
             if source == "api":
+                if numeric_identity_contract(entity_type) is not None and not (
+                    numeric_detail_argument_is_valid(entity_type, record_id)
+                ):
+                    recovery = recovery_help.numeric_detail_plan(entity_type, source, view)
+                    raise InvalidInputError(
+                        "Numeric detail identifier required.",
+                        field="record_id",
+                        subtype="numeric_detail_id_required",
+                    )
                 if api is None:
                     raise UpstreamUnavailableError("API service is not configured.")
                 if not recovery_help.detail_source_supported(entity_type, source):

@@ -229,6 +229,10 @@ def error_result(
             "Pointers require a JSON representation; retry without a pointer for non-JSON content.",
             None,
         ),
+        "numeric_detail_id_required": (
+            "This detail route requires the internal numeric id returned by supported discovery.",
+            None,
+        ),
     }
     if public_subtype in guidance:
         message, retry_after_seconds = guidance[public_subtype]

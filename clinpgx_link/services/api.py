@@ -7,6 +7,7 @@ from typing import Any
 from clinpgx_link.api.client import AsyncWorker, ClinPGxClient
 from clinpgx_link.api.registry import ApiRegistry
 from clinpgx_link.exceptions import InvalidInputError, UpstreamUnavailableError
+from clinpgx_link.identity_contracts import numeric_identity_contract
 from clinpgx_link.models import SourceResponse
 
 _SEARCH_OPERATIONS = {
@@ -30,11 +31,8 @@ _GET_OPERATIONS = {
     "chemical": "GET /data/chemical/{id}",
     "disease": "GET /data/disease/{id}",
     "variant": "GET /data/variant/{id}",
-    "literature": "GET /data/literature/{id}",
     "guideline_annotation": "GET /data/guidelineAnnotation/{id}",
     "label": "GET /data/label/{id}",
-    "summary_annotation": "GET /data/summaryAnnotation/{id}",
-    "variant_annotation": "GET /data/variantAnnotation/{id}",
 }
 
 
@@ -110,7 +108,12 @@ class ApiService:
                 subtype="documented_broken_operation",
                 hint="Use get_website_data with GET /site/vip/{id} for the verified fallback.",
             )
-        operation = _operation_for(entity_type, _GET_OPERATIONS)
+        numeric_contract = numeric_identity_contract(entity_type)
+        operation = (
+            numeric_contract.operation
+            if numeric_contract is not None
+            else _operation_for(entity_type, _GET_OPERATIONS)
+        )
         return await self.call(
             operation,
             path_parameters={"id": record_id},

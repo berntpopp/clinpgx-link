@@ -49,6 +49,7 @@ PUBLIC_ERROR_SUBTYPES: frozenset[str] = frozenset(
         "manifest_digest",
         "manifest_invalid",
         "missing_criteria",
+        "numeric_detail_id_required",
         "operation_unavailable",
         "pointer_selection_invalid",
         "pointer_syntax_invalid",

@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from clinpgx_link.exceptions import InvalidInputError
+from clinpgx_link.identity_contracts import numeric_identity_contract
 from clinpgx_link.mcp.search_contracts import (
     CANONICAL_FILTERS,
     LOCAL_SEARCH_ENTITIES,
@@ -18,6 +19,7 @@ from clinpgx_link.mcp.search_contracts import (
 )
 
 RecoveryKind = Literal[
+    "discover_numeric_detail_id",
     "invalid_search_filters",
     "record_not_found",
     "unsupported_detail_source",
@@ -30,6 +32,7 @@ RecoveryKind = Literal[
 ]
 _KINDS = frozenset(
     {
+        "discover_numeric_detail_id",
         "invalid_search_filters",
         "record_not_found",
         "unsupported_detail_source",
@@ -168,6 +171,7 @@ class RecoveryPlan:
         if self.other_type is not None and self.other_type not in _OBJECT_TYPES:
             raise ValueError("invalid recovery object type")
         required = {
+            "discover_numeric_detail_id": (self.entity_type, self.source),
             "invalid_search_filters": (self.entity_type, self.source),
             "record_not_found": (self.entity_type, self.record_id, self.source),
             "unsupported_detail_source": (self.entity_type, self.record_id, self.source),
@@ -243,6 +247,14 @@ def unsupported_detail_plan(
 
 def invalid_filters_plan(entity_type: str, source: str, view: str) -> RecoveryPlan:
     return RecoveryPlan("invalid_search_filters", entity_type=entity_type, source=source, view=view)
+
+
+def numeric_detail_plan(entity_type: str, source: str, view: str) -> RecoveryPlan:
+    if numeric_identity_contract(entity_type) is None:
+        raise ValueError("entity has no numeric detail contract")
+    return RecoveryPlan(
+        "discover_numeric_detail_id", entity_type=entity_type, source=source, view=view
+    )
 
 
 def unsupported_search_plan(entity_type: str, source: str, view: str) -> RecoveryPlan:
@@ -334,7 +346,16 @@ def recovery_payload(plan: RecoveryPlan) -> dict[str, Any]:
     choices: dict[str, list[str]] = {}
     commands: list[dict[str, Any]] = []
 
-    if plan.kind == "use_exact_gene_or_name_filter":
+    if plan.kind == "discover_numeric_detail_id":
+        contract = numeric_identity_contract(entity)
+        assert contract is not None
+        limitation = (
+            "This family uses its internal numeric id for detail retrieval. Discover a row "
+            "with a supported filter and reuse its returned id; accessionId is not a detail id."
+        )
+        choices["filters"] = list(contract.search_filters)
+        commands.append(_command("get_server_capabilities", {}))
+    elif plan.kind == "use_exact_gene_or_name_filter":
         limitation = (
             "ASCII star is not literal token syntax. Omit query and use a supported exact "
             "gene or name filter after inspecting dataset capabilities."
@@ -505,6 +526,7 @@ __all__ = [
     "detail_source_supported",
     "invalid_filters_plan",
     "not_found_plan",
+    "numeric_detail_plan",
     "recovery_payload",
     "related_mode_plan",
     "safe_identifier",

@@ -12,6 +12,10 @@ from fastmcp.tools.base import ToolResult
 from clinpgx_link.content.reader import select_value
 from clinpgx_link.content.store import ContentStore
 from clinpgx_link.exceptions import InvalidInputError, ResponseTooLargeError
+from clinpgx_link.identity_contracts import (
+    NUMERIC_IDENTITY_CONTRACTS,
+    numeric_identity_contract,
+)
 from clinpgx_link.mcp.envelope import success_result
 from clinpgx_link.mcp.selection import finite_json_bytes, resolve_scalars
 from clinpgx_link.mcp.shaping import source_pointer
@@ -80,6 +84,15 @@ _PROFILES: dict[str, AdapterProfile] = {
     ),
     "pathway_category": _IDENTITY,
     "identity": _IDENTITY,
+    **{
+        entity: AdapterProfile(
+            contract.minimal,
+            contract.compact,
+            contract.standard,
+            tuple(name for name, _kind in contract.required_types),
+        )
+        for entity, contract in NUMERIC_IDENTITY_CONTRACTS.items()
+    },
 }
 _FAMILY_PROFILES = {
     "gene": "gene",
@@ -94,15 +107,15 @@ _FAMILY_PROFILES = {
     "disease": "identity",
     "evidence": "identity",
     "label": "identity",
-    "literature": "identity",
+    "literature": "literature",
     "literature_annotation": "identity",
     "multilink_annotation": "identity",
     "ontology_term": "identity",
     "pathway": "identity",
     "relationship": "identity",
-    "summary_annotation": "identity",
+    "summary_annotation": "summary_annotation",
     "variant": "identity",
-    "variant_annotation": "identity",
+    "variant_annotation": "variant_annotation",
     "vip": "identity",
     "vip_variant": "identity",
 }
@@ -112,11 +125,11 @@ _ROUTE_PROFILES = {
     "chemical": "chemical",
     "disease": "identity",
     "variant": "identity",
-    "literature": "identity",
+    "literature": "literature",
     "guidelineAnnotation": "guideline_annotation",
     "label": "identity",
-    "summaryAnnotation": "identity",
-    "variantAnnotation": "identity",
+    "summaryAnnotation": "summary_annotation",
+    "variantAnnotation": "variant_annotation",
     "vip": "identity",
     "ontologyTerm": "identity",
     "dataAnnotation": "identity",
@@ -162,6 +175,9 @@ def adapter_profile_status(value: Any, profile_name: str | None) -> str | None:
     profile = _PROFILES.get(profile_name)
     if not isinstance(value, dict) or profile is None:
         return "unprofiled"
+    numeric_contract = numeric_identity_contract(profile_name)
+    if numeric_contract is not None:
+        return "active" if numeric_contract.source_value_is_valid(value) else "unprofiled"
     if any(name not in value for name in profile.required):
         return "unprofiled"
     if profile_name == "connected_object":

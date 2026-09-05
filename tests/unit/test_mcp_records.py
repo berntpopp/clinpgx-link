@@ -984,6 +984,7 @@ async def test_recovery_hides_malicious_identifiers_exception_payloads_and_filte
                 "gene",
                 "id",
                 "name",
+                "resource_id",
                 "source",
                 "variant",
             ]

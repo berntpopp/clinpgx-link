@@ -93,6 +93,7 @@ class SourcePresenter:
         self,
         value: Any,
         response: SourceResponse,
+        selectors: dict[str, Any],
         index: int | None,
         response_mode: ResponseMode,
         profile: str | None,
@@ -100,6 +101,7 @@ class SourcePresenter:
         force_defer: bool = False,
     ) -> dict[str, Any]:
         # Import lazily because adapter selection reuses source_pointer from this module.
+        from clinpgx_link.identity_contracts import detail_identity_metadata
         from clinpgx_link.mcp.adapter_selection import (
             adapter_profile_status,
             adapter_projection_is_unprofiled,
@@ -130,6 +132,8 @@ class SourcePresenter:
             record_id = value.get("id", value.get("record_id"))
             if isinstance(record_id, str) and re.fullmatch(r"[A-Za-z0-9:._-]{1,128}", record_id):
                 row["id"] = record_id
+        if profile_status == "active":
+            row.update(detail_identity_metadata(value, profile, selectors))
         license_info = response.details.get("license", {})
         if isinstance(license_info, dict) and license_info.get("spdx") in {
             "CC-BY-SA-4.0",
@@ -183,7 +187,9 @@ class SourcePresenter:
             if offset:
                 raise InvalidInputError("A scalar result has no row continuation.", field="offset")
             return success_result(
-                self._bounded_row(response.value, response, None, response_mode, profile),
+                self._bounded_row(
+                    response.value, response, selectors, None, response_mode, profile
+                ),
                 source=response.source,
                 content_ref=response.details["content_ref"],
             )
@@ -193,7 +199,9 @@ class SourcePresenter:
         rows: list[dict[str, Any]] = []
         fence_count = len(response.source.warnings)
         for index in range(offset, min(offset + limit, total)):
-            row = self._bounded_row(response.value[index], response, index, response_mode, profile)
+            row = self._bounded_row(
+                response.value[index], response, selectors, index, response_mode, profile
+            )
             row_fences = int("data" in row) + int(isinstance(row["source_pointer"], dict))
             if rows and (len(_json([*rows, row])) > 70000 or fence_count + row_fences > 120):
                 break
@@ -238,6 +246,7 @@ class SourcePresenter:
                     rows[0] = self._bounded_row(
                         response.value[offset],
                         response,
+                        selectors,
                         offset,
                         response_mode,
                         profile,
@@ -250,6 +259,7 @@ class SourcePresenter:
         self,
         value: Any,
         response: SourceResponse,
+        selectors: dict[str, Any],
         index: int | None,
         response_mode: ResponseMode,
         profile: str | None,
@@ -259,6 +269,7 @@ class SourcePresenter:
         row = self._row(
             value,
             response,
+            selectors,
             index,
             response_mode,
             profile,
@@ -266,7 +277,15 @@ class SourcePresenter:
         )
         if len(_json(row)) <= 70_000:
             return row
-        deferred = self._row(value, response, index, response_mode, profile, force_defer=True)
+        deferred = self._row(
+            value,
+            response,
+            selectors,
+            index,
+            response_mode,
+            profile,
+            force_defer=True,
+        )
         if len(_json(deferred)) > 70_000:
             raise ResponseTooLargeError("The source row exceeds its bounded descriptor size.")
         return deferred

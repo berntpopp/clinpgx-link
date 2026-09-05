@@ -18,6 +18,7 @@ from clinpgx_link.content.repository_assets import read_repository_content
 from clinpgx_link.content.store import ContentStore, StoredContent
 from clinpgx_link.data.repository import DatasetRepository
 from clinpgx_link.exceptions import ClinPGxError, UpstreamUnavailableError
+from clinpgx_link.identity_contracts import detail_identifier_capabilities
 from clinpgx_link.mcp.admission import Admission, run_sync
 from clinpgx_link.mcp.data_tools import register_data_tools
 from clinpgx_link.mcp.dataset_record_tools import register_dataset_record_tools
@@ -128,6 +129,7 @@ def create_mcp(
                 "response_mode": response_mode,
                 "coverage_status": "implementation_in_progress",
                 "search_contracts": capabilities_payload(),
+                "detail_identifier_contracts": detail_identifier_capabilities(),
             },
             source=source,
         )
