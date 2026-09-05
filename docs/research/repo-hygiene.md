@@ -25,6 +25,13 @@ Implementation reports formerly tracked under the ignored `.superpowers` scratch
 tree now live in `docs/reviews/implementation/`, with their contents preserved.
 Historical review verdicts describe their reviewed revision, not current approval.
 
+Before the first push, Gitleaks 8.30.1 scanned Git history with redacted output.
+Ten findings were inspected: one document digest, one OpenAPI digest and eight
+API-response digests (the research script explicitly computes SHA-256 of response
+bytes). `.gitleaksignore` records only their exact commit/file/rule/line fingerprints;
+it does not exempt paths or disable credential rules. Run
+`gitleaks git --redact --no-banner .` to repeat the history check.
+
 Outstanding: release/container/conformance workflows, coverage gate, broader
 interpreter matrix tied to the eventual container, and portable links in historical
 reviews. Local checks do not substitute for remote CI or the final agent benchmark.

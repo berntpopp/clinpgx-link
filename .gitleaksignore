@@ -1,0 +1,15 @@
+# Reviewed 2026-09-05 with Gitleaks 8.30.1. Exact immutable-history findings only.
+# These values are SHA-256 evidence digests, not credentials. No path/rule exemptions.
+# Binding source-access contract document digest:
+6a7b2d6e28d2fca6fad163c0fb0afdb57baab508:docs/reviews/foundation-and-reader-review.md:generic-api-key:21
+# Captured OpenAPI digest:
+eecc56b6b36d9869ce1888b81fed8c212e49656c:clinpgx_link/api/operations.json:generic-api-key:1902
+# API-response digests produced by compare_representations.py (hashlib.sha256(raw)):
+100e7d4f6795d5f2c707d828cb3dd908189a54ed:docs/research/representation-comparison.json:generic-api-key:5
+100e7d4f6795d5f2c707d828cb3dd908189a54ed:docs/research/representation-comparison.json:generic-api-key:65
+100e7d4f6795d5f2c707d828cb3dd908189a54ed:docs/research/representation-comparison.json:generic-api-key:116
+100e7d4f6795d5f2c707d828cb3dd908189a54ed:docs/research/representation-comparison.json:generic-api-key:158
+100e7d4f6795d5f2c707d828cb3dd908189a54ed:docs/research/representation-comparison-isolated.json:generic-api-key:5
+100e7d4f6795d5f2c707d828cb3dd908189a54ed:docs/research/representation-comparison-isolated.json:generic-api-key:67
+100e7d4f6795d5f2c707d828cb3dd908189a54ed:docs/research/representation-comparison-isolated.json:generic-api-key:120
+100e7d4f6795d5f2c707d828cb3dd908189a54ed:docs/research/representation-comparison-isolated.json:generic-api-key:164
