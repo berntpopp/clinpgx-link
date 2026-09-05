@@ -87,20 +87,17 @@ def _private_root(path: Path) -> None:
 
 def _versions(path: Path) -> Path:
     versions = path / "versions"
-    created = False
     if not versions.exists():
         versions.mkdir(mode=0o700)
-        created = True
     descriptor = bundle_io.open_private_directory(versions)
     os.close(descriptor)
-    if created:
-        root_fd = bundle_io.open_private_directory(path)
-        try:
-            os.fsync(root_fd)
-        except OSError as exc:
-            raise DataValidationError("New versions directory cannot be made durable") from exc
-        finally:
-            os.close(root_fd)
+    root_fd = bundle_io.open_private_directory(path)
+    try:
+        os.fsync(root_fd)
+    except OSError as exc:
+        raise DataValidationError("The versions directory cannot be made durable") from exc
+    finally:
+        os.close(root_fd)
     return versions
 
 
@@ -343,7 +340,6 @@ def _stage_locked(
 def _select(root: Path, receipt: MaterializationReceipt) -> None:
     root_fd = bundle_io.open_private_directory(root)
     old: str | None = None
-    recovery: str | None = None
     try:
         try:
             info = os.stat("current", dir_fd=root_fd, follow_symlinks=False)
@@ -364,11 +360,11 @@ def _select(root: Path, receipt: MaterializationReceipt) -> None:
             try:
                 os.fsync(root_fd)
             except OSError as commit_error:
-                recovery = f".current.recovery.{secrets.token_hex(12)}"
                 try:
                     if old is None:
                         os.unlink("current", dir_fd=root_fd)
                     else:
+                        recovery = f".current.recovery.{secrets.token_hex(12)}"
                         os.symlink(old, recovery, dir_fd=root_fd)
                         os.replace(recovery, "current", src_dir_fd=root_fd, dst_dir_fd=root_fd)
                     os.fsync(root_fd)
@@ -382,11 +378,8 @@ def _select(root: Path, receipt: MaterializationReceipt) -> None:
                     subtype="selection_commit_failed",
                 ) from commit_error
         finally:
-            with suppress(FileNotFoundError):
+            with suppress(OSError):
                 os.unlink(temporary, dir_fd=root_fd)
-            if recovery is not None:
-                with suppress(FileNotFoundError):
-                    os.unlink(recovery, dir_fd=root_fd)
     finally:
         os.close(root_fd)
 

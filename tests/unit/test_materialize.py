@@ -487,13 +487,14 @@ def test_failed_selection_commit_restores_old_current(
     data_root = _private(tmp_path / "data")
     materialize.install_release(first.release_input, **_kwargs(data_root))  # type: ignore[arg-type]
     real_fsync = materialize.os.fsync
-    failed = False
+    root_syncs = 0
 
     def fail_root_once(descriptor: int) -> None:
-        nonlocal failed
-        if not failed and os.readlink(f"/proc/self/fd/{descriptor}") == str(data_root):
-            failed = True
-            raise OSError("synthetic commit failure")
+        nonlocal root_syncs
+        if os.readlink(f"/proc/self/fd/{descriptor}") == str(data_root):
+            root_syncs += 1
+            if root_syncs == 4:
+                raise OSError("synthetic commit failure")
         real_fsync(descriptor)
 
     monkeypatch.setattr(materialize.os, "fsync", fail_root_once)
@@ -648,6 +649,16 @@ def test_first_versions_creation_requires_durable_data_root_sync(
     assert not (data_root / "current").exists()
     assert not any((data_root / "versions").iterdir())
 
+    synced: list[str] = []
+
+    def track_retry_sync(descriptor: int) -> None:
+        synced.append(os.readlink(f"/proc/self/fd/{descriptor}"))
+        real_fsync(descriptor)
+
+    monkeypatch.setattr(materialize.os, "fsync", track_retry_sync)
+    materialize.stage_release(release.release_input, **_kwargs(data_root))  # type: ignore[arg-type]
+    assert str(data_root) in synced
+
 
 def test_huge_lock_timeout_and_application_incompatibility_are_typed(tmp_path: Path) -> None:
     from clinpgx_link.exceptions import DataValidationError
@@ -665,7 +676,7 @@ def test_huge_lock_timeout_and_application_incompatibility_are_typed(tmp_path: P
         materialize.stage_release(release.release_input, **kwargs)  # type: ignore[arg-type]
 
 
-def test_selection_commit_and_recovery_failure_is_typed_and_leaves_no_recovery_link(
+def test_selection_commit_and_recovery_failure_preserves_recovery_link(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from clinpgx_link.exceptions import DataValidationError
@@ -677,10 +688,14 @@ def test_selection_commit_and_recovery_failure_is_typed_and_leaves_no_recovery_l
     materialize.install_release(first.release_input, **_kwargs(data_root))  # type: ignore[arg-type]
     real_fsync = materialize.os.fsync
     real_replace = materialize.os.replace
+    root_syncs = 0
 
     def fail_commit_sync(descriptor: int) -> None:
+        nonlocal root_syncs
         if os.readlink(f"/proc/self/fd/{descriptor}") == str(data_root):
-            raise OSError("synthetic selection commit failure")
+            root_syncs += 1
+            if root_syncs == 4:
+                raise OSError("synthetic selection commit failure")
         real_fsync(descriptor)
 
     def fail_recovery_replace(source: object, destination: object, **kwargs: object) -> None:
@@ -697,4 +712,47 @@ def test_selection_commit_and_recovery_failure_is_typed_and_leaves_no_recovery_l
             **_kwargs(data_root),  # type: ignore[arg-type]
         )
     assert caught.value.subtype == "selection_recovery_failed"
-    assert not any(path.name.startswith(".current.recovery.") for path in data_root.iterdir())
+    recovery_links = [
+        path for path in data_root.iterdir() if path.name.startswith(".current.recovery.")
+    ]
+    assert len(recovery_links) == 1
+    assert os.readlink(recovery_links[0]) == f"versions/{first.artifact_digest}"
+
+
+def test_selection_typed_error_survives_temporary_cleanup_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from clinpgx_link.exceptions import DataValidationError
+    from clinpgx_link.releases import materialize
+
+    first = _release(tmp_path, "a")
+    second = _release(tmp_path, "b", f"sha256:{first.artifact_digest}")
+    data_root = _private(tmp_path / "data")
+    materialize.install_release(first.release_input, **_kwargs(data_root))  # type: ignore[arg-type]
+    real_fsync = materialize.os.fsync
+    real_unlink = materialize.os.unlink
+    root_syncs = 0
+
+    def fail_selection_sync(descriptor: int) -> None:
+        nonlocal root_syncs
+        if os.readlink(f"/proc/self/fd/{descriptor}") == str(data_root):
+            root_syncs += 1
+            if root_syncs == 4:
+                raise OSError("synthetic selection commit failure")
+        real_fsync(descriptor)
+
+    def fail_temporary_cleanup(path: object, **kwargs: object) -> None:
+        if isinstance(path, str) and path.startswith(".current."):
+            raise OSError("synthetic cleanup failure")
+        real_unlink(path, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(materialize.os, "fsync", fail_selection_sync)
+    monkeypatch.setattr(materialize.os, "unlink", fail_temporary_cleanup)
+    with pytest.raises(DataValidationError) as caught:
+        materialize.install_release(
+            second.release_input,
+            previous=_retained(first),
+            **_kwargs(data_root),  # type: ignore[arg-type]
+        )
+    assert caught.value.subtype == "selection_commit_failed"
+    assert os.readlink(data_root / "current") == f"versions/{first.artifact_digest}"
