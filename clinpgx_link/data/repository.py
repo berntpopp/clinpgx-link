@@ -159,12 +159,17 @@ class DatasetRepository:
             raise InvalidInputError("Offset must be non-negative", field="offset")
 
     @staticmethod
-    def _validate_filters(filters: dict[str, str]) -> None:
+    def _validate_filter_values(filters: dict[str, str]) -> None:
         for key, value in filters.items():
-            if key not in _FILTERS:
-                raise InvalidInputError("Unknown canonical dataset filter", field=key)
             if not isinstance(value, str) or not value:
                 raise InvalidInputError("Filter values must be nonempty strings", field=key)
+
+    @classmethod
+    def _validate_filters(cls, filters: dict[str, str]) -> None:
+        cls._validate_filter_values(filters)
+        for key in filters:
+            if key not in _FILTERS:
+                raise InvalidInputError("Unknown canonical dataset filter", field=key)
 
     @staticmethod
     def _fts_query(query: str) -> str | None:
@@ -269,22 +274,30 @@ class DatasetRepository:
         match: str = "exact",
         expected_snapshot: str | None = None,
     ) -> SourceResponse:
+        """Search one dataset; lowercase canonical filter names are reserved semantics."""
         self._validate_snapshot(expected_snapshot)
         self._validate_page(limit, offset)
         if match not in {"exact", "member"}:
             raise InvalidInputError("Match must be exact or member", field="match")
         selected_filters = filters or {}
-        self._validate_filters(selected_filters)
+        self._validate_filter_values(selected_filters)
         dataset = self._dataset(dataset_id)
+        member_row: sqlite3.Row | None = None
         if member is not None:
-            exists = self._connection.execute(
-                "SELECT 1 FROM source_member WHERE dataset_id=? AND path=?",
+            member_row = self._connection.execute(
+                "SELECT headers_json FROM source_member WHERE dataset_id=? AND path=?",
                 (dataset_id, member),
             ).fetchone()
-            if exists is None:
+            if member_row is None:
                 raise NotFoundError("Dataset member is not installed", field="member")
         supported = known_filters(dataset_id, member)
-        unsupported = set(selected_filters) - supported
+        canonical_filters = {
+            key: value for key, value in selected_filters.items() if key in _FILTERS
+        }
+        source_filters = {
+            key: value for key, value in selected_filters.items() if key not in _FILTERS
+        }
+        unsupported = set(canonical_filters) - supported
         if unsupported:
             raise InvalidInputError(
                 "Filter semantics are not declared for this dataset/member",
@@ -295,11 +308,48 @@ class DatasetRepository:
         if member is not None:
             clauses.append("r.member=?")
             parameters.append(member)
+        if source_filters:
+            if member is None or member_row is None:
+                raise InvalidInputError(
+                    "Source field filters require an exact member", field=sorted(source_filters)[0]
+                )
+            headers = json.loads(member_row["headers_json"]) if member_row["headers_json"] else None
+            if not isinstance(headers, list) or not all(isinstance(item, str) for item in headers):
+                raise InvalidInputError(
+                    "Source field filters require a tabular text member",
+                    field=sorted(source_filters)[0],
+                )
+            metadata = {
+                str(item["name"]): item
+                for item in field_metadata(dataset_id, member, tuple(headers))
+            }
+            for key, value in source_filters.items():
+                declared = metadata.get(key)
+                if declared is None:
+                    raise InvalidInputError("Unknown source field filter", field=key)
+                if match == "member":
+                    if "member" not in declared["match_modes"]:
+                        raise InvalidInputError(
+                            "Source field has no declared member tokenizer", field=key
+                        )
+                    clauses.append(
+                        "EXISTS (SELECT 1 FROM membership source_value "
+                        "WHERE source_value.record_pk=r.record_pk "
+                        "AND source_value.source_field=? AND source_value.value=? "
+                        "AND source_value.match_mode='member')"
+                    )
+                else:
+                    clauses.append(
+                        "EXISTS (SELECT 1 FROM json_each(r.fields_json) source_value "
+                        "WHERE source_value.key=? AND source_value.type='text' "
+                        "AND source_value.value=?)"
+                    )
+                parameters.extend([key, value])
         values, total = self._query_records(
             clauses=clauses,
             parameters=parameters,
             query=query,
-            filters=selected_filters,
+            filters=canonical_filters,
             match=match,
             limit=limit,
             offset=offset,

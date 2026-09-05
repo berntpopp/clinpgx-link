@@ -387,7 +387,10 @@ def register_dataset_record_tools(
             str | None, Field(description="Literal token query.", max_length=512)
         ] = None,
         filters: Annotated[
-            dict[str, str] | None, Field(description="Declared canonical filters.")
+            dict[str, str] | None,
+            Field(
+                description="ANDed filters: reserved lowercase canonical keys, or exact advertised source fields when member is explicit."
+            ),
         ] = None,
         match: Annotated[
             MatchMode, Field(description="Exact cells or declared member tokenization.")

@@ -132,6 +132,86 @@ def test_unknown_filter_is_not_successful_empty(tmp_path: Path) -> None:
         repository.search("data/genes.zip", member="genes.tsv", filters={"Symobl": "CYP2C19"})
 
 
+def test_search_dataset_accepts_exact_advertised_text_fields_with_explicit_member(
+    tmp_path: Path,
+) -> None:
+    """Exact source headers query raw TSV cells and combine with canonical filters."""
+    repository, _ = _repository(tmp_path)
+
+    gene = repository.search("data/genes.zip", member="genes.tsv", filters={"Symbol": "CYP2C19"})
+    summary = repository.search(
+        "data/summaryAnnotations.zip",
+        member="summary_annotations.tsv",
+        filters={"Summary Annotation ID": "655384607", "gene": "RGS4"},
+    )
+
+    assert gene.details["total_count"] == 1
+    assert gene.value[0]["id"] == "PA124"
+    assert summary.details["total_count"] == 1
+    assert summary.value[0]["id"] == "655384607"
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"member": "genes.tsv", "filters": {"Symobl": "CYP2C19"}},
+        {"filters": {"Symbol": "CYP2C19"}},
+        {"member": "genes.tsv", "filters": {"Symbol": "CYP2C19"}, "match": "member"},
+    ],
+)
+def test_search_dataset_rejects_unknown_unscoped_or_untokenized_source_fields(
+    tmp_path: Path, kwargs: dict
+) -> None:
+    """Source fields cannot become guessed, cross-member, or generic token selectors."""
+    from clinpgx_link.exceptions import InvalidInputError
+
+    repository, _ = _repository(tmp_path)
+    with pytest.raises(InvalidInputError):
+        repository.search("data/genes.zip", **kwargs)
+
+
+def test_search_dataset_member_matches_only_profiled_multivalue_source_field(
+    tmp_path: Path,
+) -> None:
+    """A published Gene header uses only its declared semicolon membership parser."""
+    from clinpgx_link.data.catalog import SourceInput
+    from clinpgx_link.data.repository import DatasetRepository
+    from clinpgx_link.ingest.builder import build_snapshot
+
+    archive = tmp_path / "summaryAnnotations.zip"
+    _archive(
+        archive,
+        {
+            "summary_annotations.tsv": (
+                b"Summary Annotation ID\tGene\tDrug(s)\n42\tCYP2C19;CYP2D6\tclopidogrel\n"
+            )
+        },
+    )
+    source = SourceInput.from_path(
+        dataset_id="data/summaryAnnotations.zip",
+        path=archive,
+        source_url="https://api.clinpgx.org/v1/download/file/data/summaryAnnotations.zip",
+        retrieved_at="2026-09-05T08:00:00Z",
+        published_at="2026-08-05T01:12:00-07:00",
+        media_type="application/zip",
+        license_id="operator-local-only",
+        tier="approved_registry",
+    )
+    built = build_snapshot([source], tmp_path / "out", RELEASE_TAG)
+    repository = DatasetRepository(built.database)
+
+    found = repository.search(
+        "data/summaryAnnotations.zip",
+        member="summary_annotations.tsv",
+        filters={"Gene": "CYP2D6"},
+        match="member",
+    )
+
+    assert found.details["total_count"] == 1
+    assert found.value[0]["fields"]["Gene"] == "CYP2C19;CYP2D6"
+    repository.close()
+
+
 def test_unknown_json_shape_cannot_create_or_advertise_guessed_entities(tmp_path: Path) -> None:
     """Catch generic id/name keys and path substrings becoming undeclared search semantics."""
     from clinpgx_link.data.catalog import SourceInput
