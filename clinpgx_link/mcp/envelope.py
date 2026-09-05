@@ -84,6 +84,11 @@ def success_result(
                 "source_url": source.url,
                 "data_source": source.data_source,
                 "retrieved_at": source.retrieved_at,
+                "retrieval_time_kind": source.retrieval_time_kind,
+                "acquired_at": source.acquired_at,
+                "admitted_at": source.admitted_at,
+                "source_scope": source.source_scope,
+                "retrieval_time_scope": source.retrieval_time_scope,
                 "published_at": source.published_at,
                 "release_tag": source.release_tag,
                 "source_sha256": source.sha256,
@@ -110,7 +115,10 @@ def success_result(
                 **({"pagination": pagination} if pagination is not None else {}),
                 **({"snapshot_id": snapshot_id} if snapshot_id is not None else {}),
             },
-            "recommended_citation": f"ClinPGx source evidence. {source.url} Retrieved {source.retrieved_at}.",
+            "recommended_citation": (
+                f"ClinPGx source evidence. {source.url} "
+                f"Recorded source timestamp {source.retrieved_at}."
+            ),
             "unsafe_for_clinical_use": True,
         }
     )

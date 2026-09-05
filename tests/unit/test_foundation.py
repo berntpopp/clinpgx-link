@@ -45,6 +45,11 @@ def test_shared_dataclasses_match_the_frozen_collaborator_contract() -> None:
         "release_tag",
         "coverage",
         "warnings",
+        "retrieval_time_kind",
+        "acquired_at",
+        "admitted_at",
+        "source_scope",
+        "retrieval_time_scope",
     ]
     assert [field.name for field in dataclasses.fields(SourceResponse)] == [
         "value",

@@ -13,6 +13,7 @@ from typing import Any, cast
 from clinpgx_link.config import settings
 from clinpgx_link.data.coverage import field_metadata, known_filters
 from clinpgx_link.data.repository_locking import serialized_connection
+from clinpgx_link.data.repository_provenance import dataset_source, snapshot_source
 from clinpgx_link.exceptions import (
     DataValidationError,
     InvalidInputError,
@@ -82,29 +83,15 @@ class DatasetRepository:
 
     @serialized_connection
     def _source(
-        self, dataset: sqlite3.Row | None = None, *, digest: str | None = None
+        self,
+        dataset: sqlite3.Row | None = None,
+        *,
+        digest: str | None = None,
+        member: bool = False,
     ) -> SourceInfo:
-        if dataset is None:
-            row = self._connection.execute(
-                "SELECT source_url,retrieved_at FROM dataset ORDER BY retrieved_at DESC LIMIT 1"
-            ).fetchone()
-            url = "https://www.clinpgx.org/downloads" if row is None else str(row["source_url"])
-            retrieved_at = "1970-01-01T00:00:00Z" if row is None else str(row["retrieved_at"])
-            warnings: tuple[str, ...] = ()
-        else:
-            url = str(dataset["source_url"])
-            retrieved_at = str(dataset["retrieved_at"])
-            warnings = tuple(json.loads(dataset["warnings_json"]))
-        return SourceInfo(
-            source="ClinPGx local snapshot",
-            url=url,
-            retrieved_at=retrieved_at,
-            sha256=digest or self._snapshot_id.removeprefix("sha256:"),
-            data_source="download",
-            release_tag=self._release_tag,
-            coverage="installed_snapshot",
-            warnings=warnings,
-        )
+        if dataset is not None:
+            return dataset_source(dataset, self._release_tag, digest=digest, member=member)
+        return snapshot_source(self._connection, self._snapshot_id, self._release_tag)
 
     @serialized_connection
     def list_datasets(self) -> SourceResponse:
@@ -160,7 +147,11 @@ class DatasetRepository:
             "supported_filters": sorted(known_filters(dataset_id)),
             "members": described_members,
         }
-        return SourceResponse(value=result, source=self._source(dataset))
+        return SourceResponse(
+            value=result,
+            source=self._source(dataset),
+            details={"snapshot_id": self._snapshot_id},
+        )
 
     @staticmethod
     def _validate_page(limit: int, offset: int) -> None:
@@ -568,7 +559,7 @@ class DatasetRepository:
         raw = bytes(row[0])
         return SourceResponse(
             value=raw,
-            source=self._source(dataset, digest=str(metadata["sha256"])),
+            source=self._source(dataset, digest=str(metadata["sha256"]), member=member is not None),
             details={
                 "media_type": metadata["media_type"],
                 "total_bytes": metadata["byte_count"],
@@ -621,7 +612,7 @@ class DatasetRepository:
         }
         return SourceResponse(
             value=value,
-            source=self._source(dataset, digest=str(metadata["sha256"])),
+            source=self._source(dataset, digest=str(metadata["sha256"]), member=member is not None),
             details={"snapshot_id": self._snapshot_id},
         )
 

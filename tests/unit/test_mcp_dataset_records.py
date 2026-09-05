@@ -11,7 +11,7 @@ from clinpgx_link.content.assets import AssetReference
 from clinpgx_link.content.store import ContentStore
 from clinpgx_link.mcp.facade import create_mcp
 from clinpgx_link.models import SourceResponse
-from tests.unit.test_repository import _repository
+from tests.unit.test_repository import GENES_RETRIEVED_AT, _repository
 
 
 def _record_server(repository, store):
@@ -141,12 +141,31 @@ async def test_search_returns_complete_standard_rows_and_two_pages(tmp_path):
             assert row["dataset_id"] == "data/genes.zip"
             assert row["member"]["text"] == "genes.tsv"
             assert row["id"] == "PA124"
+            assert payload["_meta"]["source_url"].endswith("/data/genes.zip")
+            assert payload["_meta"]["source_scope"] == "dataset"
+            assert payload["_meta"]["retrieval_time_kind"] == "unknown"
+            assert payload["_meta"]["retrieval_time_scope"] == "source_recorded"
+            assert payload["_meta"]["acquired_at"] is None
+            assert payload["_meta"]["admitted_at"] is None
+            assert row["provenance"] == {
+                "dataset_source_url": payload["_meta"]["source_url"],
+                "archive_sha256": payload["_meta"]["source_sha256"],
+                "published_at": "2026-09-05T00:37:36-07:00",
+                "retrieved_at": GENES_RETRIEVED_AT,
+                "retrieval_time_kind": "unknown",
+                "acquired_at": None,
+                "admitted_at": None,
+                "source_scope": "dataset",
+                "retrieval_time_scope": "source_recorded",
+            }
+            assert row["member"]["provenance"]["retrieved_at"] == GENES_RETRIEVED_AT
             assert payload["_meta"]["pagination"]["total_count"] == 2
             assert payload["_meta"]["pagination"]["snapshot_id"] == built.snapshot_id
             asset = AssetReference.decode(row["content_ref"])
             assert asset.snapshot_id == built.snapshot_id
             assert asset.dataset_id == "data/genes.zip"
             assert asset.member == "genes.tsv"
+            assert asset.sha256 != row["provenance"]["archive_sha256"]
             second = await client.call_tool(
                 "search_dataset",
                 {
@@ -232,6 +251,13 @@ async def test_get_record_preserves_row_and_pointer_is_explicitly_derived(tmp_pa
             assert result["fields"]["Symbol"]["text"] == row["fields"]["Symbol"]
             assert result["fields"].keys() == row["fields"].keys()
             assert result["content_ref"].startswith("asset:")
+            assert result["provenance"]["dataset_source_url"].endswith("/data/genes.zip")
+            assert (
+                result["provenance"]["archive_sha256"]
+                == call.structured_content["_meta"]["source_sha256"]
+            )
+            assert result["provenance"]["retrieved_at"] == GENES_RETRIEVED_AT
+            assert call.structured_content["_meta"]["source_scope"] == "dataset"
             assert call.structured_content["_meta"]["snapshot_id"] == built.snapshot_id
             selected = await client.call_tool(
                 "get_dataset_record",

@@ -11,10 +11,18 @@ from fastmcp import Client, FastMCP
 from clinpgx_link.api.client import ClinPGxClient
 from clinpgx_link.api.website import WebsiteClient
 from clinpgx_link.config import Settings
+from clinpgx_link.content.assets import AssetReference
 from clinpgx_link.content.store import ContentStore
 from clinpgx_link.models import SourceResponse
 from clinpgx_link.services.api import ApiService
-from tests.unit.test_repository import RELEASE_TAG, _archive, _repository
+from tests.unit.test_repository import (
+    GENES_RETRIEVED_AT,
+    PATHWAYS_RETRIEVED_AT,
+    RELEASE_TAG,
+    _archive,
+    _mixed_repository,
+    _repository,
+)
 
 
 def _server(store, *, repository=None, api=None, website=None):
@@ -90,7 +98,7 @@ async def test_record_tool_definitions_describe_every_argument_within_budget(tmp
 
 @pytest.mark.asyncio
 async def test_auto_local_multivalue_search_and_snapshot_cursor(tmp_path):
-    repository, built = _repository(tmp_path)
+    repository, built = _mixed_repository(tmp_path)
     store = ContentStore(tmp_path / "content.sqlite")
     try:
         async with Client(_server(store, repository=repository)) as client:
@@ -105,6 +113,10 @@ async def test_auto_local_multivalue_search_and_snapshot_cursor(tmp_path):
             payload = first.structured_content
             assert payload["_meta"]["data_source"] == "download"
             assert payload["_meta"]["snapshot_id"] == built.snapshot_id
+            assert payload["_meta"]["source_url"] == "https://www.clinpgx.org/downloads"
+            assert payload["_meta"]["source_scope"] == "snapshot"
+            assert payload["_meta"]["retrieved_at"] == PATHWAYS_RETRIEVED_AT
+            assert payload["_meta"]["retrieval_time_scope"] == "aggregate_snapshot"
             assert payload["results"][0]["id"] == "655384607"
             assert payload["results"][0]["content_ref"].startswith("asset:")
             chemical = await client.call_tool(
@@ -128,7 +140,19 @@ async def test_auto_local_multivalue_search_and_snapshot_cursor(tmp_path):
             broad = await client.call_tool(
                 "search_records", {"entity_type": "gene", "query": "CPCJ", "limit": 1}
             )
-            assert _data(broad.structured_content["results"][0], "Symbol") == "CYP2C19"
+            broad_payload = broad.structured_content
+            broad_row = broad_payload["results"][0]
+            assert _data(broad_row, "Symbol") == "CYP2C19"
+            assert broad_payload["_meta"]["source_url"] == "https://www.clinpgx.org/downloads"
+            assert broad_row["provenance"]["dataset_source_url"].endswith("/data/genes.zip")
+            assert broad_row["provenance"]["retrieved_at"] == GENES_RETRIEVED_AT
+            assert (
+                broad_row["provenance"]["archive_sha256"] != broad_payload["_meta"]["source_sha256"]
+            )
+            assert broad_row["member"]["provenance"]["retrieved_at"] == GENES_RETRIEVED_AT
+            broad_asset = AssetReference.decode(broad_row["content_ref"])
+            assert broad_asset.dataset_id == "data/genes.zip"
+            assert broad_asset.member == "genes.tsv"
 
             wrong_source = await client.call_tool(
                 "search_records",
@@ -300,6 +324,11 @@ async def test_download_detail_resolves_exact_external_id_and_rejects_ambiguity(
             )
             assert result.structured_content["result"]["id"] == "PA124"
             assert result.structured_content["_meta"]["snapshot_id"] == built.snapshot_id
+            assert result.structured_content["_meta"]["source_url"].endswith("/data/genes.zip")
+            assert result.structured_content["_meta"]["source_scope"] == "dataset"
+            assert result.structured_content["result"]["provenance"]["retrieved_at"] == (
+                GENES_RETRIEVED_AT
+            )
 
             original = repository.search_entities
 
@@ -326,7 +355,7 @@ async def test_download_detail_resolves_exact_external_id_and_rejects_ambiguity(
 async def test_local_search_and_detail_defer_first_row_that_exceeds_wire_fence_budget(
     tmp_path, monkeypatch
 ):
-    repository, _ = _repository(tmp_path)
+    repository, _ = _mixed_repository(tmp_path)
     store = ContentStore(tmp_path / "content.sqlite")
     original_search = repository.search_entities
     original_get = repository.get_record
@@ -369,7 +398,11 @@ async def test_local_search_and_detail_defer_first_row_that_exceeds_wire_fence_b
                     "source": "download",
                 },
             )
-            assert search.structured_content["results"][0]["fields"]["deferred_content"] is True
+            search_row = search.structured_content["results"][0]
+            assert search_row["fields"]["deferred_content"] is True
+            retained = store.get(search_row["fields"]["content_ref"])
+            assert retained.source.retrieved_at == GENES_RETRIEVED_AT
+            assert search_row["provenance"]["dataset_source_url"].endswith("/data/genes.zip")
 
             detail = await client.call_tool(
                 "get_record",
@@ -421,11 +454,19 @@ async def test_api_and_website_detail_preserve_pointer_and_source_honesty(tmp_pa
             )
             assert json.loads(api.structured_content["result"]["data"]["text"]) == "CYP2C19"
             assert api.structured_content["result"]["source_pointer"]["text"] == "/data/symbol"
+            assert api.structured_content["_meta"]["retrieval_time_kind"] == "unknown"
+            assert api.structured_content["_meta"]["acquired_at"] is None
+            assert api.structured_content["_meta"]["admitted_at"] is None
+            assert api.structured_content["_meta"]["source_scope"] == "response"
+            assert api.structured_content["_meta"]["retrieval_time_scope"] == "source_recorded"
             website = await client.call_tool(
                 "get_record",
                 {"entity_type": "gene", "record_id": "PA124", "source": "website"},
             )
             assert website.structured_content["_meta"]["data_source"] == "website"
+            assert website.structured_content["_meta"]["retrieval_time_kind"] == "unknown"
+            assert website.structured_content["_meta"]["acquired_at"] is None
+            assert website.structured_content["_meta"]["admitted_at"] is None
             unsupported = await client.call_tool(
                 "get_record",
                 {"entity_type": "chemical", "record_id": "PA449053", "source": "website"},

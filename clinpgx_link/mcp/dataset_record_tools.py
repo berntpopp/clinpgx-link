@@ -62,6 +62,9 @@ def _derived_source(source: SourceInfo, record_id: str, raw: bytes) -> SourceInf
         release_tag=source.release_tag,
         coverage="derived_not_original",
         warnings=source.warnings,
+        retrieval_time_kind=source.retrieval_time_kind,
+        acquired_at=source.acquired_at,
+        admitted_at=source.admitted_at,
     )
 
 
@@ -260,7 +263,9 @@ def _shape_row(
     trusted_field_names: frozenset[str] | None = None,
     force_defer_fields: bool = False,
 ) -> dict[str, Any]:
-    source_ref = _asset_reference(asset_response or response, snapshot_id)
+    owning_response = asset_response or response
+    source = owning_response.source
+    source_ref = _asset_reference(owning_response, snapshot_id)
     fields = row.get("fields", {})
     owned_names = trusted_fields_for_row(row)
     trusted_names = (
@@ -274,21 +279,30 @@ def _shape_row(
         or _needs_deferred_fields(fields, trusted_field_names=trusted_names)
     )
     derived_ref = (
-        _retain_row(store, row, response.source)
-        if defer_fields or _has_oversized_string(row)
-        else None
+        _retain_row(store, row, source) if defer_fields or _has_oversized_string(row) else None
     )
     result = dict(row)
     result["content_ref"] = source_ref
+    result["provenance"] = {
+        "dataset_source_url": source.url,
+        "archive_sha256": source.sha256,
+        "published_at": source.published_at,
+        "retrieved_at": source.retrieved_at,
+        "retrieval_time_kind": source.retrieval_time_kind,
+        "acquired_at": source.acquired_at,
+        "admitted_at": source.admitted_at,
+        "source_scope": source.source_scope,
+        "retrieval_time_scope": source.retrieval_time_scope,
+    }
     record_id = str(row["record_id"])
-    result["member"] = fence_text(str(row["member"]), source=response.source, record_id=record_id)
+    result["member"] = fence_text(str(row["member"]), source=source, record_id=record_id)
     for pointer_key in ("json_pointer", "parent_pointer"):
         if pointer_key in result and result[pointer_key] is not None:
             result[pointer_key] = fence_text(
-                str(result[pointer_key]), source=response.source, record_id=record_id
+                str(result[pointer_key]), source=source, record_id=record_id
             )
     if defer_fields:
-        root_ref = derived_ref or _retain_row(store, row, response.source)
+        root_ref = derived_ref or _retain_row(store, row, source)
         result["fields"] = _fields_descriptor(
             root_ref,
             pointer="" if _has_overlong_field_pointer(fields) else "/fields",
@@ -299,13 +313,12 @@ def _shape_row(
             fields,
             pointer="/fields",
             derived_ref=derived_ref,
-            source=response.source,
+            source=source,
             record_id=record_id,
         )
         if isinstance(fields, dict):
             result["field_names"] = [
-                fence_text(str(name), source=response.source, record_id=record_id)
-                for name in fields
+                fence_text(str(name), source=source, record_id=record_id) for name in fields
             ]
     return result
 

@@ -289,7 +289,7 @@ def register_dataset_tools(
                     )
                 offset = position.offset
             response = await asyncio.to_thread(repository.describe, dataset_id)
-            if response.source.sha256 != snapshot_id.removeprefix("sha256:"):
+            if response.details.get("snapshot_id") != snapshot_id:
                 raise UpstreamUnavailableError(
                     "The local snapshot identity changed.", subtype="snapshot_mismatch"
                 )

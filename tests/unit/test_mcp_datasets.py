@@ -228,7 +228,9 @@ async def test_selected_member_only_and_structured_sheet_metadata_is_preserved(
         ],
     )
     monkeypatch.setattr(
-        repository, "describe", lambda dataset_id: SourceResponse(description, source)
+        repository,
+        "describe",
+        lambda dataset_id: SourceResponse(description, source, {"snapshot_id": built.snapshot_id}),
     )
     try:
         async with Client(_dataset_server(repository, store)) as client:
@@ -274,7 +276,9 @@ async def test_deferred_member_metadata_has_retained_pointer(tmp_path, monkeypat
         ],
     )
     monkeypatch.setattr(
-        repository, "describe", lambda dataset_id: SourceResponse(description, source)
+        repository,
+        "describe",
+        lambda dataset_id: SourceResponse(description, source, {"snapshot_id": built.snapshot_id}),
     )
     try:
         async with Client(_dataset_server(repository, store)) as client:
@@ -384,6 +388,37 @@ async def test_stale_cursor_is_rejected_after_snapshot_changes(tmp_path):
             assert stale.is_error
             assert stale.structured_content["error_code"] == "upstream_unavailable"
             assert stale.structured_content["subtype"] == "snapshot_mismatch"
+    finally:
+        repository.close()
+        store.close()
+
+
+@pytest.mark.asyncio
+async def test_dataset_description_validates_snapshot_details_not_archive_digest(
+    tmp_path, monkeypatch
+):
+    repository, built = _repository(tmp_path)
+    store = ContentStore(tmp_path / "content.sqlite")
+    original = repository.describe
+    try:
+        async with Client(_dataset_server(repository, store)) as client:
+            valid = await client.call_tool("get_dataset", {"dataset_id": "data/genes.zip"})
+            assert valid.structured_content["_meta"]["source_scope"] == "dataset"
+            assert valid.structured_content["_meta"][
+                "source_sha256"
+            ] != built.snapshot_id.removeprefix("sha256:")
+
+            def mismatched(dataset_id):
+                response = original(dataset_id)
+                response.details["snapshot_id"] = "sha256:" + "f" * 64
+                return response
+
+            monkeypatch.setattr(repository, "describe", mismatched)
+            invalid = await client.call_tool(
+                "get_dataset", {"dataset_id": "data/genes.zip"}, raise_on_error=False
+            )
+            assert invalid.is_error
+            assert invalid.structured_content["subtype"] == "snapshot_mismatch"
     finally:
         repository.close()
         store.close()

@@ -16,6 +16,8 @@ import pytest
 
 FIXTURES = Path(__file__).parents[1] / "fixtures" / "exports" / "sourced"
 RELEASE_TAG = "data-clinpgx-core-0123456789abcdef"
+GENES_RETRIEVED_AT = "2026-09-05T08:00:00Z"
+PATHWAYS_RETRIEVED_AT = "2026-09-06T09:00:00Z"
 
 
 class _OverlapRejectingConnection:
@@ -53,7 +55,7 @@ def _archive(path: Path, members: dict[str, bytes]) -> None:
     path.write_bytes(output.getvalue())
 
 
-def _repository(tmp_path: Path):
+def _repository(tmp_path: Path, *, include_pathways: bool = False):
     from clinpgx_link.data.catalog import SourceInput
     from clinpgx_link.data.repository import DatasetRepository
     from clinpgx_link.ingest.builder import build_snapshot
@@ -72,6 +74,10 @@ def _repository(tmp_path: Path):
         },
         "relationships.zip": {"relationships.tsv": (FIXTURES / "relationships.tsv").read_bytes()},
     }
+    if include_pathways:
+        definitions["pathways.json.zip"] = {
+            "pathways.json": (FIXTURES / "pathways.json").read_bytes()
+        }
     sources = []
     for name, members in definitions.items():
         path = inputs / name
@@ -81,7 +87,9 @@ def _repository(tmp_path: Path):
                 dataset_id=f"data/{name}",
                 path=path,
                 source_url=f"https://api.clinpgx.org/v1/download/file/data/{name}",
-                retrieved_at="2026-09-05T08:00:00Z",
+                retrieved_at=(
+                    PATHWAYS_RETRIEVED_AT if name == "pathways.json.zip" else GENES_RETRIEVED_AT
+                ),
                 published_at=(
                     "2026-09-05T00:37:36-07:00"
                     if name == "genes.zip"
@@ -96,9 +104,13 @@ def _repository(tmp_path: Path):
     return DatasetRepository(built.database), built
 
 
+def _mixed_repository(tmp_path: Path):
+    return _repository(tmp_path, include_pathways=True)
+
+
 def test_repository_lists_and_describes_only_the_pinned_snapshot(tmp_path: Path) -> None:
     """Catch mutable-current reads or catalog metadata presented as imported coverage."""
-    repository, built = _repository(tmp_path)
+    repository, built = _mixed_repository(tmp_path)
 
     status = repository.status()
     listed = repository.list_datasets()
@@ -106,10 +118,18 @@ def test_repository_lists_and_describes_only_the_pinned_snapshot(tmp_path: Path)
 
     assert status["snapshot_id"] == built.snapshot_id
     assert status["release_tag"] == RELEASE_TAG
-    assert len(listed.value) == 4
+    assert len(listed.value) == 5
     assert listed.source.release_tag == RELEASE_TAG
+    assert listed.source.url == "https://www.clinpgx.org/downloads"
+    assert listed.source.retrieved_at == PATHWAYS_RETRIEVED_AT
+    assert listed.source.retrieval_time_kind == "unknown"
+    assert listed.source.acquired_at is None
+    assert listed.source.admitted_at is None
+    assert listed.source.source_scope == "snapshot"
+    assert listed.source.retrieval_time_scope == "aggregate_snapshot"
     assert listed.source.sha256 == built.snapshot_id.removeprefix("sha256:")
     assert described.value["dataset_id"] == "data/genes.zip"
+    assert described.details["snapshot_id"] == built.snapshot_id
     assert described.value["source_date"] == "2026-09-05T00:37:36-07:00"
     genes = described.value["members"][0]
     assert genes["path"] == "genes.tsv"
@@ -148,6 +168,15 @@ def test_repository_search_returns_standard_rows_counts_and_stable_pages(tmp_pat
         "id": "PA124",
     }
     assert first.value[0]["fields"]["Alternate Names"] == "CPCJ;CYPIIC17;P450C2C"
+    assert first.source.url.endswith("/data/genes.zip")
+    assert first.source.retrieved_at == GENES_RETRIEVED_AT
+    assert first.source.retrieval_time_kind == "unknown"
+    assert first.source.source_scope == "dataset"
+    assert first.source.retrieval_time_scope == "source_recorded"
+    assert (
+        first.source.sha256
+        == hashlib.sha256((tmp_path / "inputs" / "genes.zip").read_bytes()).hexdigest()
+    )
 
 
 def test_unknown_filter_is_not_successful_empty(tmp_path: Path) -> None:
@@ -548,9 +577,11 @@ def test_asset_content_survives_build_cache_deletion_and_upstream_replacement(
 
     assert archive.value == original_archive
     assert archive.source.sha256 == hashlib.sha256(original_archive).hexdigest()
+    assert archive.source.source_scope == "dataset"
     assert archive.details["media_type"] == "application/zip"
     assert member.value == (FIXTURES / "genes.tsv").read_bytes()
     assert member.source.sha256 == hashlib.sha256(member.value).hexdigest()
+    assert member.source.source_scope == "member"
     assert member.details["snapshot_id"] == built.snapshot_id
     assert deleted.value == deleted_archive
     assert deleted.source.sha256 == hashlib.sha256(deleted_archive).hexdigest()
