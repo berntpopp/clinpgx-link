@@ -6,7 +6,7 @@ import ipaddress
 import re
 import uuid
 from collections.abc import AsyncIterator
-from contextlib import AsyncExitStack, asynccontextmanager
+from contextlib import asynccontextmanager
 from typing import Any
 
 import structlog
@@ -202,10 +202,10 @@ class ProtocolVersionMiddleware:
         await self.app(scope, receive, send)
 
 
-def _snapshot_status(runtime_settings: Settings) -> dict[str, Any] | None:
-    repository: DatasetRepository | None = None
+def _snapshot_status(repository: DatasetRepository | None) -> dict[str, Any] | None:
+    if repository is None:
+        return None
     try:
-        repository = DatasetRepository(runtime_settings.snapshot_path)
         status = repository.status()
         datasets = repository.list_datasets().value
         identity = status.get("snapshot_id")
@@ -223,13 +223,32 @@ def _snapshot_status(runtime_settings: Settings) -> dict[str, Any] | None:
         }
     except Exception:
         return None
-    finally:
+
+
+def _open_snapshot(runtime_settings: Settings) -> DatasetRepository | None:
+    """Admit one handle; activation cannot replace an existing process's view."""
+    repository: DatasetRepository | None = None
+    try:
+        repository = DatasetRepository(runtime_settings.snapshot_path)
+        status = _snapshot_status(repository)
+        if status is not None and (
+            runtime_settings.expected_snapshot is None
+            or status["snapshot_id"] == runtime_settings.expected_snapshot
+        ):
+            return repository
+    except Exception:
         if repository is not None:
             repository.close()
+        return None
+    if repository is not None:
+        repository.close()
+    return None
 
 
-def _health(runtime_settings: Settings) -> tuple[dict[str, Any], int]:
-    snapshot = _snapshot_status(runtime_settings)
+def _health(
+    runtime_settings: Settings, repository: DatasetRepository | None
+) -> tuple[dict[str, Any], int]:
+    snapshot = _snapshot_status(repository)
     exact = snapshot is not None and (
         runtime_settings.expected_snapshot is None
         or snapshot["snapshot_id"] == runtime_settings.expected_snapshot
@@ -249,20 +268,6 @@ def _health(runtime_settings: Settings) -> tuple[dict[str, Any], int]:
     return payload, status_code
 
 
-def _compose_lifespan(app: FastAPI, mcp_app: Any) -> None:
-    host_lifespan = app.router.lifespan_context
-    mcp_lifespan = mcp_app.router.lifespan_context
-
-    @asynccontextmanager
-    async def combined(parent: FastAPI) -> AsyncIterator[None]:
-        async with AsyncExitStack() as stack:
-            await stack.enter_async_context(host_lifespan(parent))
-            await stack.enter_async_context(mcp_lifespan(parent))
-            yield
-
-    app.router.lifespan_context = combined
-
-
 def create_app(runtime_settings: Settings | None = None) -> FastAPI:
     """Create the HTTP-only application with health routes before the MCP mount."""
     selected = runtime_settings or default_settings
@@ -276,15 +281,43 @@ def create_app(runtime_settings: Settings | None = None) -> FastAPI:
     source_client = ClinPGxClient(selected, content_store=store)
     api_service = ApiService(source_client)
     website_client = WebsiteClient(source_client)
+    repository: DatasetRepository | None = None
+    mcp_app: ASGIApp | None = None
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+        nonlocal repository, mcp_app
         logger = structlog.get_logger("clinpgx_link")
-        logger.info("server_started", status="success", source="mcp")
         try:
-            yield
+            repository = _open_snapshot(selected)
+            _app.state.repository = repository
+            mcp = create_mcp(
+                content_store=store,
+                api_service=api_service,
+                website_client=website_client,
+                repository=repository,
+                source_access_allowed=selected.runtime_mode != "production"
+                or repository is not None,
+            )
+            mounted = mcp.http_app(
+                path=selected.mcp_path,
+                stateless_http=True,
+                json_response=True,
+                host_origin_protection=False,
+            )
+            mounted.router.redirect_slashes = False
+            _app.state.mcp = mcp
+            async with mounted.router.lifespan_context(_app):
+                mcp_app = mounted
+                logger.info("server_started", status="success", source="mcp")
+                yield
         finally:
-            await source_client.close()
+            mcp_app = None
+            try:
+                await source_client.close()
+            finally:
+                if repository is not None:
+                    repository.close()
             logger.info("server_stopped", status="success", source="mcp")
 
     app = FastAPI(
@@ -299,6 +332,7 @@ def create_app(runtime_settings: Settings | None = None) -> FastAPI:
     app.state.content_store = store
     app.state.source_client = source_client
     app.state.settings = selected
+    app.state.repository = repository
 
     @app.get("/api/live")
     async def live() -> dict[str, Any]:
@@ -312,23 +346,17 @@ def create_app(runtime_settings: Settings | None = None) -> FastAPI:
     @app.get("/health")
     @app.get("/api/health")
     async def health() -> JSONResponse:
-        payload, status_code = _health(selected)
+        payload, status_code = _health(selected, repository)
         return JSONResponse(payload, status_code=status_code)
 
-    mcp = create_mcp(
-        content_store=store,
-        api_service=api_service,
-        website_client=website_client,
-    )
-    mcp_app = mcp.http_app(
-        path=selected.mcp_path,
-        stateless_http=True,
-        json_response=True,
-        host_origin_protection=False,
-    )
-    mcp_app.router.redirect_slashes = False
-    _compose_lifespan(app, mcp_app)
-    app.state.mcp = mcp
+    async def dispatch_mcp(scope: Scope, receive: Receive, send: Send) -> None:
+        if mcp_app is None:
+            await JSONResponse({"error": "service_not_ready"}, status_code=503)(
+                scope, receive, send
+            )
+            return
+        await mcp_app(scope, receive, send)
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=list(selected.allowed_origins),
@@ -345,7 +373,7 @@ def create_app(runtime_settings: Settings | None = None) -> FastAPI:
         allowed_origins=selected.allowed_origins,
     )
     app.add_middleware(RequestContextMiddleware)
-    app.mount("/", mcp_app)
+    app.mount("/", dispatch_mcp)
     return app
 
 

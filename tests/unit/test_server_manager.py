@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import base64
+import hashlib
 import json
 import sqlite3
 import uuid
@@ -297,3 +299,227 @@ def test_source_client_and_shared_store_have_one_application_lifetime(tmp_path):
 
     with pytest.raises(UpstreamUnavailableError, match="closed"):
         asyncio.run(source_client.request("GET", "/report/stats"))
+
+
+def _diagnostics(client):
+    response = client.post(
+        "/mcp",
+        headers=_HEADERS,
+        json={
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {"name": "get_diagnostics", "arguments": {}},
+        },
+    )
+    assert response.status_code == 200
+    return response.json()["result"]["structuredContent"]["result"]["local_snapshot"]
+
+
+def test_http_tools_and_health_share_snapshot_until_restart(tmp_path):
+    from clinpgx_link.server_manager import create_app
+
+    original = "sha256:" + "a" * 64
+    replacement = "sha256:" + "b" * 64
+    settings = _settings(tmp_path)
+    _snapshot(settings.snapshot_path, original)
+    candidate = tmp_path / "candidate" / "clinpgx.sqlite"
+    _snapshot(candidate, replacement)
+
+    with TestClient(create_app(settings)) as client:
+        assert _diagnostics(client)["snapshot_id"] == original
+        candidate.replace(settings.snapshot_path)
+        assert client.get("/health").json()["snapshot_id"] == original
+        assert _diagnostics(client)["snapshot_id"] == original
+
+    with TestClient(create_app(settings)) as restarted:
+        assert _diagnostics(restarted)["snapshot_id"] == replacement
+        assert restarted.get("/health").json()["snapshot_id"] == replacement
+
+
+def test_snapshot_is_admitted_at_lifespan_start_not_app_construction(tmp_path):
+    from clinpgx_link.server_manager import create_app
+
+    settings = _settings(tmp_path)
+    _snapshot(settings.snapshot_path, "sha256:" + "a" * 64)
+    candidate = tmp_path / "candidate" / "clinpgx.sqlite"
+    _snapshot(candidate, "sha256:" + "b" * 64)
+    app = create_app(settings)
+    candidate.replace(settings.snapshot_path)
+    with TestClient(app) as client:
+        assert _diagnostics(client)["snapshot_id"] == "sha256:" + "b" * 64
+
+
+def test_mcp_startup_failure_closes_admitted_snapshot(tmp_path, monkeypatch):
+    from clinpgx_link import server_manager
+
+    settings = _settings(tmp_path)
+    _snapshot(settings.snapshot_path, "sha256:" + "a" * 64)
+    app = server_manager.create_app(settings)
+
+    def failed_factory(**kwargs):
+        raise RuntimeError("Synthetic MCP construction failure")
+
+    monkeypatch.setattr(server_manager, "create_mcp", failed_factory)
+    with pytest.raises(RuntimeError, match="Synthetic MCP construction failure"), TestClient(app):
+        pass
+    with pytest.raises(sqlite3.ProgrammingError):
+        app.state.repository.list_datasets()
+    with pytest.raises(sqlite3.ProgrammingError):
+        app.state.content_store.get("content:" + "0" * 64)
+
+
+def test_mismatched_production_snapshot_is_unavailable_to_http_tools(tmp_path):
+    from clinpgx_link.models import SourceInfo
+    from clinpgx_link.server_manager import create_app
+
+    settings = _settings(
+        tmp_path, runtime_mode="production", expected_snapshot="sha256:" + "b" * 64
+    )
+    _snapshot(settings.snapshot_path, "sha256:" + "a" * 64)
+    app = create_app(settings)
+    raw = b"retained source evidence"
+    reference = app.state.content_store.put(
+        raw,
+        SourceInfo(
+            "test",
+            "https://example.test/source",
+            "2026-09-05T00:00:00Z",
+            hashlib.sha256(raw).hexdigest(),
+            "api",
+        ),
+        "text/plain",
+    )
+    with TestClient(app) as client:
+        assert _diagnostics(client)["ready"] is False
+        assert client.get("/health").status_code == 503
+        response = client.post(
+            "/mcp",
+            headers=_HEADERS,
+            json={
+                "jsonrpc": "2.0",
+                "id": 9,
+                "method": "tools/call",
+                "params": {
+                    "name": "get_source_content",
+                    "arguments": {"content_ref": reference, "representation": "base64"},
+                },
+            },
+        )
+        result = response.json()["result"]
+        assert result["isError"] is True
+        assert result["structuredContent"]["error_code"] == "upstream_unavailable"
+        assert result["structuredContent"]["subtype"] == "snapshot_not_ready"
+
+
+def test_snapshot_handle_is_closed_with_http_application(tmp_path):
+    from clinpgx_link.server_manager import create_app
+
+    settings = _settings(tmp_path)
+    _snapshot(settings.snapshot_path, "sha256:" + "a" * 64)
+    app = create_app(settings)
+    with TestClient(app) as client:
+        assert _diagnostics(client)["ready"] is True
+        repository = app.state.repository
+    with pytest.raises(sqlite3.ProgrammingError):
+        repository.list_datasets()
+
+
+def test_unready_production_makes_no_source_requests(tmp_path, monkeypatch):
+    from clinpgx_link.server_manager import create_app
+
+    settings = _settings(
+        tmp_path, runtime_mode="production", expected_snapshot="sha256:" + "b" * 64
+    )
+    app = create_app(settings)
+    sent = []
+
+    async def unexpected_send(request, **kwargs):
+        sent.append(request)
+        raise AssertionError("Unready production must not contact upstream")
+
+    monkeypatch.setattr(app.state.source_client._http, "send", unexpected_send)
+    with TestClient(app) as client:
+        for name, arguments in (
+            (
+                "get_api_data",
+                {"operation": "GET /data/gene/{id}", "path_parameters": {"id": "PA124"}},
+            ),
+            (
+                "get_website_data",
+                {
+                    "operation": "GET /site/alleleFunction/{geneId}",
+                    "path_parameters": {"geneId": "PA128"},
+                },
+            ),
+        ):
+            response = client.post(
+                "/mcp",
+                headers=_HEADERS,
+                json={
+                    "jsonrpc": "2.0",
+                    "id": 5,
+                    "method": "tools/call",
+                    "params": {"name": name, "arguments": arguments},
+                },
+            )
+            result = response.json()["result"]
+            assert result["isError"] is True
+            assert result["structuredContent"]["subtype"] == "snapshot_not_ready"
+        probe = client.post(
+            "/mcp",
+            headers=_HEADERS,
+            json={
+                "jsonrpc": "2.0",
+                "id": 6,
+                "method": "tools/call",
+                "params": {"name": "get_diagnostics", "arguments": {"probe_upstream": True}},
+            },
+        )
+        assert not probe.json()["result"]["isError"]
+        assert (
+            probe.json()["result"]["structuredContent"]["result"]["upstream_probe"]["status"]
+            == "not_configured"
+        )
+        assert client.get("/api/live").status_code == 200
+    assert sent == []
+
+
+def test_http_dataset_discovery_reaches_exact_installed_bytes(tmp_path):
+    from clinpgx_link.server_manager import create_app
+    from tests.unit.test_repository import FIXTURES, _repository
+
+    repository, built = _repository(tmp_path)
+    repository.close()
+    settings = _settings(tmp_path).model_copy(update={"snapshot_path": built.database})
+    with TestClient(create_app(settings)) as client:
+
+        def call(name, arguments):
+            response = client.post(
+                "/mcp",
+                headers=_HEADERS,
+                json={
+                    "jsonrpc": "2.0",
+                    "id": 4,
+                    "method": "tools/call",
+                    "params": {"name": name, "arguments": arguments},
+                },
+            )
+            assert response.status_code == 200
+            result = response.json()["result"]
+            assert not result.get("isError", False), result
+            assert json.loads(result["content"][0]["text"]) == result["structuredContent"]
+            return result["structuredContent"]
+
+        catalog = call("list_datasets", {"query": "genes", "limit": 1})
+        assert catalog["results"][0]["dataset_id"] == "data/genes.zip"
+        dataset = call("get_dataset", {"dataset_id": "data/genes.zip"})
+        assert dataset["_meta"]["pagination"]["snapshot_id"] == built.snapshot_id
+        member = dataset["result"]["members"][0]
+        content = call(
+            "get_source_content",
+            {"content_ref": member["content_ref"], "representation": "base64", "length": 8192},
+        )["result"]
+        assert content["offline_available"] is True
+        assert content["has_more"] is False
+        assert base64.b64decode(content["base64"]) == (FIXTURES / "genes.tsv").read_bytes()
