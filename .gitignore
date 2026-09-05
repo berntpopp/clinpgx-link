@@ -11,7 +11,8 @@ build/
 .env
 .env.*
 !.env.example
-data/
-!clinpgx_link/data/
-!clinpgx_link/data/**
+/data/
 artifacts/
+.benchmarks/
+.worktrees/
+.superpowers/
