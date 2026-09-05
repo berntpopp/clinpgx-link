@@ -46,6 +46,8 @@ def test_byte_chunks_preserve_exact_source_encoding():
         )
         parts.append(base64.b64decode(result["base64"], validate=True))
         assert result["sha256"] == hashlib.sha256(raw).hexdigest()
+        assert result["source_sha256"] == hashlib.sha256(raw).hexdigest()
+        assert result["derived"] is False
     assert b"".join(parts) == raw
 
 
@@ -124,21 +126,188 @@ def test_invalid_json_cannot_be_reinterpreted_as_valid_data(raw):
     assert base64.b64decode(original["base64"]) == raw
 
 
-def test_selected_string_bytes_are_explicitly_derived_and_lossless():
+def test_pointer_base64_is_rejected_with_original_body_recovery():
+    from clinpgx_link.content.reader import read_content
+    from clinpgx_link.exceptions import InvalidInputError
+
+    with pytest.raises(InvalidInputError) as caught:
+        read_content(
+            b'{ "x" : "\\u00e9" }\r\n',
+            media_type="application/json",
+            pointer="/x",
+            representation="base64",
+        )
+    assert caught.value.field == "pointer"
+    assert "empty pointer" in (caught.value.hint or "").lower()
+    assert "base64" in (caught.value.hint or "").lower()
+
+
+@pytest.mark.parametrize(
+    (
+        "raw",
+        "expected_type",
+        "expected_bytes",
+        "expected_length",
+        "expected_unit",
+        "digest_representation",
+    ),
+    [
+        (
+            b'{"x":"\\u03b1"}',
+            "string",
+            "\N{GREEK SMALL LETTER ALPHA}".encode(),
+            1,
+            "characters",
+            "utf8_decoded_string",
+        ),
+        (b'{"x":1.25}', "number", b"1.25", 4, "bytes", "canonical_json_scalar"),
+        (b'{"x":true}', "boolean", b"true", 4, "bytes", "canonical_json_scalar"),
+        (b'{"x":null}', "null", b"null", 4, "bytes", "canonical_json_scalar"),
+    ],
+)
+def test_scalar_structure_describes_selected_digest_and_length(
+    raw,
+    expected_type,
+    expected_bytes,
+    expected_length,
+    expected_unit,
+    digest_representation,
+):
     from clinpgx_link.content.reader import read_content
 
-    result = read_content(
-        b'{"x":"\\u00e9"}',
-        media_type="application/json",
-        pointer="/x",
-        representation="base64",
-        start=1,
-        length=1,
+    result = read_content(raw, media_type="application/json", pointer="/x")
+
+    assert result["type"] == expected_type
+    assert result["length"] == expected_length
+    assert result["unit"] == expected_unit
+    assert result["digest_representation"] == digest_representation
+    assert result["sha256"] == hashlib.sha256(expected_bytes).hexdigest()
+    assert result["source_sha256"] == hashlib.sha256(raw).hexdigest()
+
+
+def test_scalar_children_also_include_selected_digest_metadata():
+    from clinpgx_link.content.reader import read_content
+
+    raw = b'{"x":"\\u03b1"}'
+    result = read_content(raw, media_type="application/json", length=1)
+
+    assert result["items"] == [
+        {
+            "key": "x",
+            "pointer": "/x",
+            "type": "string",
+            "length": 1,
+            "unit": "characters",
+            "digest_representation": "utf8_decoded_string",
+            "sha256": hashlib.sha256("\N{GREEK SMALL LETTER ALPHA}".encode()).hexdigest(),
+        }
+    ]
+
+
+def test_structure_pointer_at_character_limit_is_advertised_and_traversable():
+    from clinpgx_link.content.reader import read_content
+
+    key = "k" * 4095
+    raw = json.dumps({key: "reachable"}).encode()
+    structure = read_content(raw, media_type="application/json", length=1)
+    child_pointer = structure["items"][0]["pointer"]
+
+    assert len(child_pointer) == 4096
+    selected = read_content(
+        raw, media_type="application/json", pointer=child_pointer, representation="text"
     )
-    assert result["derived"] is True
-    assert result["total"] == 2
-    assert result["unit"] == "bytes"
-    assert base64.b64decode(result["base64"]) == b"\xa9"
+    assert selected["text"] == "reachable"
+
+
+def test_structure_rejects_child_pointer_over_character_limit_with_byte_recovery():
+    from clinpgx_link.content.reader import read_content
+    from clinpgx_link.exceptions import ResponseTooLargeError
+
+    raw = json.dumps({"k" * 4096: "unreachable"}).encode()
+    with pytest.raises(ResponseTooLargeError) as caught:
+        read_content(raw, media_type="application/json", length=1)
+
+    assert caught.value.field == "pointer"
+    assert "empty pointer" in (caught.value.hint or "").lower()
+    assert "base64" in (caught.value.hint or "").lower()
+
+
+def test_structure_rejects_child_beyond_segment_limit_without_advertising_it():
+    from clinpgx_link.content.reader import read_content
+    from clinpgx_link.exceptions import ResponseTooLargeError
+
+    value = {"leaf": "unreachable"}
+    for _ in range(128):
+        value = {"a": value}
+    raw = json.dumps(value).encode()
+    pointer = "/a" * 128
+
+    with pytest.raises(ResponseTooLargeError) as caught:
+        read_content(raw, media_type="application/json", pointer=pointer, length=1)
+    assert caught.value.field == "pointer"
+    assert "empty pointer" in (caught.value.hint or "").lower()
+
+
+def test_structure_pages_honor_serialized_budget_with_progressing_continuations():
+    from clinpgx_link.content.reader import read_content
+
+    source = {f"{index:03d}-" + "x" * 300: index for index in range(100)}
+    raw = json.dumps(source).encode()
+    start = 0
+    returned_keys = []
+    page_sizes = []
+    while True:
+        result = read_content(
+            raw,
+            media_type="application/json",
+            representation="structure",
+            start=start,
+            length=100,
+        )
+        serialized_size = len(
+            json.dumps(result, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        )
+        page_sizes.append(result["returned"])
+        assert serialized_size <= 32 * 1024
+        assert result["returned"] > 0
+        returned_keys.extend(item["key"] for item in result["items"])
+        if not result["has_more"]:
+            assert result["next_start"] is None
+            break
+        assert result["next_start"] == start + result["returned"]
+        start = result["next_start"]
+
+    assert page_sizes[0] < 100
+    assert returned_keys == list(source)
+
+
+def test_oversized_first_structure_descriptor_has_exact_byte_recovery():
+    from clinpgx_link.content.reader import read_content
+    from clinpgx_link.exceptions import ResponseTooLargeError
+
+    key = "😀" * 4095
+    raw = json.dumps({key: True}).encode()
+    with pytest.raises(ResponseTooLargeError) as caught:
+        read_content(raw, media_type="application/json", length=1)
+
+    assert caught.value.subtype == "response_too_large"
+    assert "empty pointer" in (caught.value.hint or "").lower()
+    start = 0
+    parts = []
+    while True:
+        original = read_content(
+            raw,
+            media_type="application/json",
+            representation="base64",
+            start=start,
+            length=8192,
+        )
+        parts.append(base64.b64decode(original["base64"], validate=True))
+        if not original["has_more"]:
+            break
+        assert original["next_start"] > start
+        start = original["next_start"]
+    assert b"".join(parts) == raw
 
 
 def test_pointer_descent_through_scalar_is_rejected():

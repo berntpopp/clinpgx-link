@@ -13,11 +13,23 @@ import math
 import re
 from typing import Any
 
-from clinpgx_link.exceptions import DataValidationError, InvalidInputError
+from clinpgx_link.exceptions import DataValidationError, InvalidInputError, ResponseTooLargeError
+
+_MAX_POINTER_CHARACTERS = 4096
+_MAX_POINTER_SEGMENTS = 128
+_MAX_STRUCTURE_DESCRIPTOR_BYTES = 32 * 1024
 
 
 def _invalid(field: str, hint: str) -> InvalidInputError:
     return InvalidInputError("Unsupported content selection.", field=field, hint=hint)
+
+
+def _descriptor_too_large() -> ResponseTooLargeError:
+    return ResponseTooLargeError(
+        "Content structure descriptor exceeds the supported size.",
+        field="pointer",
+        hint="Use an empty pointer with representation='base64' to retrieve original body bytes.",
+    )
 
 
 def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -49,7 +61,11 @@ def _decode_json(raw: bytes) -> Any:
 def _select(value: Any, pointer: str) -> Any:
     if not pointer:
         return value
-    if not pointer.startswith("/") or len(pointer) > 4096 or pointer.count("/") > 128:
+    if (
+        not pointer.startswith("/")
+        or len(pointer) > _MAX_POINTER_CHARACTERS
+        or pointer.count("/") > _MAX_POINTER_SEGMENTS
+    ):
         raise _invalid("pointer", "Use a bounded RFC 6901 pointer from structure discovery.")
     for token in pointer[1:].split("/"):
         if re.search(r"~(?![01])", token):
@@ -72,12 +88,30 @@ def _describe(value: Any) -> dict[str, Any]:
     if isinstance(value, list):
         return {"type": "array", "length": len(value)}
     if isinstance(value, str):
-        return {"type": "string", "length": len(value)}
+        selected = value.encode("utf-8")
+        return {
+            "type": "string",
+            "length": len(value),
+            "unit": "characters",
+            "digest_representation": "utf8_decoded_string",
+            "sha256": hashlib.sha256(selected).hexdigest(),
+        }
+    selected = json.dumps(value, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode(
+        "utf-8"
+    )
     if value is None:
-        return {"type": "null"}
-    if isinstance(value, bool):
-        return {"type": "boolean"}
-    return {"type": "number"}
+        scalar_type = "null"
+    elif isinstance(value, bool):
+        scalar_type = "boolean"
+    else:
+        scalar_type = "number"
+    return {
+        "type": scalar_type,
+        "length": len(selected),
+        "unit": "bytes",
+        "digest_representation": "canonical_json_scalar",
+        "sha256": hashlib.sha256(selected).hexdigest(),
+    }
 
 
 def _page(total: int, start: int, length: int) -> dict[str, Any]:
@@ -93,6 +127,80 @@ def _page(total: int, start: int, length: int) -> dict[str, Any]:
     }
 
 
+def _page_for_returned(total: int, start: int, returned: int) -> dict[str, Any]:
+    next_start = start + returned
+    return {
+        "start": start,
+        "returned": returned,
+        "total": total,
+        "has_more": next_start < total,
+        "next_start": next_start if next_start < total else None,
+    }
+
+
+def _serialized_size(value: dict[str, Any]) -> int:
+    return len(
+        json.dumps(value, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode(
+            "utf-8"
+        )
+    )
+
+
+def _child_pointer(pointer: str, key: str | int) -> str:
+    escaped = str(key).replace("~", "~0").replace("/", "~1")
+    child = f"{pointer}/{escaped}"
+    if len(child) > _MAX_POINTER_CHARACTERS or child.count("/") > _MAX_POINTER_SEGMENTS:
+        raise _descriptor_too_large()
+    return child
+
+
+def _structure_page(
+    metadata: dict[str, Any],
+    descriptor: dict[str, Any],
+    value: dict[str, Any] | list[Any],
+    *,
+    pointer: str,
+    source_sha256: str,
+    start: int,
+    length: int,
+) -> dict[str, Any]:
+    entries: list[tuple[str | int, Any]] = (
+        list(value.items()) if isinstance(value, dict) else list(enumerate(value))
+    )
+    total = len(entries)
+    if start > total:
+        raise _invalid("start", "Start must not exceed the reported total length.")
+
+    items: list[dict[str, Any]] = []
+    for key, child_value in entries[start : min(start + length, total)]:
+        child = _child_pointer(pointer, key)
+        item = {"key": key, "pointer": child, **_describe(child_value)}
+        candidate_items = [*items, item]
+        candidate = {
+            **metadata,
+            **descriptor,
+            **_page_for_returned(total, start, len(candidate_items)),
+            "sha256": source_sha256,
+            "items": candidate_items,
+        }
+        if _serialized_size(candidate) > _MAX_STRUCTURE_DESCRIPTOR_BYTES:
+            if not items:
+                raise _descriptor_too_large()
+            break
+        items.append(item)
+
+    result = {
+        **metadata,
+        **descriptor,
+        **_page_for_returned(total, start, len(items)),
+        "sha256": source_sha256,
+        "items": items,
+    }
+    if _serialized_size(result) > _MAX_STRUCTURE_DESCRIPTOR_BYTES:
+        raise _descriptor_too_large()
+    return result
+
+
 def read_content(
     raw: bytes,
     *,
@@ -104,9 +212,8 @@ def read_content(
 ) -> dict[str, Any]:
     """Read a bounded structure, text or exact-byte slice of one acquired source.
 
-    Text output is intentionally raw here: the caller must fence/sanitize it. For a
-    JSON pointer, base64 returns the UTF-8 string or canonical selected JSON value,
-    explicitly marked derived; the original serialized member is available at root.
+    Text output is intentionally raw here: the caller must fence/sanitize it. Base64
+    only accepts the empty pointer and always returns original body bytes.
     """
     if type(start) is not int or type(length) is not int or start < 0 or not 1 <= length <= 8192:
         raise _invalid("start", "Use a nonnegative start and a length from 1 through 8192.")
@@ -119,7 +226,12 @@ def read_content(
         "pointer": pointer,
         "representation": representation,
     }
-    if representation == "base64" and not pointer:
+    if representation == "base64":
+        if pointer:
+            raise _invalid(
+                "pointer",
+                "Use an empty pointer with base64 to retrieve the original body bytes.",
+            )
         return {
             **metadata,
             **_page(len(raw), start, length),
@@ -142,40 +254,24 @@ def read_content(
     if representation == "structure":
         descriptor = _describe(value)
         if isinstance(value, (dict, list)):
-            keys = list(value) if isinstance(value, dict) else list(range(len(value)))
-            page = _page(len(keys), start, length)
-            items = []
-            for key in keys[start : start + length]:
-                escaped = str(key).replace("~", "~0").replace("/", "~1")
-                items.append(
-                    {"key": key, "pointer": f"{pointer}/{escaped}", **_describe(value[key])}
-                )
-            return {**metadata, **descriptor, **page, "sha256": raw_digest, "items": items}
+            return _structure_page(
+                metadata,
+                descriptor,
+                value,
+                pointer=pointer,
+                source_sha256=raw_digest,
+                start=start,
+                length=length,
+            )
         if start:
             raise _invalid("start", "Scalar structure descriptors have no continuation.")
-        return {**metadata, **descriptor, "sha256": raw_digest}
-    if representation == "text":
-        if not isinstance(value, str):
-            raise _invalid("pointer", "Select a string value using structure discovery.")
-        return {
-            **metadata,
-            **_page(len(value), start, length),
-            "unit": "characters",
-            "sha256": hashlib.sha256(value.encode("utf-8")).hexdigest(),
-            "text": value[start : start + length],
-        }
-    selected = (
-        value
-        if isinstance(value, str)
-        else json.dumps(
-            value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False
-        )
-    ).encode("utf-8")
+        return {**metadata, **descriptor}
+    if not isinstance(value, str):
+        raise _invalid("pointer", "Select a string value using structure discovery.")
     return {
         **metadata,
-        **_page(len(selected), start, length),
-        "unit": "bytes",
-        "derived": True,
-        "sha256": hashlib.sha256(selected).hexdigest(),
-        "base64": base64.b64encode(selected[start : start + length]).decode("ascii"),
+        **_page(len(value), start, length),
+        "unit": "characters",
+        "sha256": hashlib.sha256(value.encode("utf-8")).hexdigest(),
+        "text": value[start : start + length],
     }
