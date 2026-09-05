@@ -48,6 +48,8 @@ class _Budget:
     step_budget: int | None
     deadline: float | None
     steps: int = 0
+    interrupted: bool = False
+    outer_interrupted: bool = False
 
 
 class SQLiteProgressHooks:
@@ -73,14 +75,20 @@ class SQLiteProgressHooks:
 
     def _progress(self) -> int:
         now = self._clock()
+        outer_interrupted = False
+        should_interrupt = False
         for budget in self._budgets:
+            if outer_interrupted:
+                budget.outer_interrupted = True
             if budget.step_budget is not None:
                 budget.steps += self._quantum
             if (budget.step_budget is not None and budget.steps >= budget.step_budget) or (
                 budget.deadline is not None and now >= budget.deadline
             ):
-                return 1
-        return 0
+                budget.interrupted = True
+                outer_interrupted = True
+                should_interrupt = True
+        return int(should_interrupt)
 
     @contextmanager
     def budget(
@@ -89,7 +97,7 @@ class SQLiteProgressHooks:
         step_budget: int | None = None,
         timeout_seconds: float | None = None,
         deadline: float | None = None,
-    ) -> Iterator[None]:
+    ) -> Iterator[_Budget]:
         if step_budget is not None and step_budget < 1:
             raise ValueError("Step budget must be positive")
         if timeout_seconds is not None and timeout_seconds <= 0:
@@ -104,7 +112,7 @@ class SQLiteProgressHooks:
         if len(self._budgets) == 1:
             self._connection.set_progress_handler(self._progress, self._quantum)
         try:
-            yield
+            yield state
         finally:
             state_index = next(
                 index for index, active in enumerate(self._budgets) if active is state
@@ -112,6 +120,11 @@ class SQLiteProgressHooks:
             del self._budgets[state_index]
             if not self._budgets:
                 self._connection.set_progress_handler(None, 0)
+
+    @staticmethod
+    def was_local_interruption(budget: _Budget) -> bool:
+        """Return true only when this budget, and no enclosing budget, expired."""
+        return budget.interrupted and not budget.outer_interrupted
 
 
 class RepositoryDiagnosticsSupport:
@@ -283,11 +296,12 @@ def exact_zero_diagnostics(
         count = 0
         last_record_pk: int | None = None
         examples: list[str] = []
+        local_budget: _Budget | None = None
         try:
             with hooks.budget(
                 step_budget=limits.step_budget,
                 timeout_seconds=limits.timeout_seconds,
-            ):
+            ) as local_budget:
                 for row in connection.execute(sql, parameters):
                     record_pk = int(row[0])
                     if record_pk != last_record_pk:
@@ -296,7 +310,11 @@ def exact_zero_diagnostics(
                     if row[1] is not None:
                         _retain_binary_top3(examples, str(row[1]))
         except sqlite3.OperationalError as exc:
-            if "interrupted" not in str(exc).lower():
+            if (
+                "interrupted" not in str(exc).lower()
+                or local_budget is None
+                or not hooks.was_local_interruption(local_budget)
+            ):
                 raise
             results.append({"filter": target, "status": "diagnostics_unavailable"})
         else:

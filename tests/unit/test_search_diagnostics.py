@@ -187,6 +187,40 @@ def test_diagnostic_step_interrupt_is_explicit_and_connection_recovers(tmp_path:
     assert recovered.details["total_count"] == 2
 
 
+def test_outer_deadline_expiring_during_repository_diagnostics_is_not_swallowed(
+    tmp_path: Path,
+) -> None:
+    from clinpgx_link.data.repository import DatasetRepository
+    from clinpgx_link.data.search_diagnostics import DiagnosticLimits, SQLiteProgressHooks
+
+    baseline, built = _repository(tmp_path)
+    baseline.close()
+    repository = DatasetRepository(
+        built.database,
+        diagnostic_limits=DiagnosticLimits(step_budget=50_000, timeout_seconds=0.05, quantum=1),
+    )
+    hooks: SQLiteProgressHooks
+    hooks = SQLiteProgressHooks(
+        repository._connection,
+        clock=lambda: 2.0 if len(hooks._budgets) > 1 else 0.0,
+        quantum=1,
+    )
+    repository._progress_hooks = hooks
+    try:
+        with pytest.raises(sqlite3.OperationalError, match="interrupted"):
+            with repository.execution_budget(deadline=1.0):
+                repository.search(
+                    "data/summaryAnnotations.zip",
+                    member="summary_annotations.tsv",
+                    filters={"gene": "RGS4", "chemical": "absent"},
+                )
+        recovered = repository.search("data/genes.zip", member="genes.tsv", limit=1)
+    finally:
+        repository.close()
+
+    assert recovered.details["total_count"] == 2
+
+
 def test_managed_progress_hooks_compose_local_and_expired_outer_deadlines() -> None:
     from clinpgx_link.data.search_diagnostics import SQLiteProgressHooks
 
