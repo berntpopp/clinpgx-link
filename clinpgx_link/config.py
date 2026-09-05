@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import ipaddress
 import json
+import re
 from pathlib import Path, PurePath
 from typing import Annotated, Literal
 from urllib.parse import urlsplit
 
-from pydantic import Field, SecretStr, field_validator, model_validator
+from pydantic import Field, SecretStr, ValidationInfo, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 _MIB = 1024 * 1024
@@ -16,6 +18,7 @@ _DEFAULT_API_ORIGIN = "https://api.clinpgx.org"
 _DEFAULT_DOWNLOAD_ORIGIN = "https://s3.pgkb.org"
 
 OriginTuple = Annotated[tuple[str, ...], NoDecode]
+_DNS_LABEL = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\Z")
 
 
 def _canonical_https_origin(value: str) -> str:
@@ -35,6 +38,29 @@ def _canonical_https_origin(value: str) -> str:
     if value != canonical:
         raise ValueError("origin must be canonical lowercase HTTPS origin")
     return canonical
+
+
+def _canonical_host(value: str) -> str:
+    """Validate one lowercase ASCII DNS name or canonical bare IP literal."""
+    if not value or value != value.strip() or not value.isascii():
+        raise ValueError("host must be a canonical ASCII DNS name or IP literal")
+    try:
+        address = ipaddress.ip_address(value)
+    except ValueError:
+        if ":" in value:
+            raise ValueError("IPv6 hosts must use canonical bare-address form") from None
+        labels = value.split(".")
+        if (
+            len(value) > 253
+            or value != value.lower()
+            or all(label.isdigit() for label in labels)
+            or any(not _DNS_LABEL.fullmatch(label) for label in labels)
+        ):
+            raise ValueError("host must be a canonical lowercase DNS name") from None
+        return value
+    if str(address) != value:
+        raise ValueError("IP host must use canonical unbracketed notation")
+    return value
 
 
 class Settings(BaseSettings):
@@ -100,7 +126,7 @@ class Settings(BaseSettings):
         mode="before",
     )
     @classmethod
-    def _parse_string_tuple(cls, value: object) -> object:
+    def _parse_string_tuple(cls, value: object, info: ValidationInfo) -> object:
         if not isinstance(value, str):
             return value
         stripped = value.strip()
@@ -111,6 +137,8 @@ class Settings(BaseSettings):
             if not isinstance(decoded, list):
                 raise ValueError("allowlist JSON must be an array")
             return tuple(decoded)
+        if info.field_name == "allowed_hosts":
+            return tuple(value.split(","))
         return tuple(item.strip() for item in stripped.split(",") if item.strip())
 
     @field_validator(
@@ -129,9 +157,10 @@ class Settings(BaseSettings):
     @field_validator("allowed_hosts")
     @classmethod
     def _validate_hosts(cls, values: tuple[str, ...]) -> tuple[str, ...]:
-        if any(not value or any(marker in value for marker in "*?[]/@") for value in values):
-            raise ValueError("host allowlist entries must be exact host names")
-        return values
+        validated = tuple(_canonical_host(value) for value in values)
+        if len(validated) != len(set(validated)):
+            raise ValueError("host allowlist entries must be unique")
+        return validated
 
     @field_validator("allowed_origins")
     @classmethod

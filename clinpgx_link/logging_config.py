@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+import json
 import logging
+import math
+import re
 import sys
+import uuid
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, TextIO
 
 import structlog
@@ -15,6 +20,8 @@ if TYPE_CHECKING:
     from structlog.typing import FilteringBoundLogger
 
 _SERVICE_NAME = "clinpgx-link"
+_INVALID_EVENT = "invalid_event"
+_INVALID_REQUEST_ID = "invalid"
 _SAFE_EVENT_FIELDS = frozenset(
     {
         "cache_hit",
@@ -39,6 +46,159 @@ _SAFE_EVENT_FIELDS = frozenset(
         "version",
     }
 )
+_EVENTS = frozenset(
+    {
+        _INVALID_EVENT,
+        "cache_lookup",
+        "request_complete",
+        "request_failed",
+        "request_started",
+        "server_started",
+        "server_stopped",
+        "snapshot_opened",
+        "snapshot_validation_failed",
+        "upstream_complete",
+        "upstream_failed",
+        "upstream_started",
+    }
+)
+_DEVELOPER_OPERATIONS = frozenset(
+    {
+        "api.call",
+        "api.describe",
+        "content.get",
+        "content.put",
+        "dataset.describe",
+        "dataset.get_record",
+        "dataset.list",
+        "dataset.related",
+        "dataset.search",
+        "server.health",
+    }
+)
+_DATA_SOURCES = frozenset({"api", "cache", "download", "snapshot", "website"})
+_SOURCES = frozenset(
+    {
+        "clinpgx_api",
+        "clinpgx_download",
+        "clinpgx_website",
+        "content_store",
+        "local_snapshot",
+        "mcp",
+    }
+)
+_ERROR_CODES = frozenset(
+    {
+        "ambiguous_query",
+        "internal",
+        "invalid_input",
+        "not_found",
+        "rate_limited",
+        "upstream_unavailable",
+    }
+)
+_EXCEPTION_TYPES = frozenset(
+    {
+        "AmbiguousQueryError",
+        "ClinPGxError",
+        "DataValidationError",
+        "InvalidInputError",
+        "NotFoundError",
+        "RateLimitedError",
+        "ResponseTooLargeError",
+        "UpstreamUnavailableError",
+        "other_exception",
+    }
+)
+_LOG_LEVELS = frozenset({"critical", "debug", "error", "info", "warning"})
+_METHODS = frozenset({"GET", "HEAD", "POST"})
+_STATUSES = frozenset(
+    {"cache_hit", "cache_miss", "error", "failed", "ready", "success", "unavailable"}
+)
+_RELEASE_TAG = re.compile(r"data-clinpgx-(?:core|extended)-[0-9a-f]{16}\Z")
+_SNAPSHOT_ID = re.compile(r"sha256:[0-9a-f]{64}\Z")
+_TIMESTAMP = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z\Z")
+_VERSION = re.compile(r"\d+\.\d+\.\d+(?:[+-][0-9A-Za-z.-]+)?\Z")
+_DROP = object()
+
+
+def _registry_operations() -> frozenset[str]:
+    """Load the developer-vendored operation vocabulary, failing closed."""
+    path = Path(__file__).with_name("api") / "operations.json"
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+        operations = document["operations"]
+        return frozenset(
+            entry["operation"]
+            for entry in operations
+            if isinstance(entry, dict) and isinstance(entry.get("operation"), str)
+        )
+    except (OSError, KeyError, TypeError, json.JSONDecodeError):
+        return frozenset()
+
+
+_OPERATIONS = _registry_operations() | _DEVELOPER_OPERATIONS
+
+
+def _canonical_request_id(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = uuid.UUID(value)
+    except (ValueError, AttributeError):
+        return None
+    canonical = str(parsed)
+    return canonical if value == canonical else None
+
+
+def _bounded_number(value: object, minimum: float, maximum: float) -> bool:
+    return (
+        not isinstance(value, bool)
+        and isinstance(value, (int, float))
+        and math.isfinite(value)
+        and minimum <= value <= maximum
+    )
+
+
+def _safe_value(key: str, value: object) -> object:
+    """Return a safe scalar for one known field, or a private drop marker."""
+    vocabularies = {
+        "data_source": _DATA_SOURCES,
+        "error_code": _ERROR_CODES,
+        "exception_type": _EXCEPTION_TYPES,
+        "log_level": _LOG_LEVELS,
+        "method": _METHODS,
+        "operation": _OPERATIONS,
+        "source": _SOURCES,
+        "status": _STATUSES,
+    }
+    if key == "event":
+        return value if isinstance(value, str) and value in _EVENTS else _INVALID_EVENT
+    if key == "request_id":
+        return _canonical_request_id(value) or _INVALID_REQUEST_ID
+    if key in vocabularies:
+        return value if isinstance(value, str) and value in vocabularies[key] else _DROP
+    if key == "release_tag":
+        return value if isinstance(value, str) and _RELEASE_TAG.fullmatch(value) else _DROP
+    if key == "snapshot_id":
+        return value if isinstance(value, str) and _SNAPSHOT_ID.fullmatch(value) else _DROP
+    if key == "service":
+        return value if value == _SERVICE_NAME else _DROP
+    if key == "timestamp":
+        return value if isinstance(value, str) and _TIMESTAMP.fullmatch(value) else _DROP
+    if key == "version":
+        return value if isinstance(value, str) and _VERSION.fullmatch(value) else _DROP
+    if key == "cache_hit":
+        return value if isinstance(value, bool) else _DROP
+    if key == "elapsed_ms":
+        return value if _bounded_number(value, 0, 86_400_000) else _DROP
+    if key == "record_count":
+        return value if _bounded_number(value, 0, 20_000_000) and isinstance(value, int) else _DROP
+    if key == "retry_count":
+        return value if _bounded_number(value, 0, 10) and isinstance(value, int) else _DROP
+    if key == "status_code":
+        return value if _bounded_number(value, 100, 599) and isinstance(value, int) else _DROP
+    return _DROP
 
 
 def _payload_free(_logger: Any, _name: str, event_dict: dict[str, Any]) -> dict[str, Any]:
@@ -46,8 +206,18 @@ def _payload_free(_logger: Any, _name: str, event_dict: dict[str, Any]) -> dict[
     if event_dict.get("exc_info"):
         exc_info = event_dict["exc_info"]
         if isinstance(exc_info, tuple) and exc_info and isinstance(exc_info[0], type):
-            event_dict["exception_type"] = exc_info[0].__name__
-    return {key: value for key, value in event_dict.items() if key in _SAFE_EVENT_FIELDS}
+            exception_name = exc_info[0].__name__
+            event_dict["exception_type"] = (
+                exception_name if exception_name in _EXCEPTION_TYPES else "other_exception"
+            )
+    retained: dict[str, Any] = {}
+    for key, value in event_dict.items():
+        if key not in _SAFE_EVENT_FIELDS:
+            continue
+        safe = _safe_value(key, value)
+        if safe is not _DROP:
+            retained[key] = safe
+    return retained
 
 
 def _add_static_fields(_logger: Any, _name: str, event_dict: dict[str, Any]) -> dict[str, Any]:
@@ -58,7 +228,9 @@ def _add_static_fields(_logger: Any, _name: str, event_dict: dict[str, Any]) -> 
 
 def bind_request_id(request_id: str) -> None:
     """Bind a validated request identifier to subsequent events in this context."""
-    structlog.contextvars.bind_contextvars(request_id=request_id)
+    structlog.contextvars.bind_contextvars(
+        request_id=_canonical_request_id(request_id) or _INVALID_REQUEST_ID
+    )
 
 
 def clear_request_context() -> None:

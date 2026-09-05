@@ -242,7 +242,8 @@ def test_correlated_logging_drops_payloads_queries_urls_and_secrets() -> None:
 
     stream = StringIO()
     logger = configure_logging(level="INFO", log_format="json", stream=stream)
-    bind_request_id("req-123")
+    request_id = "2eb4ae86-7f47-4be9-945a-36d1f103230c"
+    bind_request_id(request_id)
     logger.info(
         "request_complete",
         record_count=2,
@@ -256,11 +257,143 @@ def test_correlated_logging_drops_payloads_queries_urls_and_secrets() -> None:
     event = json.loads(stream.getvalue())
     rendered = json.dumps(event)
     assert event["event"] == "request_complete"
-    assert event["request_id"] == "req-123"
+    assert event["request_id"] == request_id
     assert event["record_count"] == 2
     assert event["service"] == "clinpgx-link"
     assert "sensitive" not in rendered
     assert not {"payload", "query", "url", "source_auth_token"} & event.keys()
+
+
+@pytest.mark.parametrize("unsafe", ["never-reflect-this-value", "hostile\nforged=value"])
+def test_logging_validates_every_retained_string_value_and_bound_context(unsafe: str) -> None:
+    """Catch a sensitive value smuggled through an otherwise allowlisted log field."""
+    import structlog
+
+    from clinpgx_link.logging_config import clear_request_context, configure_logging
+
+    retained_fields = {
+        "cache_hit",
+        "data_source",
+        "elapsed_ms",
+        "error_code",
+        "event",
+        "exception_type",
+        "log_level",
+        "method",
+        "operation",
+        "record_count",
+        "release_tag",
+        "request_id",
+        "retry_count",
+        "service",
+        "snapshot_id",
+        "source",
+        "status",
+        "status_code",
+        "timestamp",
+        "version",
+    }
+    rendered_events: list[str] = []
+    for field in sorted(retained_fields):
+        stream = StringIO()
+        logger = configure_logging(level="INFO", log_format="json", stream=stream)
+        if field == "event":
+            logger.info(unsafe)
+        else:
+            logger.info("request_complete", **{field: unsafe})
+        rendered_events.append(stream.getvalue())
+
+        stream = StringIO()
+        logger = configure_logging(level="INFO", log_format="json", stream=stream)
+        structlog.contextvars.bind_contextvars(**{field: unsafe})
+        logger.info("request_complete")
+        rendered_events.append(stream.getvalue())
+        clear_request_context()
+
+    assert unsafe not in "".join(rendered_events)
+
+
+def test_logging_keeps_only_bounded_typed_operational_values() -> None:
+    """Catch string coercion, unbounded counters, or accidental removal of valid metrics."""
+    from clinpgx_link.logging_config import configure_logging
+
+    stream = StringIO()
+    logger = configure_logging(level="INFO", log_format="json", stream=stream)
+    logger.info(
+        "request_complete",
+        cache_hit=True,
+        elapsed_ms=12.5,
+        method="GET",
+        record_count=2,
+        retry_count=1,
+        status="success",
+        status_code=200,
+    )
+    valid = json.loads(stream.getvalue())
+    assert valid["cache_hit"] is True
+    assert valid["elapsed_ms"] == 12.5
+    assert valid["method"] == "GET"
+    assert valid["record_count"] == 2
+    assert valid["retry_count"] == 1
+    assert valid["status"] == "success"
+    assert valid["status_code"] == 200
+
+    stream = StringIO()
+    logger = configure_logging(level="INFO", log_format="json", stream=stream)
+    logger.info(
+        "request_complete",
+        cache_hit="true",
+        elapsed_ms=-1,
+        record_count=10**20,
+        retry_count=True,
+        status_code=999,
+    )
+    invalid = json.loads(stream.getvalue())
+    assert (
+        not {
+            "cache_hit",
+            "elapsed_ms",
+            "record_count",
+            "retry_count",
+            "status_code",
+        }
+        & invalid.keys()
+    )
+
+
+@pytest.mark.parametrize(
+    "host",
+    [
+        " example.org ",
+        "example.org:443",
+        "example\\evil.org",
+        "a..b",
+        "Example.org",
+        "example.org.",
+        "-example.org",
+        "example-.org",
+        "café.example",
+        "[::1]",
+        "127.000.000.001",
+    ],
+)
+def test_allowed_hosts_reject_noncanonical_dns_and_ip_literals(host: str) -> None:
+    """Catch host values that are not exact canonical DNS names or IP literals."""
+    from clinpgx_link.config import Settings
+
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, allowed_hosts=(host,))
+
+
+def test_allowed_hosts_accept_unique_canonical_dns_and_ip_literals() -> None:
+    """Catch validation that rejects middleware-ready DNS, IPv4, or bare IPv6 hosts."""
+    from clinpgx_link.config import Settings
+
+    hosts = ("localhost", "api.clinpgx.org", "127.0.0.1", "2001:db8::1", "xn--caf-dma.example")
+    assert Settings(_env_file=None, allowed_hosts=hosts).allowed_hosts == hosts
+
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, allowed_hosts=("localhost", "localhost"))
 
 
 def test_vendored_openapi_and_operation_inventory_match_actual_source() -> None:

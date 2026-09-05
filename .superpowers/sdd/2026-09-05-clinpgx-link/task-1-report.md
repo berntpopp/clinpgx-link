@@ -114,3 +114,43 @@ No sibling repository was modified. Concurrent main-owned content-reader files a
 - Coverage references `api/website_operations.json`, which Task 2 owns. It also seals the current 27-operation research evidence hash and only cites operation IDs present in that evidence.
 - The API OpenAPI is vendored byte-for-byte; `operations.json` adds stable `METHOD /path` identities without removing captured parameters or response declarations.
 - Full `make ci-local` was run after the main agent's independently owned content-reader slice became green: repository formatting, Ruff, strict mypy, all 55 unit tests, and installed FastMCP symbol imports passed.
+
+## Independent-review corrections
+
+The first scoped review found that logging filtered field names but did not validate
+the retained values, and that `allowed_hosts` accepted malformed host strings. Both
+were reproduced with tests before changing application code.
+
+RED evidence:
+
+```text
+$ uv run pytest tests/unit/test_foundation.py -q
+13 failed, 35 passed in 0.16s
+```
+
+The failures covered secrets and newline-forged values in every retained direct and
+context-bound log field, invalid scalar metric types/bounds, ten malformed DNS/IP
+forms, and duplicate hosts. The earlier `req-123` assertion was changed to canonical
+UUID `2eb4ae86-7f47-4be9-945a-36d1f103230c`; this preserves the correlation behavior
+test while leaving invalid-request handling to the hostile-value regression.
+
+GREEN evidence after the minimal fixes:
+
+```text
+$ uv run pytest tests/unit/test_foundation.py -q
+48 passed in 0.15s
+
+$ uv run ruff check clinpgx_link/config.py clinpgx_link/logging_config.py tests/unit/test_foundation.py
+All checks passed!
+
+$ uv run mypy clinpgx_link/config.py clinpgx_link/logging_config.py
+Success: no issues found in 2 source files
+```
+
+The logging processor now validates every retained value against a fixed
+developer/registry vocabulary or a strict bounded scalar/identifier contract. Invalid
+events and request IDs become fixed markers; all other invalid values are dropped.
+The host validator accepts only unique canonical lowercase ASCII DNS names (including
+explicit punycode A-labels) or canonical unbracketed IPv4/IPv6 literals. Whitespace,
+ports, brackets, Unicode U-labels, case normalization, malformed labels, and ambiguous
+numeric dotted forms are rejected rather than normalized.
