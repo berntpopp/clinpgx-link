@@ -35,7 +35,7 @@ def _json(value: Any) -> bytes:
 class SourcePresenter:
     def __init__(self, store: ContentStore) -> None:
         self.store = store
-        self.cursors = CursorCodec()
+        self.cursors = CursorCodec(clock=store.now)
 
     def _retain(self, response: SourceResponse) -> str:
         raw = _json(
@@ -117,7 +117,11 @@ class SourcePresenter:
         if not isinstance(response.value, list):
             if offset:
                 raise InvalidInputError("A scalar result has no row continuation.", field="offset")
-            return success_result(self._row(response.value, response, None), source=response.source)
+            return success_result(
+                self._row(response.value, response, None),
+                source=response.source,
+                content_ref=response.details["content_ref"],
+            )
         total = len(response.value)
         if offset > total:
             raise InvalidInputError("Offset exceeds returned source set.", field="offset")
@@ -133,11 +137,21 @@ class SourcePresenter:
         next_cursor = None
         if stop < total:
             state_ref = state_ref or self._retain(response)
-            next_cursor = self.cursors.encode(selectors, identity=state_ref, offset=stop)
+            deadline = min(
+                self.store.get(response.details["content_ref"]).expires_at,
+                self.store.get(state_ref).expires_at,
+            )
+            next_cursor = self.cursors.encode(
+                selectors,
+                identity=state_ref,
+                offset=stop,
+                expires_at=deadline,
+            )
         return success_result(
             rows,
             source=response.source,
             collection=True,
+            content_ref=response.details["content_ref"],
             pagination={
                 "offset": offset,
                 "returned": len(rows),

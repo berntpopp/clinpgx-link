@@ -50,18 +50,33 @@ class CursorCodec:
         self._clock = clock
         self._ttl = ttl_seconds
 
-    def encode(self, selectors: dict[str, Any], *, identity: str, offset: int) -> str:
+    def encode(
+        self,
+        selectors: dict[str, Any],
+        *,
+        identity: str,
+        offset: int,
+        expires_at: float | None = None,
+    ) -> str:
         if type(offset) is not int or not 0 <= offset <= 2**53 - 1:
             raise _invalid()
         if not isinstance(identity, str) or not re.fullmatch(r"[A-Za-z0-9:_-]{1,256}", identity):
             raise _invalid()
+        now = self._clock()
+        deadline = now + self._ttl
+        if expires_at is not None:
+            if type(expires_at) not in {int, float} or not 0 <= expires_at <= 253402300799:
+                raise _invalid()
+            deadline = min(deadline, expires_at)
+        if deadline <= now:
+            raise _invalid("cursor_expired")
         payload = json.dumps(
             {
                 "v": 1,
                 "q": _query_hash(selectors),
                 "i": identity,
                 "o": offset,
-                "e": self._clock() + self._ttl,
+                "e": deadline,
             },
             sort_keys=True,
             separators=(",", ":"),

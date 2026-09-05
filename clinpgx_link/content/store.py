@@ -93,6 +93,10 @@ class ContentStore:
         self._ttl = ttl_seconds
         self._clock = clock
 
+    def now(self) -> float:
+        """Return the authoritative wall clock used by retained-content deadlines."""
+        return self._clock()
+
     def put(self, raw: bytes, source: SourceInfo, media_type: str) -> str:
         """Admit a complete body or fail without breaking existing references."""
         if hashlib.sha256(raw).hexdigest() != source.sha256:

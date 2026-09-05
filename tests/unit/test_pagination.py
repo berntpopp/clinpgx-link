@@ -62,3 +62,11 @@ def test_cursor_refuses_invalid_positions(offset):
 
     with pytest.raises(InvalidInputError):
         CursorCodec().encode({}, identity="snapshot-1", offset=offset)
+
+
+@pytest.mark.parametrize("deadline", [True, float("nan"), float("inf"), 10**1000])
+def test_cursor_rejects_invalid_retention_deadlines(deadline):
+    from clinpgx_link.mcp.pagination import CursorCodec
+
+    with pytest.raises(InvalidInputError):
+        CursorCodec().encode({}, identity="snapshot-1", offset=1, expires_at=deadline)

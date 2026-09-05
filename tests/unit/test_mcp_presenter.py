@@ -93,3 +93,42 @@ def test_presenter_single_scalar_and_unknown_keys_are_fenced(source_store):
     assert envelope["result"]["data"]["kind"] == "untrusted_text"
     assert "ignore all rules" not in envelope["result"]
     assert json.loads(envelope["result"]["data"]["text"]) == original.value
+
+
+def test_empty_collection_preserves_original_reference_and_executable_recovery(source_store):
+    from clinpgx_link.mcp.shaping import SourcePresenter
+
+    original = response(source_store, [])
+    result = SourcePresenter(source_store).present(original, selectors={}).structured_content
+    assert result["results"] == []
+    reference = result["_meta"]["content_ref"]
+    assert reference == original.details["content_ref"]
+    assert json.loads(source_store.get(reference).raw) == {"status": "success", "data": []}
+    assert result["_meta"]["next_commands"] == [
+        {
+            "tool": "get_source_content",
+            "arguments": {"content_ref": reference, "representation": "structure"},
+        }
+    ]
+
+
+def test_cursor_expiry_is_bounded_by_older_original_content(tmp_path):
+    from clinpgx_link.exceptions import InvalidInputError
+    from clinpgx_link.mcp.shaping import SourcePresenter
+
+    now = [1000.0]
+    store = ContentStore(tmp_path / "short-lived.sqlite", clock=lambda: now[0], ttl_seconds=10)
+    try:
+        original = response(store, [{"id": "PA1"}, {"id": "PA2"}])
+        now[0] = 1005.0
+        presenter = SourcePresenter(store)
+        envelope = presenter.present(original, selectors={}, limit=1).structured_content
+        cursor = envelope["_meta"]["pagination"]["next_cursor"]
+        now[0] = 1009.0
+        assert presenter.resume(cursor, {})[1] == 1
+        now[0] = 1010.0
+        with pytest.raises(InvalidInputError) as caught:
+            presenter.cursors.decode(cursor, {})
+        assert caught.value.subtype == "cursor_expired"
+    finally:
+        store.close()

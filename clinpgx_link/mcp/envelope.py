@@ -58,6 +58,7 @@ def success_result(
     elapsed_ms: float = 0,
     collection: bool = False,
     pagination: dict[str, Any] | None = None,
+    content_ref: str | None = None,
 ) -> ToolResult:
     """Build provenance without confusing source time with the time of a cache hit."""
     request_id = REQUEST_ID.get() or str(uuid.uuid4())
@@ -81,7 +82,20 @@ def success_result(
                     for warning in source.warnings
                 ],
                 "unsafe_for_clinical_use": True,
-                "next_commands": [],
+                "next_commands": (
+                    [
+                        {
+                            "tool": "get_source_content",
+                            "arguments": {
+                                "content_ref": content_ref,
+                                "representation": "structure",
+                            },
+                        }
+                    ]
+                    if content_ref is not None
+                    else []
+                ),
+                **({"content_ref": content_ref} if content_ref is not None else {}),
                 **({"pagination": pagination} if pagination is not None else {}),
             },
             "recommended_citation": f"ClinPGx source evidence. {source.url} Retrieved {source.retrieved_at}.",
