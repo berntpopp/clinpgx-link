@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import io
+import re
+import stat
 import zipfile
+from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Any, BinaryIO
 
 from openpyxl import load_workbook  # type: ignore[import-untyped]
-from openpyxl.utils import get_column_letter  # type: ignore[import-untyped]
+from openpyxl.utils import get_column_letter, range_boundaries  # type: ignore[import-untyped]
 
 from clinpgx_link.exceptions import DataValidationError
 
@@ -43,21 +46,250 @@ class SpreadsheetDocument:
     sheets: tuple[SpreadsheetSheet, ...]
 
 
-def _workbook_bytes(stream: BinaryIO) -> bytes:
+@dataclass(frozen=True)
+class SpreadsheetLimits:
+    """Hard package and worksheet bounds applied before openpyxl materializes cells."""
+
+    max_package_bytes: int = 128 * 1024 * 1024
+    max_parts: int = 2048
+    max_expanded_bytes: int = 256 * 1024 * 1024
+    max_part_bytes: int = 64 * 1024 * 1024
+    max_xml_bytes: int = 32 * 1024 * 1024
+    max_sheets: int = 256
+    max_rows: int = 100_000
+    max_columns: int = 512
+    max_cells: int = 250_000
+    max_merged_ranges: int = 10_000
+    max_merged_cells: int = 250_000
+
+    @classmethod
+    def for_tests(cls, **overrides: int) -> SpreadsheetLimits:
+        values = {
+            "max_package_bytes": 1024 * 1024,
+            "max_parts": 100,
+            "max_expanded_bytes": 4 * 1024 * 1024,
+            "max_part_bytes": 2 * 1024 * 1024,
+            "max_xml_bytes": 1024 * 1024,
+            "max_sheets": 10,
+            "max_rows": 1000,
+            "max_columns": 100,
+            "max_cells": 10_000,
+            "max_merged_ranges": 100,
+            "max_merged_cells": 10_000,
+        }
+        unknown = set(overrides) - set(values)
+        if unknown:
+            raise ValueError("Unknown spreadsheet limit")
+        values.update(overrides)
+        return cls(**values)
+
+
+def _validate_limits(limits: SpreadsheetLimits) -> None:
+    values = vars(limits).values()
+    if any(type(value) is not int or value <= 0 for value in values):
+        raise DataValidationError(
+            "Spreadsheet limits are internally inconsistent", subtype="resource_limit"
+        )
+    if limits.max_xml_bytes > limits.max_part_bytes:
+        raise DataValidationError(
+            "Spreadsheet XML limit exceeds its part limit", subtype="resource_limit"
+        )
+
+
+def _workbook_bytes(stream: BinaryIO, limits: SpreadsheetLimits) -> bytes:
     chunks: list[bytes] = []
-    while chunk := stream.read(1024 * 1024):
+    total = 0
+    while chunk := stream.read(min(1024 * 1024, limits.max_package_bytes + 1 - total)):
+        total += len(chunk)
+        if total > limits.max_package_bytes:
+            raise DataValidationError(
+                "Spreadsheet exceeds its package byte limit", subtype="resource_limit"
+            )
         chunks.append(chunk)
     raw = b"".join(chunks)
     if not zipfile.is_zipfile(io.BytesIO(raw)):
         raise DataValidationError("Spreadsheet does not have an OOXML ZIP signature")
+    return raw
+
+
+def _safe_part_name(info: zipfile.ZipInfo) -> str:
+    name = info.filename
+    parts = name.split("/")
+    mode = info.external_attr >> 16
+    if (
+        not name
+        or name.startswith("/")
+        or "\\" in name
+        or "\x00" in name
+        or any(part in {"", ".", ".."} for part in parts)
+        or info.flag_bits & 0x1
+        or stat.S_ISLNK(mode)
+    ):
+        raise DataValidationError("Spreadsheet contains an unsafe OOXML part")
+    return name
+
+
+def _read_part(package: zipfile.ZipFile, info: zipfile.ZipInfo) -> bytes:
+    try:
+        return package.read(info)
+    except (KeyError, NotImplementedError, OSError, RuntimeError, zipfile.BadZipFile) as exc:
+        raise DataValidationError("Spreadsheet OOXML part cannot be decoded") from exc
+
+
+def _range_bounds(reference: str, *, context: str) -> tuple[int, int, int, int]:
+    if not isinstance(reference, str) or not re.fullmatch(
+        r"[A-Z]{1,3}[1-9][0-9]*(?::[A-Z]{1,3}[1-9][0-9]*)?", reference
+    ):
+        raise DataValidationError(f"Spreadsheet {context} is invalid")
+    try:
+        bounds = range_boundaries(reference)
+    except (TypeError, ValueError) as exc:
+        raise DataValidationError(f"Spreadsheet {context} is invalid") from exc
+    if any(value is None for value in bounds):
+        raise DataValidationError(f"Spreadsheet {context} is invalid")
+    return tuple(int(value) for value in bounds)  # type: ignore[return-value]
+
+
+_WORKSHEET_TAG = re.compile(
+    rb"<(?:[A-Za-z_][A-Za-z0-9_.-]*:)?(dimension|row|c|mergeCell)\b([^<>]*)/?>"
+)
+
+
+def _xml_attribute(attributes: bytes, name: bytes) -> str:
+    match = re.search(rb"(?:^|\s)" + name + rb"\s*=\s*(['\"])(.*?)\1", attributes)
+    if match is None:
+        return ""
+    try:
+        return match.group(2).decode("ascii")
+    except UnicodeDecodeError:
+        return ""
+
+
+def _validate_worksheet_xml(raw: bytes, limits: SpreadsheetLimits) -> None:
+    max_row = 0
+    max_column = 0
+    cell_count = 0
+    merge_count = 0
+    merged_cells = 0
+    for matched in _WORKSHEET_TAG.finditer(raw):
+        name = matched.group(1)
+        attributes = matched.group(2)
+        if name == b"dimension":
+            minimum_column, minimum_row, maximum_column, maximum_row = _range_bounds(
+                _xml_attribute(attributes, b"ref"), context="dimension"
+            )
+            if minimum_column < 1 or minimum_row < 1:
+                raise DataValidationError("Spreadsheet dimension is invalid")
+            if (
+                maximum_row > limits.max_rows
+                or maximum_column > limits.max_columns
+                or maximum_row * maximum_column > limits.max_cells
+            ):
+                raise DataValidationError(
+                    "Spreadsheet dimension exceeds its cell bounds", subtype="resource_limit"
+                )
+            max_row = max(max_row, maximum_row)
+            max_column = max(max_column, maximum_column)
+        elif name == b"row":
+            row = _xml_attribute(attributes, b"r")
+            if not row.isascii() or not row.isdecimal() or int(row) > limits.max_rows:
+                raise DataValidationError(
+                    "Spreadsheet row dimension exceeds its bounds", subtype="resource_limit"
+                )
+            max_row = max(max_row, int(row))
+        elif name == b"c":
+            minimum_column, minimum_row, maximum_column, maximum_row = _range_bounds(
+                _xml_attribute(attributes, b"r"), context="cell coordinate"
+            )
+            cell_count += 1
+            max_row = max(max_row, maximum_row)
+            max_column = max(max_column, maximum_column)
+            if (
+                cell_count > limits.max_cells
+                or maximum_row > limits.max_rows
+                or maximum_column > limits.max_columns
+            ):
+                raise DataValidationError(
+                    "Spreadsheet cell count or coordinate exceeds its bounds",
+                    subtype="resource_limit",
+                )
+        elif name == b"mergeCell":
+            minimum_column, minimum_row, maximum_column, maximum_row = _range_bounds(
+                _xml_attribute(attributes, b"ref"), context="merge range"
+            )
+            merge_count += 1
+            merged_cells += (maximum_row - minimum_row + 1) * (
+                maximum_column - minimum_column + 1
+            )
+            if (
+                merge_count > limits.max_merged_ranges
+                or merged_cells > limits.max_merged_cells
+                or maximum_row > limits.max_rows
+                or maximum_column > limits.max_columns
+            ):
+                raise DataValidationError(
+                    "Spreadsheet merge ranges exceed their bounds", subtype="resource_limit"
+                )
+            max_row = max(max_row, maximum_row)
+            max_column = max(max_column, maximum_column)
+    if max_row * max_column > limits.max_cells:
+        raise DataValidationError(
+            "Spreadsheet dimension exceeds its cell bounds", subtype="resource_limit"
+        )
+
+
+def _xml_parts(package: zipfile.ZipFile, limits: SpreadsheetLimits) -> Iterator[bytes]:
+    infos = package.infolist()
+    if len(infos) > limits.max_parts:
+        raise DataValidationError(
+            "Spreadsheet exceeds its OOXML part-count limit", subtype="resource_limit"
+        )
+    seen: set[str] = set()
+    total_expanded = 0
+    sheet_count = 0
+    for info in infos:
+        name = _safe_part_name(info)
+        if name in seen:
+            raise DataValidationError("Spreadsheet contains duplicate OOXML parts")
+        seen.add(name)
+        total_expanded += info.file_size
+        if info.file_size > limits.max_part_bytes:
+            raise DataValidationError(
+                "Spreadsheet OOXML part exceeds its expanded limit", subtype="resource_limit"
+            )
+        if total_expanded > limits.max_expanded_bytes:
+            raise DataValidationError(
+                "Spreadsheet OOXML package exceeds its expanded byte limit",
+                subtype="resource_limit",
+            )
+        if not info.is_dir() and name.lower().endswith(".xml"):
+            if info.file_size > limits.max_xml_bytes:
+                raise DataValidationError(
+                    "Spreadsheet XML part exceeds its byte limit", subtype="resource_limit"
+                )
+            body = _read_part(package, info)
+            upper = body.upper()
+            if b"<!DOCTYPE" in upper or b"<!ENTITY" in upper:
+                raise DataValidationError("Spreadsheet XML contains a forbidden declaration")
+            if name.startswith("xl/worksheets/"):
+                sheet_count += 1
+                if sheet_count > limits.max_sheets:
+                    raise DataValidationError(
+                        "Spreadsheet exceeds its worksheet-count limit", subtype="resource_limit"
+                    )
+                _validate_worksheet_xml(body, limits)
+            yield body
+    if "[Content_Types].xml" not in seen or "xl/workbook.xml" not in seen:
+        raise DataValidationError("Spreadsheet is missing required OOXML parts")
+
+
+def _validate_package(raw: bytes, limits: SpreadsheetLimits) -> None:
     try:
         with zipfile.ZipFile(io.BytesIO(raw)) as package:
-            members = set(package.namelist())
+            for _ in _xml_parts(package, limits):
+                pass
     except zipfile.BadZipFile as exc:
         raise DataValidationError("Spreadsheet OOXML package is invalid") from exc
-    if "[Content_Types].xml" not in members or "xl/workbook.xml" not in members:
-        raise DataValidationError("Spreadsheet is missing required OOXML parts")
-    return raw
 
 
 def _merged_cells(worksheet: Any) -> dict[str, tuple[str, str]]:
@@ -71,9 +303,14 @@ def _merged_cells(worksheet: Any) -> dict[str, tuple[str, str]]:
     return result
 
 
-def parse_spreadsheet(stream: BinaryIO) -> SpreadsheetDocument:
+def parse_spreadsheet(
+    stream: BinaryIO, *, limits: SpreadsheetLimits | None = None
+) -> SpreadsheetDocument:
     """Read a profiled first-row-header workbook without flattening formulas/merges."""
-    raw = _workbook_bytes(stream)
+    configured = limits or SpreadsheetLimits()
+    _validate_limits(configured)
+    raw = _workbook_bytes(stream, configured)
+    _validate_package(raw, configured)
     try:
         formulas = load_workbook(io.BytesIO(raw), data_only=False, read_only=False)
         cached = load_workbook(io.BytesIO(raw), data_only=True, read_only=False)
@@ -141,6 +378,7 @@ def parse_spreadsheet(stream: BinaryIO) -> SpreadsheetDocument:
 __all__ = [
     "SpreadsheetCell",
     "SpreadsheetDocument",
+    "SpreadsheetLimits",
     "SpreadsheetRow",
     "SpreadsheetSheet",
     "parse_spreadsheet",

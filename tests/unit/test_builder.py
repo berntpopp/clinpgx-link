@@ -292,6 +292,57 @@ def test_builder_quarantines_known_bad_readme_json_and_xlsx_with_exact_bytes(
     assert rows[1][4] == 0
 
 
+def test_xlsx_row_limit_aborts_candidate_instead_of_quarantining_partial_rows(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Catch the XLSX quarantine path swallowing the global normalized-row limit."""
+    from openpyxl import Workbook
+
+    from clinpgx_link.exceptions import DataValidationError
+    from clinpgx_link.ingest import builder as builder_module
+
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.append(["ID"])
+    sheet.append(["PA1"])
+    sheet.append(["PA2"])
+    workbook_bytes = io.BytesIO()
+    workbook.save(workbook_bytes)
+    path = tmp_path / "haplotypes.zip"
+    _archive(path, {"CYP2C19.xlsx": workbook_bytes.getvalue()})
+    monkeypatch.setattr(builder_module.settings, "max_ingest_rows", 1)
+
+    with pytest.raises(DataValidationError, match="row limit"):
+        builder_module.build_snapshot([_source(path)], tmp_path / "out", RELEASE_TAG)
+
+    assert not (tmp_path / "out" / RELEASE_TAG).exists()
+
+
+def test_quarantined_member_rolls_back_rows_inserted_before_late_parse_failure(
+    tmp_path: Path,
+) -> None:
+    """Catch quarantined members retaining partial normalized rows outside their counts."""
+    from clinpgx_link.ingest.builder import build_snapshot
+
+    nested: dict[str, object] = {"id": "PA1"}
+    for _ in range(129):
+        nested = {"children": [nested]}
+    path = tmp_path / "haplotypes.zip"
+    _archive(path, {"README.json": json.dumps(nested).encode()})
+
+    built = build_snapshot([_source(path)], tmp_path / "out", RELEASE_TAG)
+    with sqlite3.connect(built.database) as connection:
+        normalized = connection.execute("SELECT count(*) FROM record").fetchone()[0]
+        member = connection.execute(
+            "SELECT parser_status,record_count FROM source_member WHERE path='README.json'"
+        ).fetchone()
+        dataset = connection.execute("SELECT record_count FROM dataset").fetchone()[0]
+
+    assert normalized == 0
+    assert member == ("quarantined", 0)
+    assert dataset == 0
+
+
 def test_auxiliary_rows_gain_only_profiled_gene_allele_and_drug_memberships(
     tmp_path: Path,
 ) -> None:

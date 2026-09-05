@@ -41,6 +41,7 @@ _TRANSFORM_FILES = (
     "ingest/spreadsheets.py",
     "ingest/tabular.py",
 )
+_QUARANTINED_LEGACY_DATASET = "data/haplotypes.zip"
 
 
 @dataclass(frozen=True)
@@ -342,7 +343,10 @@ def _ingest_member(
         for record in records:
             count += 1
             if count > remaining_rows:
-                raise DataValidationError("Snapshot exceeds its configured normalized-row limit")
+                raise DataValidationError(
+                    "Snapshot exceeds its configured normalized-row limit",
+                    subtype="resource_limit",
+                )
             _insert_record(
                 connection,
                 snapshot_id=snapshot_id,
@@ -352,7 +356,10 @@ def _ingest_member(
             )
         return "indexed", None, headers, count
     except DataValidationError as exc:
-        if suffix == ".xlsx" or (suffix == ".json" and _is_readme(member.path)):
+        legacy_quarantine = source.source.dataset_id == _QUARANTINED_LEGACY_DATASET and (
+            suffix == ".xlsx" or (suffix == ".json" and _is_readme(member.path))
+        )
+        if legacy_quarantine and exc.subtype != "resource_limit":
             return "quarantined", str(exc), headers, 0
         raise
 
@@ -436,13 +443,22 @@ def _create_database(
                         member.raw,
                     ),
                 )
-                status, limitation, headers, count = _ingest_member(
-                    connection,
-                    source=acquired,
-                    member=member,
-                    snapshot_id=snapshot_id,
-                    remaining_rows=settings.max_ingest_rows - total_records,
-                )
+                connection.execute("SAVEPOINT normalize_member")
+                try:
+                    status, limitation, headers, count = _ingest_member(
+                        connection,
+                        source=acquired,
+                        member=member,
+                        snapshot_id=snapshot_id,
+                        remaining_rows=settings.max_ingest_rows - total_records,
+                    )
+                    if status == "quarantined":
+                        connection.execute("ROLLBACK TO normalize_member")
+                    connection.execute("RELEASE normalize_member")
+                except Exception:
+                    connection.execute("ROLLBACK TO normalize_member")
+                    connection.execute("RELEASE normalize_member")
+                    raise
                 total_records += count
                 dataset_records += count
                 if limitation:
