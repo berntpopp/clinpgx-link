@@ -1,6 +1,7 @@
 """Installed source bytes are retrieved through actual MCP calls, offline."""
 
 import base64
+import json
 
 import pytest
 from fastmcp import Client
@@ -82,11 +83,76 @@ async def test_asset_digest_mismatch_and_stale_snapshot_fail_closed(tmp_path):
                 reference = AssetReference(snapshot, "data/genes.zip", "genes.tsv", digest).encode()
                 call = await client.call_tool(
                     "get_source_content",
-                    {"content_ref": reference, "representation": "base64"},
+                    {"content_ref": reference, "pointer": "/0", "representation": "base64"},
                     raise_on_error=False,
                 )
                 assert call.is_error
                 assert call.structured_content["error_code"] == "upstream_unavailable"
+                assert call.structured_content["fallback_tool"] == "get_server_capabilities"
+                assert call.structured_content["_meta"]["next_commands"] == [
+                    {"tool": "get_server_capabilities", "arguments": {}}
+                ]
+    finally:
+        repository.close()
+        store.close()
+
+
+@pytest.mark.asyncio
+async def test_valid_asset_base64_pointer_offers_executable_exact_byte_recovery(tmp_path):
+    repository, built = _repository(tmp_path)
+    member = repository.describe("data/genes.zip").value["members"][0]
+    reference = AssetReference(
+        built.snapshot_id, "data/genes.zip", "genes.tsv", member["sha256"]
+    ).encode()
+    store = ContentStore(tmp_path / "cache.sqlite")
+    try:
+        async with Client(create_mcp(content_store=store, repository=repository)) as client:
+            rejected = await client.call_tool(
+                "get_source_content",
+                {"content_ref": reference, "pointer": "/0", "representation": "base64"},
+                raise_on_error=False,
+            )
+            command = rejected.structured_content["_meta"]["next_commands"][0]
+            recovered = await client.call_tool(command["tool"], command["arguments"])
+
+        assert rejected.is_error
+        assert json.loads(rejected.content[0].text) == rejected.structured_content
+        assert rejected.structured_content["subtype"] == "base64_pointer_unsupported"
+        assert command == {
+            "tool": "get_source_content",
+            "arguments": {
+                "content_ref": reference,
+                "pointer": "",
+                "representation": "base64",
+            },
+        }
+        assert json.loads(recovered.content[0].text) == recovered.structured_content
+        assert (
+            base64.b64decode(recovered.structured_content["result"]["base64"])
+            == (FIXTURES / "genes.tsv").read_bytes()
+        )
+    finally:
+        repository.close()
+        store.close()
+
+
+@pytest.mark.asyncio
+async def test_malformed_asset_reference_never_advertises_content_recovery(tmp_path):
+    repository, _ = _repository(tmp_path)
+    store = ContentStore(tmp_path / "cache.sqlite")
+    try:
+        async with Client(create_mcp(content_store=store, repository=repository)) as client:
+            rejected = await client.call_tool(
+                "get_source_content",
+                {"content_ref": "asset:not-valid", "pointer": "/0", "representation": "base64"},
+                raise_on_error=False,
+            )
+
+        assert rejected.is_error
+        assert rejected.structured_content["fallback_tool"] == "get_server_capabilities"
+        assert rejected.structured_content["_meta"]["next_commands"] == [
+            {"tool": "get_server_capabilities", "arguments": {}}
+        ]
     finally:
         repository.close()
         store.close()

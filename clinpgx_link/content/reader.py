@@ -22,8 +22,10 @@ _MAX_POINTER_SEGMENTS = 128
 _MAX_STRUCTURE_DESCRIPTOR_BYTES = 32 * 1024
 
 
-def _invalid(field: str, hint: str) -> InvalidInputError:
-    return InvalidInputError("Unsupported content selection.", field=field, hint=hint)
+def _invalid(field: str, hint: str, *, subtype: str | None = None) -> InvalidInputError:
+    return InvalidInputError(
+        "Unsupported content selection.", field=field, hint=hint, subtype=subtype
+    )
 
 
 def _descriptor_too_large() -> ResponseTooLargeError:
@@ -73,15 +75,29 @@ def select_value(value: Any, pointer: str) -> Any:
         or len(pointer) > _MAX_POINTER_CHARACTERS
         or pointer.count("/") > _MAX_POINTER_SEGMENTS
     ):
-        raise _invalid("pointer", "Use a bounded RFC 6901 pointer from structure discovery.")
+        raise _invalid(
+            "pointer",
+            "Use a bounded RFC 6901 pointer from structure discovery.",
+            subtype="pointer_syntax_invalid",
+        )
     for token in pointer[1:].split("/"):
         if re.search(r"~(?![01])", token):
-            raise _invalid("pointer", "Escape slash as ~1 and tilde as ~0.")
+            raise _invalid(
+                "pointer",
+                "Escape slash as ~1 and tilde as ~0.",
+                subtype="pointer_syntax_invalid",
+            )
         key = token.replace("~1", "/").replace("~0", "~")
         if isinstance(value, dict) and key in value:
             value = value[key]
-        elif isinstance(value, list) and re.fullmatch(r"0|[1-9][0-9]*", key):
-            if len(key) > 12 or int(key) >= len(value):
+        elif isinstance(value, list):
+            if re.fullmatch(r"0|[1-9][0-9]*", key) is None or len(key) > 12:
+                raise _invalid(
+                    "pointer",
+                    "Use a canonical nonnegative decimal array index.",
+                    subtype="array_index_invalid",
+                )
+            if int(key) >= len(value):
                 raise _invalid("pointer", "Choose an existing array index.")
             value = value[int(key)]
         else:
@@ -241,6 +257,7 @@ def read_content(
             raise _invalid(
                 "pointer",
                 "Use an empty pointer with base64 to retrieve the original body bytes.",
+                subtype="base64_pointer_unsupported",
             )
         return {
             **metadata,
@@ -259,7 +276,11 @@ def read_content(
     except (ValueError, UnicodeError, RecursionError) as exc:
         raise DataValidationError("Source content cannot be decoded.") from exc
     if pointer and not is_json:
-        raise _invalid("pointer", "Pointers require a JSON source representation.")
+        raise _invalid(
+            "pointer",
+            "Pointers require a JSON source representation.",
+            subtype="json_pointer_required",
+        )
     value = select_value(value, pointer)
     if representation == "structure":
         descriptor = _describe(value)
@@ -277,7 +298,11 @@ def read_content(
             raise _invalid("start", "Scalar structure descriptors have no continuation.")
         return {**metadata, **descriptor}
     if not isinstance(value, str):
-        raise _invalid("pointer", "Select a string value using structure discovery.")
+        raise _invalid(
+            "pointer",
+            "Select a string value using structure discovery.",
+            subtype="text_selection_required",
+        )
     return {
         **metadata,
         **_page(len(value), start, length),

@@ -12,7 +12,12 @@ from fastmcp.tools.base import ToolResult
 from mcp.types import TextContent
 
 from clinpgx_link.content.assets import AssetReference
-from clinpgx_link.exceptions import ClinPGxError, ResponseTooLargeError
+from clinpgx_link.exceptions import (
+    PUBLIC_ERROR_SUBTYPES,
+    SELECTION_FAILURE_REASONS,
+    ClinPGxError,
+    ResponseTooLargeError,
+)
 from clinpgx_link.mcp.recovery import RecoveryPlan, recovery_payload
 from clinpgx_link.mcp.untrusted_content import UntrustedText, enforce_limits, fence_text
 from clinpgx_link.models import SourceInfo
@@ -25,6 +30,12 @@ _MESSAGES = {
     "upstream_unavailable": "The required source is currently unavailable.",
     "rate_limited": "The source or retained-content cache is at capacity.",
     "internal": "The server could not complete this request.",
+}
+_SELECTION_FAILURES = {
+    "array_index_invalid": frozenset({"invalid_array_index"}),
+    "pointer_selection_invalid": frozenset({"duplicate_pointer"}),
+    "pointer_syntax_invalid": frozenset({"malformed_rfc6901_pointer", "pointer_not_string"}),
+    "scalar_selection_required": frozenset({"container_selected"}),
 }
 
 
@@ -163,9 +174,24 @@ def error_result(
             "next_commands": [{"tool": "get_server_capabilities", "arguments": {}}],
         },
     }
-    for key, value in (("field", error.field), ("subtype", error.subtype)):
-        if value and re.fullmatch(r"[a-z_]{1,40}", value):
-            result[key] = value
+    if error.field and re.fullmatch(r"[a-z_]{1,40}", error.field):
+        result["field"] = error.field
+    public_subtype = (
+        error.subtype
+        if isinstance(error.subtype, str) and error.subtype in PUBLIC_ERROR_SUBTYPES
+        else None
+    )
+    if public_subtype is not None:
+        result["subtype"] = public_subtype
+    if (
+        type(error.selection_index) is int
+        and 0 <= error.selection_index <= 11
+        and isinstance(error.reason, str)
+        and error.reason in SELECTION_FAILURE_REASONS
+        and error.reason in _SELECTION_FAILURES.get(public_subtype or "", ())
+    ):
+        result["selection_index"] = error.selection_index
+        result["reason"] = error.reason
     guidance = {
         "admission_capacity": (
             "The server's active work capacity is full. Retry after 1 second.",
@@ -179,9 +205,36 @@ def error_result(
             "The tool execution deadline was reached. Work may still be terminating. Retry after 5 seconds with a narrower request.",
             5,
         ),
+        "base64_pointer_unsupported": (
+            "Base64 retrieval requires an empty pointer; retry to retrieve the exact original bytes.",
+            None,
+        ),
+        "pointer_syntax_invalid": (
+            "The pointer is not valid bounded RFC 6901 syntax; use a pointer from structure discovery.",
+            None,
+        ),
+        "array_index_invalid": (
+            "The pointer has an invalid array index; use a canonical index from structure discovery.",
+            None,
+        ),
+        "scalar_selection_required": (
+            "The selected value is a container; inspect its structure and select scalar children.",
+            None,
+        ),
+        "text_selection_required": (
+            "Text retrieval requires a string; use structure or the owning read tool for other values.",
+            None,
+        ),
+        "json_pointer_required": (
+            "Pointers require a JSON representation; retry without a pointer for non-JSON content.",
+            None,
+        ),
     }
-    if error.subtype in guidance:
-        result["message"], result["retry_after_seconds"] = guidance[error.subtype]
+    if public_subtype in guidance:
+        message, retry_after_seconds = guidance[public_subtype]
+        result["message"] = message
+        if retry_after_seconds is not None:
+            result["retry_after_seconds"] = retry_after_seconds
     recoverable_ref = bool(content_ref and re.fullmatch(r"content:[0-9a-f]{64}", content_ref))
     if content_ref and not recoverable_ref:
         try:

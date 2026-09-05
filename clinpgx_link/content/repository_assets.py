@@ -7,7 +7,7 @@ import hashlib
 from clinpgx_link.content.assets import AssetReference
 from clinpgx_link.content.reader import read_content
 from clinpgx_link.data.repository import DatasetRepository
-from clinpgx_link.exceptions import DataValidationError, InvalidInputError
+from clinpgx_link.exceptions import DataValidationError, InvalidInputError, RecoverableContentError
 from clinpgx_link.models import SourceResponse
 
 
@@ -22,10 +22,6 @@ def read_repository_content(
 ) -> SourceResponse:
     reference = AssetReference.decode(content_ref)
     if representation == "base64":
-        if pointer:
-            raise InvalidInputError(
-                "Exact original bytes require an empty pointer.", field="pointer"
-            )
         response = repository.read_asset(
             reference.dataset_id,
             member=reference.member,
@@ -36,6 +32,10 @@ def read_repository_content(
         value = response.value
         if start > value["total_bytes"]:
             raise InvalidInputError("Start exceeds source byte length.", field="start")
+        if response.source.sha256 != reference.sha256:
+            raise DataValidationError("Retained source identity does not match its reference.")
+        if pointer:
+            raise RecoverableContentError(content_ref=content_ref)
         payload = {
             "source_sha256": response.source.sha256,
             "sha256": response.source.sha256,

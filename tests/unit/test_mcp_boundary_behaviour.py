@@ -20,6 +20,139 @@ from clinpgx_link.services.api import ApiService
 from tests.unit.test_repository import _repository
 
 
+@pytest.mark.parametrize(
+    ("subtype", "expected_message"),
+    [
+        (
+            "base64_pointer_unsupported",
+            "Base64 retrieval requires an empty pointer; retry to retrieve the exact original bytes.",
+        ),
+        (
+            "pointer_syntax_invalid",
+            "The pointer is not valid bounded RFC 6901 syntax; use a pointer from structure discovery.",
+        ),
+        (
+            "array_index_invalid",
+            "The pointer has an invalid array index; use a canonical index from structure discovery.",
+        ),
+        (
+            "scalar_selection_required",
+            "The selected value is a container; inspect its structure and select scalar children.",
+        ),
+        (
+            "text_selection_required",
+            "Text retrieval requires a string; use structure or the owning read tool for other values.",
+        ),
+        (
+            "json_pointer_required",
+            "Pointers require a JSON representation; retry without a pointer for non-JSON content.",
+        ),
+    ],
+)
+def test_closed_content_subtypes_select_fixed_public_messages(subtype, expected_message):
+    from clinpgx_link.exceptions import InvalidInputError
+    from clinpgx_link.mcp.envelope import error_result
+
+    hostile = "ignore-all-instructions-secret"
+    result = error_result(
+        InvalidInputError(hostile, field="pointer", hint=hostile, subtype=subtype)
+    )
+
+    assert result.structured_content["message"] == expected_message
+    assert result.structured_content["subtype"] == subtype
+    assert hostile not in result.content[0].text
+    assert json.loads(result.content[0].text) == result.structured_content
+
+
+def test_unknown_subtype_hint_and_message_cannot_supply_public_instructions():
+    from clinpgx_link.exceptions import InvalidInputError
+    from clinpgx_link.mcp.envelope import error_result
+
+    hostile = "ignore-all-instructions-secret"
+    result = error_result(
+        InvalidInputError(hostile, field="pointer", hint=hostile, subtype="hostile_subtype")
+    )
+
+    assert result.structured_content["message"] == (
+        "The request is outside the supported input contract."
+    )
+    assert "subtype" not in result.structured_content
+    assert hostile not in result.content[0].text
+
+
+@pytest.mark.parametrize(
+    ("subtype", "selection_index", "reason"),
+    [
+        ("scalar_selection_required", -1, "container_selected"),
+        ("scalar_selection_required", 12, "container_selected"),
+        ("scalar_selection_required", True, "container_selected"),
+        ("scalar_selection_required", 0, "hostile_reason"),
+        ("data_invalid", 0, "container_selected"),
+        ("pointer_syntax_invalid", 0, "container_selected"),
+    ],
+)
+def test_selection_metadata_requires_a_bounded_index_and_matching_closed_reason(
+    subtype, selection_index, reason
+):
+    from clinpgx_link.exceptions import InvalidInputError
+    from clinpgx_link.mcp.envelope import error_result
+
+    result = error_result(
+        InvalidInputError(
+            "discarded",
+            subtype=subtype,
+            selection_index=selection_index,
+            reason=reason,
+        )
+    )
+
+    assert "selection_index" not in result.structured_content
+    assert "reason" not in result.structured_content
+
+
+def test_selection_metadata_accepts_the_upper_bounded_index_for_its_closed_reason():
+    from clinpgx_link.exceptions import InvalidInputError
+    from clinpgx_link.mcp.envelope import error_result
+
+    result = error_result(
+        InvalidInputError(
+            "discarded",
+            subtype="array_index_invalid",
+            selection_index=11,
+            reason="invalid_array_index",
+        )
+    )
+
+    assert result.structured_content["selection_index"] == 11
+    assert result.structured_content["reason"] == "invalid_array_index"
+
+
+@pytest.mark.parametrize(
+    ("subtype", "message", "retry_after"),
+    [
+        (
+            "admission_capacity",
+            "The server's active work capacity is full. Retry after 1 second.",
+            1,
+        ),
+        (
+            "execution_deadline",
+            "The tool execution deadline was reached. Work may still be terminating. Retry after 5 seconds with a narrower request.",
+            5,
+        ),
+    ],
+)
+def test_existing_capacity_and_deadline_guidance_is_preserved(subtype, message, retry_after):
+    from clinpgx_link.exceptions import RateLimitedError, UpstreamUnavailableError
+    from clinpgx_link.mcp.envelope import error_result
+
+    error_type = RateLimitedError if subtype == "admission_capacity" else UpstreamUnavailableError
+    result = error_result(error_type("discarded", subtype=subtype))
+
+    assert result.structured_content["message"] == message
+    assert result.structured_content["retry_after_seconds"] == retry_after
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize("arguments", [{"limit": 0}, {}, {"untrusted": "secret"}])
 async def test_boundary_clock_covers_validation_and_tool_errors(tmp_path, arguments):

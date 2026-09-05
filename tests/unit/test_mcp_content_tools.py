@@ -181,8 +181,37 @@ async def test_invalid_pointer_offers_working_original_byte_recovery(content_sto
         )
         command = call.structured_content["_meta"]["next_commands"][0]
         recovered = await client.call_tool(command["tool"], command["arguments"])
-    assert command["tool"] == "get_source_content"
+    assert json.loads(call.content[0].text) == call.structured_content
+    assert call.structured_content["subtype"] == "base64_pointer_unsupported"
+    assert call.structured_content["message"] == (
+        "Base64 retrieval requires an empty pointer; retry to retrieve the exact original bytes."
+    )
+    assert command == {
+        "tool": "get_source_content",
+        "arguments": {
+            "content_ref": ref,
+            "pointer": "",
+            "representation": "base64",
+        },
+    }
+    assert json.loads(recovered.content[0].text) == recovered.structured_content
     assert base64.b64decode(recovered.structured_content["result"]["base64"]) == raw
+
+
+@pytest.mark.asyncio
+async def test_content_schema_states_representation_selection_contract(content_store):
+    from clinpgx_link.mcp.facade import create_mcp
+
+    tools = {tool.name: tool for tool in await create_mcp(content_store=content_store).list_tools()}
+    properties = tools["get_source_content"].parameters["properties"]
+
+    pointer_description = properties["pointer"]["description"].lower()
+    representation_description = properties["representation"]["description"].lower()
+    assert "base64 requires an empty pointer" in pointer_description
+    assert "text reads strings" in representation_description
+    assert "numeric, boolean, or null" in representation_description
+    assert "owning read tool" in representation_description
+    assert "scalar representation" not in representation_description
 
 
 @pytest.mark.asyncio

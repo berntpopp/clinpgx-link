@@ -287,7 +287,12 @@ def render_pointer_selections(
     except InvalidInputError as exc:
         if exc.subtype != "scalar_selection_required":
             raise
-        raise RecoverableSelectionError(content_ref=normalized_ref, subtype=exc.subtype) from exc
+        raise RecoverableSelectionError(
+            content_ref=normalized_ref,
+            subtype=exc.subtype,
+            selection_index=exc.selection_index,
+            reason=exc.reason,
+        ) from exc
     selections: list[dict[str, Any]] = []
     for item in resolved:
         locator = original_locator(row, item.pointer, member_ref)

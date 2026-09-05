@@ -143,12 +143,15 @@ def create_mcp(
         ],
         pointer: Annotated[
             str,
-            Field(description="RFC 6901 pointer; empty for exact original bytes.", max_length=4096),
+            Field(
+                description="RFC 6901 pointer for JSON reads; base64 requires an empty pointer.",
+                max_length=4096,
+            ),
         ] = "",
         representation: Annotated[
             Literal["structure", "text", "base64"],
             Field(
-                description="Discover children, read a string, or retrieve exact original bytes."
+                description="Structure discovers JSON values; text reads strings; base64 returns exact original bytes. Numeric, boolean, or null values use scalar selectors in the owning read tool."
             ),
         ] = "structure",
         start: Annotated[
@@ -211,7 +214,17 @@ def create_mcp(
                 elapsed_ms=(time.monotonic() - began) * 1000,
             )
         except ClinPGxError as exc:
-            return error_result(exc, content_ref=stored.reference if stored else None)
+            recoverable_ref = getattr(exc, "content_ref", None)
+            return error_result(
+                exc,
+                content_ref=(
+                    recoverable_ref
+                    if isinstance(recoverable_ref, str)
+                    else stored.reference
+                    if stored
+                    else None
+                ),
+            )
         except Exception:
             return error_result(ClinPGxError("Internal source retrieval failure."))
 

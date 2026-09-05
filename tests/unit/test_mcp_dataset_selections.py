@@ -364,7 +364,10 @@ async def test_multi_pointer_preserves_types_absence_null_and_rejects_containers
             )
             container = await client.call_tool(
                 "get_dataset_record",
-                {"record_id": row["record_id"], "pointers": ["/fields/nested"]},
+                {
+                    "record_id": row["record_id"],
+                    "pointers": ["/ordinal", "/fields/nested"],
+                },
                 raise_on_error=False,
             )
         selections = call.structured_content["result"]["selections"]
@@ -378,6 +381,9 @@ async def test_multi_pointer_preserves_types_absence_null_and_rejects_containers
         assert selections[1]["original_locator"]["column"]["text"] == "stored/null"
         assert container.is_error
         assert container.structured_content["subtype"] == "scalar_selection_required"
+        assert container.structured_content["selection_index"] == 1
+        assert container.structured_content["reason"] == "container_selected"
+        assert container.structured_content["fallback_args"]["representation"] == "structure"
     finally:
         repository.close()
         store.close()
@@ -505,7 +511,10 @@ async def test_pointer_syntax_is_rejected_before_repository_acquisition(tmp_path
         async with Client(_record_server(None, store)) as client:
             malformed = await client.call_tool(
                 "get_dataset_record",
-                {"record_id": "record:" + "a" * 64, "pointers": ["/bad~2"]},
+                {
+                    "record_id": "record:" + "a" * 64,
+                    "pointers": ["/valid", "/bad~2"],
+                },
                 raise_on_error=False,
             )
             incompatible = await client.call_tool(
@@ -519,6 +528,10 @@ async def test_pointer_syntax_is_rejected_before_repository_acquisition(tmp_path
             )
         assert malformed.structured_content["error_code"] == "invalid_input"
         assert malformed.structured_content["field"] == "pointers"
+        assert malformed.structured_content["subtype"] == "pointer_syntax_invalid"
+        assert malformed.structured_content["selection_index"] == 1
+        assert malformed.structured_content["reason"] == "malformed_rfc6901_pointer"
+        assert json.loads(malformed.content[0].text) == malformed.structured_content
         assert incompatible.structured_content["error_code"] == "invalid_input"
         assert incompatible.structured_content["field"] == "pointers"
     finally:

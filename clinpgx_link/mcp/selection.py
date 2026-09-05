@@ -43,26 +43,54 @@ class ScalarSelection:
     sha256: str | None = None
 
 
-def _invalid_pointers(hint: str) -> InvalidInputError:
-    return InvalidInputError("Invalid scalar pointer selection.", field="pointers", hint=hint)
+def _invalid_pointers(
+    hint: str,
+    *,
+    subtype: str | None = None,
+    selection_index: int | None = None,
+    reason: str | None = None,
+) -> InvalidInputError:
+    return InvalidInputError(
+        "Invalid scalar pointer selection.",
+        field="pointers",
+        hint=hint,
+        subtype=subtype,
+        selection_index=selection_index,
+        reason=reason,
+    )
 
 
-def _tokens(pointer: str) -> tuple[str, ...]:
+def _tokens(pointer: str, *, selection_index: int | None = None) -> tuple[str, ...]:
     if (
         (pointer and not pointer.startswith("/"))
         or len(pointer) > _MAX_POINTER_CHARACTERS
         or pointer.count("/") > _MAX_POINTER_SEGMENTS
     ):
-        raise _invalid_pointers("Use bounded RFC 6901 pointers from structure discovery.")
+        raise _invalid_pointers(
+            "Use bounded RFC 6901 pointers from structure discovery.",
+            subtype="pointer_syntax_invalid",
+            selection_index=selection_index,
+            reason="malformed_rfc6901_pointer",
+        )
     try:
         pointer.encode("utf-8")
     except UnicodeError as exc:
-        raise _invalid_pointers("Use bounded RFC 6901 pointers encoded as UTF-8.") from exc
+        raise _invalid_pointers(
+            "Use bounded RFC 6901 pointers encoded as UTF-8.",
+            subtype="pointer_syntax_invalid",
+            selection_index=selection_index,
+            reason="malformed_rfc6901_pointer",
+        ) from exc
     if not pointer:
         return ()
     encoded_tokens = pointer[1:].split("/")
     if any(_MALFORMED_ESCAPE.search(token) for token in encoded_tokens):
-        raise _invalid_pointers("Use RFC 6901 escapes: slash is ~1 and tilde is ~0.")
+        raise _invalid_pointers(
+            "Use RFC 6901 escapes: slash is ~1 and tilde is ~0.",
+            subtype="pointer_syntax_invalid",
+            selection_index=selection_index,
+            reason="malformed_rfc6901_pointer",
+        )
     return tuple(token.replace("~1", "/").replace("~0", "~") for token in encoded_tokens)
 
 
@@ -89,12 +117,22 @@ def validate_pointers(
 
     validated: list[str] = []
     seen: set[str] = set()
-    for candidate in pointers:
+    for selection_index, candidate in enumerate(pointers):
         if not isinstance(candidate, str):
-            raise _invalid_pointers("Every selection must be an RFC 6901 pointer string.")
-        _tokens(candidate)
+            raise _invalid_pointers(
+                "Every selection must be an RFC 6901 pointer string.",
+                subtype="pointer_syntax_invalid",
+                selection_index=selection_index,
+                reason="pointer_not_string",
+            )
+        _tokens(candidate, selection_index=selection_index)
         if candidate in seen:
-            raise _invalid_pointers("Pointers must be unique.")
+            raise _invalid_pointers(
+                "Pointers must be unique.",
+                subtype="pointer_selection_invalid",
+                selection_index=selection_index,
+                reason="duplicate_pointer",
+            )
         seen.add(candidate)
         validated.append(candidate)
 
@@ -156,7 +194,7 @@ def _validate_json_domain(value: Any) -> None:
             stack.extend((child, False) for child in item)
 
 
-def _resolve(value: Any, tokens: tuple[str, ...]) -> Any:
+def _resolve(value: Any, tokens: tuple[str, ...], *, selection_index: int) -> Any:
     current = value
     for token in tokens:
         if isinstance(current, dict):
@@ -167,7 +205,10 @@ def _resolve(value: Any, tokens: tuple[str, ...]) -> Any:
         if isinstance(current, list):
             if not _ARRAY_INDEX.fullmatch(token) or len(token) > 12:
                 raise _invalid_pointers(
-                    "Array tokens must be canonical nonnegative decimal indices."
+                    "Array tokens must be canonical nonnegative decimal indices.",
+                    subtype="array_index_invalid",
+                    selection_index=selection_index,
+                    reason="invalid_array_index",
                 )
             index = int(token)
             if index >= len(current):
@@ -200,15 +241,20 @@ def resolve_scalars(
         )
 
     resolved: list[tuple[str, Any]] = []
-    parsed = tuple((pointer, _tokens(pointer)) for pointer in validated)
-    for pointer, tokens in parsed:
-        selected = _resolve(value, tokens)
+    parsed = tuple(
+        (pointer, _tokens(pointer, selection_index=index))
+        for index, pointer in enumerate(validated)
+    )
+    for selection_index, (pointer, tokens) in enumerate(parsed):
+        selected = _resolve(value, tokens, selection_index=selection_index)
         if isinstance(selected, (dict, list)):
             raise InvalidInputError(
                 "Scalar selection cannot return objects or arrays.",
                 field="pointers",
                 hint="Select scalar children discovered through structure retrieval.",
                 subtype="scalar_selection_required",
+                selection_index=selection_index,
+                reason="container_selected",
             )
         if selected is not _MISSING and not _is_json_scalar(selected):
             raise DataValidationError("Source value is not finite UTF-8 JSON.")

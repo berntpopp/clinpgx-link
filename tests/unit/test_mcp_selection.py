@@ -43,9 +43,24 @@ def test_validate_pointers_checks_trailing_syntax_after_a_missing_ancestor():
     from clinpgx_link.mcp.selection import validate_pointers
 
     with pytest.raises(InvalidInputError) as caught:
-        validate_pointers(["/missing/still~2malformed"])
+        validate_pointers(["/valid", "/missing/still~2malformed"])
 
     assert "RFC 6901" in (caught.value.hint or "")
+    assert caught.value.subtype == "pointer_syntax_invalid"
+    assert caught.value.selection_index == 1
+    assert caught.value.reason == "malformed_rfc6901_pointer"
+
+
+def test_validate_pointers_identifies_the_later_duplicate_without_reflecting_it():
+    from clinpgx_link.exceptions import InvalidInputError
+    from clinpgx_link.mcp.selection import validate_pointers
+
+    with pytest.raises(InvalidInputError) as caught:
+        validate_pointers(["/same", "/same"])
+
+    assert caught.value.subtype == "pointer_selection_invalid"
+    assert caught.value.selection_index == 1
+    assert caught.value.reason == "duplicate_pointer"
 
 
 @pytest.mark.parametrize(
@@ -108,8 +123,11 @@ def test_resolve_scalars_uses_strict_array_indices_and_marks_valid_misses_absent
         ("absent", None),
     )
 
-    with pytest.raises(InvalidInputError):
-        resolve_scalars({"items": ["first"]}, ("/items/01",))
+    with pytest.raises(InvalidInputError) as caught:
+        resolve_scalars({"items": ["first"]}, ("/items/0", "/items/01"))
+    assert caught.value.subtype == "array_index_invalid"
+    assert caught.value.selection_index == 1
+    assert caught.value.reason == "invalid_array_index"
     with pytest.raises(InvalidInputError):
         resolve_scalars({"items": ["first"]}, ("/items/-",))
 
@@ -123,6 +141,8 @@ def test_resolve_scalars_rejects_any_selected_container_as_one_call():
 
     assert caught.value.field == "pointers"
     assert caught.value.subtype == "scalar_selection_required"
+    assert caught.value.selection_index == 1
+    assert caught.value.reason == "container_selected"
 
 
 def test_resolve_scalars_detects_a_later_container_before_serializing_values():

@@ -138,8 +138,41 @@ def test_pointer_base64_is_rejected_with_original_body_recovery():
             representation="base64",
         )
     assert caught.value.field == "pointer"
+    assert caught.value.subtype == "base64_pointer_unsupported"
     assert "empty pointer" in (caught.value.hint or "").lower()
     assert "base64" in (caught.value.hint or "").lower()
+
+
+@pytest.mark.parametrize(
+    ("raw", "media_type", "pointer", "representation", "subtype"),
+    [
+        (b'{"items":["first"]}', "application/json", "bad", "structure", "pointer_syntax_invalid"),
+        (
+            b'{"items":["first"]}',
+            "application/json",
+            "/items/01",
+            "structure",
+            "array_index_invalid",
+        ),
+        (b'{"value":7}', "application/json", "/value", "text", "text_selection_required"),
+        (b"plain text", "text/plain", "/value", "structure", "json_pointer_required"),
+    ],
+)
+def test_content_selection_failures_have_closed_subtypes(
+    raw, media_type, pointer, representation, subtype
+):
+    from clinpgx_link.content.reader import read_content
+    from clinpgx_link.exceptions import InvalidInputError
+
+    with pytest.raises(InvalidInputError) as caught:
+        read_content(
+            raw,
+            media_type=media_type,
+            pointer=pointer,
+            representation=representation,
+        )
+
+    assert caught.value.subtype == subtype
 
 
 @pytest.mark.parametrize(
