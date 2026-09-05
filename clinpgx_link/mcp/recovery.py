@@ -11,6 +11,7 @@ from clinpgx_link.mcp.search_contracts import (
     CANONICAL_FILTERS,
     LOCAL_SEARCH_ENTITIES,
     api_filter_choices,
+    api_filter_value_choices,
     api_filters,
     supports_accession_shortcut,
     supports_api_search,
@@ -245,7 +246,7 @@ def unsupported_api_filters_plan(entity_type: str, source: str, view: str) -> Re
 def search_contract_plan(
     entity_type: str, source: str, view: str, subtype: str | None
 ) -> RecoveryPlan | None:
-    if subtype == "unsupported_api_filters":
+    if subtype in {"unsupported_api_filters", "unsupported_api_filter_value"}:
         return unsupported_api_filters_plan(entity_type, source, view)
     if subtype == "unsupported_search_source":
         return unsupported_search_plan(entity_type, source, view)
@@ -388,10 +389,11 @@ def recovery_payload(plan: RecoveryPlan) -> dict[str, Any]:
         commands.append(_command("get_server_capabilities", {}))
     elif plan.kind == "unsupported_api_filters":
         limitation = (
-            "The API route for this entity does not accept one or more supplied canonical "
-            "filters; this is not an absence claim about source records."
+            "The API route for this entity does not accept one or more supplied filters or "
+            "route-scoped values; this is not an absence claim about source records."
         )
         choices["filters"] = api_filter_choices(str(entity))
+        choices.update(api_filter_value_choices(str(entity)))
         commands.append(_command("get_server_capabilities", {}))
     elif plan.kind == "unsupported_search_source":
         limitation = "This entity and source do not have a compatible search contract."

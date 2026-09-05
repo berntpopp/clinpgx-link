@@ -26,6 +26,7 @@ class SearchContract:
     operation: str
     filter_mapping: tuple[tuple[str, str], ...]
     example_filters: tuple[tuple[str, str], ...]
+    filter_values: tuple[tuple[str, tuple[str, ...]], ...] = ()
     semantics: str = "All supplied canonical exact filters are combined with AND semantics."
 
     @property
@@ -34,6 +35,9 @@ class SearchContract:
 
     def translation(self) -> dict[str, str]:
         return dict(self.filter_mapping)
+
+    def value_choices(self) -> dict[str, tuple[str, ...]]:
+        return dict(self.filter_values)
 
     def example(self) -> dict[str, Any]:
         return {
@@ -95,6 +99,7 @@ _CONTRACT_ROWS = (
         "GET /data/guidelineAnnotation",
         (("source", "source"),),
         (("source", "CPIC"),),
+        (("source", ("cpic", "dpwg", "pro")),),
     ),
     SearchContract(
         "label",
@@ -106,6 +111,7 @@ _CONTRACT_ROWS = (
             ("chemical", "relatedChemicals.name"),
         ),
         (("gene", "DPYD"), ("chemical", "fluorouracil")),
+        (("source", ("ema", "fda", "hcsc", "pmda")),),
     ),
     SearchContract(
         "summary_annotation",
@@ -165,11 +171,20 @@ def api_filters(entity_type: str, filters: dict[str, str]) -> dict[str, str] | N
     if contract is None or not filters or not set(filters) <= set(contract.filters):
         return None
     mapping = contract.translation()
+    value_choices = contract.value_choices()
     translated: dict[str, str] = {}
     for canonical, value in filters.items():
         upstream = mapping[canonical]
-        if canonical == "source":
-            value = value.lower()
+        allowed_values = value_choices.get(canonical)
+        if allowed_values is not None:
+            normalized = value.lower()
+            if normalized not in allowed_values:
+                raise InvalidInputError(
+                    "The filter value is outside the entity API contract.",
+                    field="filters",
+                    subtype="unsupported_api_filter_value",
+                )
+            value = normalized
         previous = translated.get(upstream)
         if previous is not None and previous != value:
             raise InvalidInputError(
@@ -185,6 +200,14 @@ def api_filter_choices(entity_type: str) -> list[str]:
     """List canonical API selectors for fixed recovery guidance."""
     contract = api_contract(entity_type)
     return list(contract.filters) if contract is not None else []
+
+
+def api_filter_value_choices(entity_type: str) -> dict[str, list[str]]:
+    """Return route-scoped accepted enum spellings for recovery."""
+    contract = api_contract(entity_type)
+    if contract is None:
+        return {}
+    return {key: list(values) for key, values in contract.value_choices().items()}
 
 
 def supports_api_search(entity_type: str) -> bool:
@@ -241,6 +264,7 @@ def capabilities_payload() -> dict[str, Any]:
                 "operation": contract.operation,
                 "filters": list(contract.filters),
                 "filter_mapping": contract.translation(),
+                "filter_values": api_filter_value_choices(entity),
                 "semantics": contract.semantics,
                 "example": contract.example(),
                 "example_purpose": "Request syntax and route binding; not evidence of a match.",
@@ -265,6 +289,7 @@ __all__ = [
     "SearchRoute",
     "api_contract",
     "api_filter_choices",
+    "api_filter_value_choices",
     "api_filters",
     "capabilities_payload",
     "resolve_search_route",

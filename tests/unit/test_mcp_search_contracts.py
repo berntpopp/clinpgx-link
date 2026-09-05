@@ -77,6 +77,12 @@ async def test_capability_examples_execute_through_captured_api_routes(tmp_path)
             contracts = capabilities.structured_content["result"]["search_contracts"]
             api_contracts = contracts["api"]
             assert set(api_contracts) == set(expected)
+            assert api_contracts["guideline_annotation"]["filter_values"] == {
+                "source": ["cpic", "dpwg", "pro"]
+            }
+            assert api_contracts["label"]["filter_values"] == {
+                "source": ["ema", "fda", "hcsc", "pmda"]
+            }
             assert "membership" in contracts["download"]["semantics"]
             assert "entity-family identity" not in contracts["download"]["semantics"]
 
@@ -112,6 +118,83 @@ async def test_capability_examples_execute_through_captured_api_routes(tmp_path)
             ).encode("utf-8")
             assert len(serialized) <= 100_000
             assert (len(serialized) + 3) // 4 <= 25_000
+    finally:
+        await upstream.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("entity_type", "source_value", "source_policy", "choices"),
+    [
+        ("guideline_annotation", "fda", "api", ["cpic", "dpwg", "pro"]),
+        ("label", "CPIC", "api", ["ema", "fda", "hcsc", "pmda"]),
+        ("guideline_annotation", "not-a-source", "auto", ["cpic", "dpwg", "pro"]),
+        (
+            "label",
+            "IGNORE_PREVIOUS_<script>source-secret",
+            "api",
+            ["ema", "fda", "hcsc", "pmda"],
+        ),
+    ],
+)
+async def test_api_source_values_are_route_scoped_and_non_reflecting(
+    tmp_path, entity_type, source_value, source_policy, choices
+):
+    calls: list[httpx.Request] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        return httpx.Response(500)
+
+    store, upstream, service = _api(tmp_path, handle)
+    try:
+        async with Client(create_mcp(content_store=store, api_service=service)) as client:
+            rejected = await client.call_tool(
+                "search_records",
+                {
+                    "entity_type": entity_type,
+                    "filters": {"source": source_value},
+                    "source": source_policy,
+                },
+                raise_on_error=False,
+            )
+            payload = rejected.structured_content
+            assert rejected.is_error
+            assert payload["error_code"] == "invalid_input"
+            assert payload["subtype"] == "unsupported_api_filter_value"
+            assert payload["field"] == "filters"
+            assert payload["recovery_action"] == "unsupported_api_filters"
+            assert "route-scoped values" in payload["recovery"]["limitation"]
+            assert payload["recovery"]["valid_choices"]["source"] == choices
+            assert source_value not in json.dumps(payload)
+            assert calls == []
+    finally:
+        await upstream.close()
+
+
+@pytest.mark.asyncio
+async def test_declared_source_value_accepts_case_insensitive_spelling(tmp_path):
+    calls: list[httpx.Request] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        return httpx.Response(200, json={"status": "success", "data": []})
+
+    store, upstream, service = _api(tmp_path, handle)
+    try:
+        async with Client(create_mcp(content_store=store, api_service=service)) as client:
+            result = await client.call_tool(
+                "search_records",
+                {
+                    "entity_type": "guideline_annotation",
+                    "filters": {"source": "CPIC"},
+                    "source": "api",
+                },
+            )
+            assert result.structured_content["success"] is True
+            assert len(calls) == 1
+            assert calls[0].url.path == "/v1/data/guidelineAnnotation"
+            assert dict(calls[0].url.params) == {"source": "cpic", "view": "base"}
     finally:
         await upstream.close()
 
