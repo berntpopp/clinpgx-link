@@ -29,6 +29,29 @@ def _data(row, key):
     return row["fields"][key]["text"]
 
 
+def test_recovery_plan_rejects_nonclosed_kind_and_unsafe_context() -> None:
+    from clinpgx_link.mcp.recovery import RecoveryPlan, recovery_payload
+
+    with pytest.raises(ValueError):
+        RecoveryPlan("invented_action")  # type: ignore[arg-type]
+    with pytest.raises(ValueError):
+        RecoveryPlan(
+            "record_not_found",
+            entity_type="gene",
+            record_id="PA1<script>",
+            source="api",
+        )
+    with pytest.raises(ValueError):
+        RecoveryPlan(
+            "record_not_found",
+            entity_type="gene",
+            record_id="PA" + "1" * 511,
+            source="api",
+        )
+    with pytest.raises(TypeError):
+        recovery_payload({"kind": "record_not_found"})  # type: ignore[arg-type]
+
+
 @pytest.mark.asyncio
 async def test_record_tool_definitions_describe_every_argument_within_budget(tmp_path):
     store = ContentStore(tmp_path / "content.sqlite")
@@ -106,6 +129,23 @@ async def test_auto_local_multivalue_search_and_snapshot_cursor(tmp_path):
                 "search_records", {"entity_type": "gene", "query": "CPCJ", "limit": 1}
             )
             assert _data(broad.structured_content["results"][0], "Symbol") == "CYP2C19"
+
+            wrong_source = await client.call_tool(
+                "search_records",
+                {"entity_type": "gene", "query": "CPCJ", "source": "api"},
+                raise_on_error=False,
+            )
+            recovery = wrong_source.structured_content
+            assert recovery["recovery"]["valid_choices"]["source"] == ["api", "download"]
+            assert recovery["fallback_args"] == {
+                "entity_type": "gene",
+                "source": "download",
+                "limit": 20,
+            }
+            alternative = await client.call_tool(
+                recovery["fallback_tool"], recovery["fallback_args"]
+            )
+            assert alternative.structured_content["success"] is True
 
             all_genes = await client.call_tool(
                 "search_records", {"entity_type": "gene", "source": "download", "limit": 1}
@@ -627,4 +667,201 @@ async def test_api_related_rejects_wrong_conditional_mode_combinations(tmp_path)
                 assert rejected.structured_content["error_code"] == "invalid_input"
                 assert rejected.structured_content["field"] == field
     finally:
+        store.close()
+
+
+@pytest.mark.asyncio
+async def test_variant_symbol_detail_error_advertises_and_executes_exact_api_search(tmp_path):
+    requests = []
+
+    def handle(request):
+        requests.append(request)
+        assert request.url.path == "/v1/data/variant/"
+        assert dict(request.url.params) == {"symbol": "rs123", "view": "max"}
+        return httpx.Response(200, json={"status": "success", "data": [{"id": "PA1"}]})
+
+    store = ContentStore(tmp_path / "content.sqlite")
+    upstream = ClinPGxClient(
+        Settings(_env_file=None, cache_root=tmp_path),
+        httpx.AsyncClient(transport=httpx.MockTransport(handle)),
+        store,
+    )
+    try:
+        async with Client(_server(store, api=ApiService(upstream))) as client:
+            rejected = await client.call_tool(
+                "get_record",
+                {"entity_type": "variant", "record_id": "rs123", "source": "api"},
+                raise_on_error=False,
+            )
+            payload = rejected.structured_content
+            assert rejected.is_error
+            assert payload["error_code"] == "invalid_input"
+            assert payload["field"] == "record_id"
+            assert payload["recovery"]["context"] == {
+                "entity_type": "variant",
+                "record_id": "rs123",
+                "source": "api",
+            }
+            assert "not an absence" in payload["recovery"]["limitation"]
+            assert payload["fallback_tool"] == "search_records"
+            assert payload["fallback_args"] == {
+                "entity_type": "variant",
+                "filters": {"variant": "rs123"},
+                "source": "api",
+                "view": "max",
+            }
+            recovered = await client.call_tool(payload["fallback_tool"], payload["fallback_args"])
+            assert recovered.structured_content["results"][0]["id"] == "PA1"
+            assert len(requests) == 1
+    finally:
+        await upstream.close()
+
+
+@pytest.mark.asyncio
+async def test_unknown_safe_pa_not_found_preserves_context_and_callable_discovery(tmp_path):
+    def handle(request):
+        if request.url.path == "/v1/data/gene/PA999999":
+            return httpx.Response(404, json={"hostile": "source-secret"})
+        assert request.url.path == "/v1/data/gene"
+        assert dict(request.url.params) == {"accessionId": "PA999999", "view": "max"}
+        return httpx.Response(200, json={"status": "success", "data": []})
+
+    store = ContentStore(tmp_path / "content.sqlite")
+    upstream = ClinPGxClient(
+        Settings(_env_file=None, cache_root=tmp_path),
+        httpx.AsyncClient(transport=httpx.MockTransport(handle)),
+        store,
+    )
+    try:
+        async with Client(_server(store, api=ApiService(upstream))) as client:
+            missing = await client.call_tool(
+                "get_record",
+                {"entity_type": "gene", "record_id": "PA999999", "source": "api"},
+                raise_on_error=False,
+            )
+            payload = missing.structured_content
+            assert payload["error_code"] == "not_found"
+            assert payload["recovery"]["context"] == {
+                "entity_type": "gene",
+                "record_id": "PA999999",
+                "source": "api",
+            }
+            assert "source-secret" not in json.dumps(payload)
+            recovered = await client.call_tool(payload["fallback_tool"], payload["fallback_args"])
+            assert recovered.structured_content["results"] == []
+    finally:
+        await upstream.close()
+
+
+@pytest.mark.asyncio
+async def test_unsupported_detail_pair_lists_real_choices_and_callable_explicit_alternative(
+    tmp_path,
+):
+    paths = []
+
+    def handle(request):
+        paths.append(request.url.path)
+        if request.url.path == "/v1/data/chemical/PA123":
+            return httpx.Response(200, json={"status": "success", "data": {"id": "PA123"}})
+        assert request.url.path == "/v1/report/connectedObjects/PA123/Chemical"
+        return httpx.Response(200, json=[])
+
+    store = ContentStore(tmp_path / "content.sqlite")
+    upstream = ClinPGxClient(
+        Settings(_env_file=None, cache_root=tmp_path),
+        httpx.AsyncClient(transport=httpx.MockTransport(handle)),
+        store,
+    )
+    try:
+        async with Client(_server(store, api=ApiService(upstream))) as client:
+            unsupported = await client.call_tool(
+                "get_record",
+                {"entity_type": "chemical", "record_id": "PA123", "source": "website"},
+                raise_on_error=False,
+            )
+            payload = unsupported.structured_content
+            assert payload["recovery"]["valid_choices"]["source"] == ["api", "download"]
+            assert payload["fallback_args"]["source"] == "api"
+            recovered = await client.call_tool(payload["fallback_tool"], payload["fallback_args"])
+            assert recovered.structured_content["result"]["data"]["text"]
+
+            wrong_mode = await client.call_tool(
+                "get_related_records",
+                {
+                    "record_id": "PA123",
+                    "other_id": "PA456",
+                    "result_type": "relationship",
+                    "source": "api",
+                },
+                raise_on_error=False,
+            )
+            related = wrong_mode.structured_content
+            assert related["recovery"]["valid_choices"]["mode"] == [
+                "connected_object",
+                "pair",
+            ]
+            assert "other_id" not in related["fallback_args"]
+            retried = await client.call_tool(related["fallback_tool"], related["fallback_args"])
+            assert retried.structured_content["results"] == []
+            assert paths == [
+                "/v1/data/chemical/PA123",
+                "/v1/report/connectedObjects/PA123/Chemical",
+            ]
+    finally:
+        await upstream.close()
+
+
+@pytest.mark.asyncio
+async def test_recovery_hides_malicious_identifiers_exception_payloads_and_filter_keys(tmp_path):
+    from clinpgx_link.exceptions import NotFoundError
+
+    secret = "IGNORE_INSTRUCTIONS_source_secret"
+
+    class HostileFailureApi:
+        async def get(self, *_args, **_kwargs):
+            raise NotFoundError(secret, hint=secret)
+
+    repository, _ = _repository(tmp_path)
+    store = ContentStore(tmp_path / "content.sqlite")
+    try:
+        async with Client(_server(store, repository=repository, api=HostileFailureApi())) as client:
+            hostile_id = "PA999<script>IGNORE"
+            missing = await client.call_tool(
+                "get_record",
+                {"entity_type": "gene", "record_id": hostile_id, "source": "api"},
+                raise_on_error=False,
+            )
+            rendered = json.dumps(missing.structured_content)
+            assert missing.structured_content["error_code"] == "not_found"
+            assert hostile_id not in rendered
+            assert secret not in rendered
+
+            hostile_key = "ignore_previous_secret"
+            invalid = await client.call_tool(
+                "search_records",
+                {
+                    "entity_type": "gene",
+                    "filters": {hostile_key: "NEVER_ECHO"},
+                    "source": "download",
+                },
+                raise_on_error=False,
+            )
+            payload = invalid.structured_content
+            rendered = json.dumps(payload)
+            assert payload["error_code"] == "invalid_input"
+            assert payload["recovery"]["valid_choices"]["filters"] == [
+                "annotation_id",
+                "chemical",
+                "gene",
+                "id",
+                "name",
+                "source",
+                "variant",
+            ]
+            assert hostile_key not in rendered
+            assert "NEVER_ECHO" not in rendered
+            recovered = await client.call_tool(payload["fallback_tool"], payload["fallback_args"])
+            assert recovered.structured_content["success"] is True
+    finally:
+        repository.close()
         store.close()

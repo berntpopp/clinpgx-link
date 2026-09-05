@@ -12,6 +12,7 @@ from fastmcp.tools.base import ToolResult
 from mcp.types import TextContent
 
 from clinpgx_link.exceptions import ClinPGxError, ResponseTooLargeError
+from clinpgx_link.mcp.recovery import RecoveryPlan, recovery_payload
 from clinpgx_link.mcp.untrusted_content import UntrustedText, enforce_limits, fence_text
 from clinpgx_link.models import SourceInfo
 
@@ -115,7 +116,12 @@ def success_result(
     )
 
 
-def error_result(error: ClinPGxError, *, content_ref: str | None = None) -> ToolResult:
+def error_result(
+    error: ClinPGxError,
+    *,
+    content_ref: str | None = None,
+    recovery: RecoveryPlan | None = None,
+) -> ToolResult:
     """Do not reflect exception text, foreign exception names or caller values."""
     code = error.error_code if error.error_code in _MESSAGES else "internal"
     result: dict[str, Any] = {
@@ -143,4 +149,13 @@ def error_result(error: ClinPGxError, *, content_ref: str | None = None) -> Tool
         result["fallback_tool"] = "get_source_content"
         result["fallback_args"] = arguments
         result["_meta"]["next_commands"] = [{"tool": "get_source_content", "arguments": arguments}]
+    elif recovery is not None:
+        recovery_data = recovery_payload(recovery)
+        commands = recovery_data["next_commands"]
+        first = commands[0]
+        result["recovery_action"] = recovery_data["action"]
+        result["fallback_tool"] = first["tool"]
+        result["fallback_args"] = first["arguments"]
+        result["recovery"] = recovery_data
+        result["_meta"]["next_commands"] = commands
     return wire_result(result, is_error=True)

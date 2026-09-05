@@ -21,6 +21,7 @@ from clinpgx_link.exceptions import (
     NotFoundError,
     UpstreamUnavailableError,
 )
+from clinpgx_link.mcp import recovery as recovery_help
 from clinpgx_link.mcp.envelope import error_result
 from clinpgx_link.mcp.pagination import CursorCodec
 from clinpgx_link.mcp.record_shaping import (
@@ -162,72 +163,6 @@ _ANNOTATIONS = {
     "idempotentHint": True,
     "openWorldHint": True,
 }
-_LOCAL_ENTITIES = frozenset(
-    {"allele", "annotation_id", "chemical", "disease", "gene", "literature", "variant"}
-)
-_WEBSITE_GET = {
-    "allele": "GET /site/allele/{id}",
-    "gene": "GET /site/gene/{id}",
-    "guideline": "GET /site/guideline/{id}",
-    "guideline_annotation": "GET /site/guidelineAnnotation/{id}",
-    "haplotype": "GET /site/haplotype/{id}",
-    "label": "GET /site/labelAnnotation/{id}",
-    "pathway": "GET /site/pathway/{id}",
-    "vip": "GET /site/vip/{id}",
-}
-_API_RESULT = {
-    "guideline_annotation": "guidelineAnnotation",
-    "label": "label",
-    "literature_annotation": "literatureAnnotation",
-    "multilink_annotation": "multilinkAnnotation",
-    "pathway": "pathway",
-    "summary_annotation": "summaryAnnotation",
-    "variant_annotation": "variantAnnotation",
-    "vip": "vip",
-    "vip_variant": "vipVariant",
-}
-
-
-def _api_filters(entity_type: str, filters: dict[str, str]) -> dict[str, str] | None:
-    """Translate only canonical filters with equivalent documented API semantics."""
-    mapping: dict[str, dict[str, str]] = {
-        "pathway": {"id": "accessionId"},
-        "gene": {"id": "accessionId", "gene": "symbol"},
-        "chemical": {"id": "accessionId", "chemical": "name"},
-        "disease": {"id": "accessionId"},
-        "variant": {"variant": "symbol"},
-        "literature": {"id": "id"},
-        "guideline_annotation": {"source": "source"},
-        "label": {
-            "source": "source",
-            "gene": "relatedGenes.symbol",
-            "chemical": "relatedChemicals.name",
-        },
-        "summary_annotation": {
-            "id": "id",
-            "annotation_id": "id",
-            "gene": "location.genes.symbol",
-            "chemical": "relatedChemicals.name",
-            "variant": "location.fingerprint",
-        },
-        "variant_annotation": {
-            "gene": "location.genes.symbol",
-            "variant": "location.fingerprint",
-        },
-    }
-    declared = mapping.get(entity_type)
-    if declared is None or not filters or not set(filters) <= set(declared):
-        return None
-    return {declared[key]: value for key, value in filters.items()}
-
-
-def _validate_filters(filters: dict[str, str]) -> None:
-    allowed = {"id", "name", "gene", "chemical", "variant", "source", "annotation_id"}
-    for key, value in filters.items():
-        if key not in allowed:
-            raise InvalidInputError("Unknown canonical entity filter.", field=key)
-        if not isinstance(value, str) or not value:
-            raise InvalidInputError("Entity filters must be nonempty strings.", field=key)
 
 
 def _select(response: SourceResponse, pointer: str) -> SourceResponse:
@@ -272,12 +207,23 @@ def register_record_tools(
         """Search exact live fields or broad installed entity memberships."""
         began = time.monotonic()
         response: SourceResponse | None = None
+        recovery: recovery_help.RecoveryPlan | None = None
         try:
             selected_filters = filters or {}
-            _validate_filters(selected_filters)
+            try:
+                recovery_help.validate_filters(selected_filters)
+            except InvalidInputError as exc:
+                return error_result(
+                    exc,
+                    recovery=recovery_help.invalid_filters_plan(entity_type, source, view),
+                )
             if cursor is not None and offset:
                 raise InvalidInputError("Cursor and offset cannot be combined.", field="offset")
-            translated = None if query is not None else _api_filters(entity_type, selected_filters)
+            translated = (
+                None
+                if query is not None
+                else recovery_help.api_filters(entity_type, selected_filters)
+            )
             selected_source = source
             if source == "auto":
                 selected_source = "api" if translated is not None else "download"
@@ -292,6 +238,7 @@ def register_record_tools(
             }
             if selected_source == "api":
                 if query is not None or translated is None:
+                    recovery = recovery_help.unsupported_search_plan(entity_type, source, view)
                     raise InvalidInputError(
                         "The API supports only declared exact filters for this entity.",
                         field="filters" if query is None else "query",
@@ -315,7 +262,8 @@ def register_record_tools(
                     state_ref=state_ref,
                 )
             local_snapshot = await asyncio.to_thread(snapshot_id, repository)
-            if entity_type not in _LOCAL_ENTITIES:
+            if entity_type not in recovery_help.LOCAL_ENTITIES:
+                recovery = recovery_help.unsupported_search_plan(entity_type, source, view)
                 raise InvalidInputError(
                     "This entity type is not indexed in the local snapshot.", field="entity_type"
                 )
@@ -349,7 +297,9 @@ def register_record_tools(
             )
         except ClinPGxError as exc:
             return error_result(
-                exc, content_ref=response.details.get("content_ref") if response else None
+                exc,
+                content_ref=response.details.get("content_ref") if response else None,
+                recovery=recovery,
             )
         except Exception:
             return error_result(ClinPGxError("Entity search failed."))
@@ -372,10 +322,25 @@ def register_record_tools(
         """Get one exact entity without changing the requested source."""
         began = time.monotonic()
         response: SourceResponse | None = None
+        recovery: recovery_help.RecoveryPlan | None = None
         try:
+            if (
+                source == "api"
+                and entity_type == "variant"
+                and record_id.startswith("rs")
+                and recovery_help.safe_identifier(record_id)
+            ):
+                recovery = recovery_help.variant_symbol_plan(record_id, view)
+                raise InvalidInputError(
+                    "Variant symbols require collection search.", field="record_id"
+                )
             if source == "api":
                 if api is None:
                     raise UpstreamUnavailableError("API service is not configured.")
+                if not recovery_help.detail_source_supported(entity_type, source):
+                    recovery = recovery_help.unsupported_detail_plan(
+                        entity_type, record_id, source, view
+                    )
                 response = await api.get(entity_type, record_id, view)
                 return await asyncio.to_thread(
                     presenter.present,
@@ -390,8 +355,11 @@ def register_record_tools(
                     },
                 )
             if source == "website":
-                operation = _WEBSITE_GET.get(entity_type)
+                operation = recovery_help.WEBSITE_GET.get(entity_type)
                 if operation is None:
+                    recovery = recovery_help.unsupported_detail_plan(
+                        entity_type, record_id, source, view
+                    )
                     raise InvalidInputError(
                         "No verified website detail route exists for this entity.",
                         field="entity_type",
@@ -416,7 +384,10 @@ def register_record_tools(
                     },
                 )
             local_snapshot = await asyncio.to_thread(snapshot_id, repository)
-            if entity_type not in _LOCAL_ENTITIES:
+            if entity_type not in recovery_help.LOCAL_ENTITIES:
+                recovery = recovery_help.unsupported_detail_plan(
+                    entity_type, record_id, source, view
+                )
                 raise InvalidInputError(
                     "This entity type is not indexed in the local snapshot.", field="entity_type"
                 )
@@ -451,8 +422,12 @@ def register_record_tools(
                 began=began,
             )
         except ClinPGxError as exc:
+            if isinstance(exc, NotFoundError):
+                recovery = recovery_help.not_found_plan(entity_type, record_id, source, view)
             return error_result(
-                exc, content_ref=response.details.get("content_ref") if response else None
+                exc,
+                content_ref=response.details.get("content_ref") if response else None,
+                recovery=recovery,
             )
         except Exception:
             return error_result(ClinPGxError("Entity retrieval failed."))
@@ -506,6 +481,7 @@ def register_record_tools(
         """Read live connected objects or pairs, or loss-preserving installed joins."""
         began = time.monotonic()
         response: SourceResponse | None = None
+        recovery: recovery_help.RecoveryPlan | None = None
         try:
             if cursor is not None and offset:
                 raise InvalidInputError("Cursor and offset cannot be combined.", field="offset")
@@ -525,18 +501,27 @@ def register_record_tools(
                         operation = "GET /report/connectedObjects/{id}/{type}"
                         path_parameters = {"id": record_id, "type": other_type}
                         query_parameters = None
-                    elif result_type in _API_RESULT:
+                    elif result_type in recovery_help.API_RESULT:
+                        recovery = recovery_help.related_mode_plan(
+                            record_id, result_type, other_id, other_type, source, view
+                        )
                         raise InvalidInputError(
                             "The documented API pair route requires other_id.", field="other_id"
                         )
                     else:
+                        recovery = recovery_help.related_mode_plan(
+                            record_id, result_type, other_id, other_type, source, view
+                        )
                         raise InvalidInputError(
                             "This result type has no documented API report route.",
                             field="result_type",
                         )
                 else:
-                    api_type = _API_RESULT.get(result_type)
+                    api_type = recovery_help.API_RESULT.get(result_type)
                     if api_type is None:
+                        recovery = recovery_help.related_mode_plan(
+                            record_id, result_type, other_id, other_type, source, view
+                        )
                         raise InvalidInputError(
                             "This result type has no documented API pair route.",
                             field="result_type",
@@ -601,7 +586,9 @@ def register_record_tools(
             )
         except ClinPGxError as exc:
             return error_result(
-                exc, content_ref=response.details.get("content_ref") if response else None
+                exc,
+                content_ref=response.details.get("content_ref") if response else None,
+                recovery=recovery,
             )
         except Exception:
             return error_result(ClinPGxError("Related-record retrieval failed."))
