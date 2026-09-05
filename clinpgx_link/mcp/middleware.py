@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import time
 import uuid
+from collections.abc import Callable
 from typing import Any
 
 from fastmcp import FastMCP
@@ -19,16 +21,26 @@ from clinpgx_link.exceptions import (
     NotFoundError,
     UpstreamUnavailableError,
 )
-from clinpgx_link.mcp.envelope import REQUEST_ID, error_result
+from clinpgx_link.mcp.admission import Admission, route_pool
+from clinpgx_link.mcp.envelope import REQUEST_ID, error_result, wire_result
 
 
 class BoundaryGuard(Middleware):
     """Unknown names never reach FastMCP's name-reflecting dispatch path."""
 
-    def __init__(self, server: FastMCP, *, source_access_allowed: bool = True) -> None:
+    def __init__(
+        self,
+        server: FastMCP,
+        *,
+        source_access_allowed: bool = True,
+        admission: Admission | None = None,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
         self.server = server
         self.source_access_allowed = source_access_allowed
         self.validators: dict[str, Draft202012Validator] = {}
+        self.admission = admission or Admission()
+        self.clock = clock
 
     @staticmethod
     def _validation_field(error: JSONSchemaValidationError, properties: dict[str, Any]) -> str:
@@ -42,7 +54,31 @@ class BoundaryGuard(Middleware):
         context: MiddlewareContext[Any],
         call_next: CallNext[Any, ToolResult],
     ) -> ToolResult:
+        began = self.clock()
         token = REQUEST_ID.set(REQUEST_ID.get() or str(uuid.uuid4()))
+        try:
+            result = await self._call(context, call_next)
+            try:
+                return self._timed(result, began)
+            except ClinPGxError as exc:
+                return self._timed(error_result(exc), began)
+            except Exception:
+                return self._timed(error_result(ClinPGxError("Invalid boundary result.")), began)
+        finally:
+            REQUEST_ID.reset(token)
+
+    def _timed(self, result: ToolResult, began: float) -> ToolResult:
+        payload = result.structured_content
+        assert isinstance(payload, dict)
+        payload["_meta"].update(
+            elapsed_ms=round((self.clock() - began) * 1000, 3), timing_scope="tool_boundary"
+        )
+        payload["_meta"].pop("timing_unavailable_reason", None)
+        return wire_result(payload, is_error=result.is_error)
+
+    async def _call(
+        self, context: MiddlewareContext[Any], call_next: CallNext[Any, ToolResult]
+    ) -> ToolResult:
         try:
             tool = await self.server.get_tool(context.message.name)
             if tool is None:
@@ -75,10 +111,14 @@ class BoundaryGuard(Middleware):
                     )
                 )
             try:
-                return await call_next(context)
+                return await self.admission.run(
+                    route_pool(tool.name, arguments), lambda: call_next(context)
+                )
             except (ValidationError, FastMCPValidationError):
                 return error_result(InvalidInputError("Invalid tool arguments.", field="arguments"))
             except ClinPGxError as exc:
                 return error_result(exc)
-        finally:
-            REQUEST_ID.reset(token)
+        except ClinPGxError as exc:
+            return error_result(exc)
+        except Exception:
+            return error_result(ClinPGxError("Boundary execution failed."))

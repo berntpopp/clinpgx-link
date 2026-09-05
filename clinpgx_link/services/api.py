@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from clinpgx_link.api.client import ClinPGxClient
+from clinpgx_link.api.client import AsyncWorker, ClinPGxClient
 from clinpgx_link.api.registry import ApiRegistry
 from clinpgx_link.exceptions import InvalidInputError, UpstreamUnavailableError
 from clinpgx_link.models import SourceResponse
@@ -55,6 +55,10 @@ class ApiService:
     def __init__(self, client: ClinPGxClient, registry: ApiRegistry | None = None) -> None:
         self._client = client
         self.registry = registry or ApiRegistry()
+
+    def configure_worker(self, worker: AsyncWorker) -> None:
+        """Bind the host's worker lifetime policy before serving requests."""
+        self._client.worker = worker
 
     async def call(
         self,

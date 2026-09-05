@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import json
 import time
@@ -21,6 +20,7 @@ from clinpgx_link.exceptions import (
     ResponseTooLargeError,
     UpstreamUnavailableError,
 )
+from clinpgx_link.mcp.admission import run_sync
 from clinpgx_link.mcp.envelope import error_result, success_result
 from clinpgx_link.mcp.pagination import CursorCodec
 from clinpgx_link.mcp.row_provenance import row_provenance
@@ -182,7 +182,7 @@ def register_dataset_tools(
                 raise InvalidInputError("Offset must be non-negative.", field="offset")
             if cursor is not None and offset:
                 raise InvalidInputError("Cursor and offset cannot be combined.", field="offset")
-            snapshot_id = str((await asyncio.to_thread(repository.status))["snapshot_id"])
+            snapshot_id = str((await run_sync(repository.status))["snapshot_id"])
             selectors = {
                 "tool": "list_datasets",
                 "query": query,
@@ -196,7 +196,7 @@ def register_dataset_tools(
                         subtype="snapshot_mismatch",
                     )
                 offset = position.offset
-            response = await asyncio.to_thread(repository.list_datasets)
+            response = await run_sync(repository.list_datasets)
             if response.source.sha256 != snapshot_id.removeprefix("sha256:"):
                 raise UpstreamUnavailableError(
                     "The local snapshot identity changed.", subtype="snapshot_mismatch"
@@ -290,7 +290,7 @@ def register_dataset_tools(
                 raise InvalidInputError("Offset must be non-negative.", field="offset")
             if cursor is not None and offset:
                 raise InvalidInputError("Cursor and offset cannot be combined.", field="offset")
-            snapshot_id = str((await asyncio.to_thread(repository.status))["snapshot_id"])
+            snapshot_id = str((await run_sync(repository.status))["snapshot_id"])
             selectors = {"tool": "get_dataset", "dataset_id": dataset_id}
             if cursor is not None:
                 position = cursors.decode(cursor, selectors)
@@ -300,7 +300,7 @@ def register_dataset_tools(
                         subtype="snapshot_mismatch",
                     )
                 offset = position.offset
-            response = await asyncio.to_thread(repository.describe, dataset_id)
+            response = await run_sync(repository.describe, dataset_id)
             if response.details.get("snapshot_id") != snapshot_id:
                 raise UpstreamUnavailableError(
                     "The local snapshot identity changed.", subtype="snapshot_mismatch"
@@ -308,7 +308,8 @@ def register_dataset_tools(
             total = len(response.value.get("members", []))
             if offset > total:
                 raise InvalidInputError("Offset exceeds dataset members.", field="offset")
-            value = _decorate_dataset(
+            value = await run_sync(
+                _decorate_dataset,
                 response.value,
                 response.source,
                 snapshot_id,

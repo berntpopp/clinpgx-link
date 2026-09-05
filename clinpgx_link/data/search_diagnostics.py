@@ -146,9 +146,20 @@ class RepositoryDiagnosticsSupport:
         self, *, step_budget: int | None = None, deadline: float | None = None
     ) -> Iterator[None]:
         """Compose an outer repository limit with any nested diagnostic limit."""
-        with self._connection_lock:
+        acquired = self._connection_lock.acquire(
+            timeout=max(0.0, deadline - self._progress_hooks._clock())
+            if deadline is not None
+            else -1
+        )
+        if not acquired:
+            raise sqlite3.OperationalError("interrupted")
+        try:
+            if deadline is not None and self._progress_hooks._clock() >= deadline:
+                raise sqlite3.OperationalError("interrupted")
             with self._progress_hooks.budget(step_budget=step_budget, deadline=deadline):
                 yield
+        finally:
+            self._connection_lock.release()
 
     @staticmethod
     def _fts_query(query: str) -> str | None:

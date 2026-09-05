@@ -57,7 +57,7 @@ def success_result(
     value: Any,
     *,
     source: SourceInfo,
-    elapsed_ms: float = 0,
+    elapsed_ms: float | None = None,
     collection: bool = False,
     pagination: dict[str, Any] | None = None,
     content_ref: str | None = None,
@@ -81,7 +81,11 @@ def success_result(
             "results" if collection else "result": value,
             "_meta": {
                 "request_id": request_id,
-                "elapsed_ms": round(elapsed_ms, 3),
+                "elapsed_ms": round(elapsed_ms, 3) if elapsed_ms is not None else None,
+                "timing_scope": "tool_body" if elapsed_ms is not None else None,
+                **(
+                    {"timing_unavailable_reason": "no_boundary_timer"} if elapsed_ms is None else {}
+                ),
                 "source": source.source,
                 "source_url": source.url,
                 "data_source": source.data_source,
@@ -152,6 +156,9 @@ def error_result(
         "unsafe_for_clinical_use": True,
         "_meta": {
             "request_id": REQUEST_ID.get() or str(uuid.uuid4()),
+            "elapsed_ms": None,
+            "timing_scope": None,
+            "timing_unavailable_reason": "no_boundary_timer",
             "unsafe_for_clinical_use": True,
             "next_commands": [{"tool": "get_server_capabilities", "arguments": {}}],
         },
@@ -159,6 +166,22 @@ def error_result(
     for key, value in (("field", error.field), ("subtype", error.subtype)):
         if value and re.fullmatch(r"[a-z_]{1,40}", value):
             result[key] = value
+    guidance = {
+        "admission_capacity": (
+            "The server's active work capacity is full. Retry after 1 second.",
+            1,
+        ),
+        "upstream_throttle": (
+            "The upstream source throttled this request. Retry after 30 seconds.",
+            30,
+        ),
+        "execution_deadline": (
+            "The tool execution deadline was reached. Work may still be terminating. Retry after 5 seconds with a narrower request.",
+            5,
+        ),
+    }
+    if error.subtype in guidance:
+        result["message"], result["retry_after_seconds"] = guidance[error.subtype]
     recoverable_ref = bool(content_ref and re.fullmatch(r"content:[0-9a-f]{64}", content_ref))
     if content_ref and not recoverable_ref:
         try:

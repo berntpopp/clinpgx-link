@@ -22,6 +22,7 @@ from clinpgx_link.exceptions import (
     ResponseTooLargeError,
     UpstreamUnavailableError,
 )
+from clinpgx_link.mcp.admission import run_sync
 from clinpgx_link.mcp.dataset_record_fields import (
     profiled_nested_fields_are_safe,
     profiled_selected_nested_value_is_safe,
@@ -36,7 +37,7 @@ from clinpgx_link.mcp.dataset_record_selection import (
 )
 from clinpgx_link.mcp.envelope import error_result, success_result
 from clinpgx_link.mcp.pagination import CursorCodec
-from clinpgx_link.mcp.row_provenance import row_provenance
+from clinpgx_link.mcp.row_provenance import derived_record_source, row_provenance
 from clinpgx_link.mcp.search_diagnostics import (
     dataset_search_error_result,
     presented_search_diagnostics,
@@ -61,26 +62,11 @@ def _json(value: Any) -> bytes:
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode()
 
 
-def _derived_source(source: SourceInfo, record_id: str, raw: bytes) -> SourceInfo:
-    return SourceInfo(
-        "ClinPGx Link derived dataset record",
-        "clinpgx://dataset-record/" + record_id,
-        source.retrieved_at,
-        hashlib.sha256(raw).hexdigest(),
-        "derived",
-        published_at=source.published_at,
-        release_tag=source.release_tag,
-        coverage="derived_not_original",
-        warnings=source.warnings,
-        retrieval_time_kind=source.retrieval_time_kind,
-        acquired_at=source.acquired_at,
-        admitted_at=source.admitted_at,
-    )
-
-
 def _retain_row(store: ContentStore, row: dict[str, Any], source: SourceInfo) -> str:
     raw = _json(row)
-    return store.put(raw, _derived_source(source, str(row["record_id"]), raw), "application/json")
+    return store.put(
+        raw, derived_record_source(source, str(row["record_id"]), raw), "application/json"
+    )
 
 
 def _has_oversized_string(value: Any) -> bool:
@@ -389,7 +375,7 @@ def register_dataset_record_tools(
                 raise InvalidInputError("Limit must be between 1 and 100.", field="limit")
             if type(offset) is not int or offset < 0:
                 raise InvalidInputError("Offset must be non-negative.", field="offset")
-            snapshot_id = str((await asyncio.to_thread(repository.status))["snapshot_id"])
+            snapshot_id = str((await run_sync(repository.status))["snapshot_id"])
             selected_filters = filters or {}
             selectors = {
                 "tool": "search_dataset",
@@ -408,7 +394,7 @@ def register_dataset_record_tools(
                         subtype="snapshot_mismatch",
                     )
                 offset = position.offset
-            response = await asyncio.to_thread(
+            response = await run_sync(
                 repository.search,
                 dataset_id,
                 member=member,
@@ -425,9 +411,7 @@ def register_dataset_record_tools(
                 )
             asset_responses = await asyncio.gather(
                 *(
-                    asyncio.to_thread(
-                        repository.get_record, row["record_id"], expected_snapshot=snapshot_id
-                    )
+                    run_sync(repository.get_record, row["record_id"], expected_snapshot=snapshot_id)
                     for row in response.value
                 )
             )
@@ -440,7 +424,8 @@ def register_dataset_record_tools(
                 visible_inputs = row_inputs[:visible_count]
                 rows: list[dict[str, Any]] = []
                 for raw_row, asset_response in visible_inputs:
-                    shaped = profiled_row(
+                    shaped = await run_sync(
+                        profiled_row,
                         raw_row,
                         response,
                         snapshot_id,
@@ -453,7 +438,8 @@ def register_dataset_record_tools(
                         force_defer_fields=force_defer_fields,
                     )
                     if len(_json(shaped)) > 70_000:
-                        shaped = profiled_row(
+                        shaped = await run_sync(
+                            profiled_row,
                             raw_row,
                             response,
                             snapshot_id,
@@ -543,8 +529,8 @@ def register_dataset_record_tools(
                 raise UpstreamUnavailableError(
                     "Local dataset snapshot is not configured.", subtype="dataset_unavailable"
                 )
-            snapshot_id = str((await asyncio.to_thread(repository.status))["snapshot_id"])
-            response = await asyncio.to_thread(
+            snapshot_id = str((await run_sync(repository.status))["snapshot_id"])
+            response = await run_sync(
                 repository.get_record, record_id, expected_snapshot=snapshot_id
             )
             if response.details.get("snapshot_id") != snapshot_id:
@@ -552,7 +538,8 @@ def register_dataset_record_tools(
                     "The local snapshot identity changed.", subtype="snapshot_mismatch"
                 )
             if selected_pointers is None:
-                result = profiled_row(
+                result = await run_sync(
+                    profiled_row,
                     response.value,
                     response,
                     snapshot_id,
@@ -563,7 +550,8 @@ def register_dataset_record_tools(
                     shape_dataset_row,
                 )
             else:
-                result = pointer_selected_row(
+                result = await run_sync(
+                    pointer_selected_row,
                     response.value,
                     response,
                     snapshot_id,
@@ -574,8 +562,8 @@ def register_dataset_record_tools(
             result["snapshot_id"] = snapshot_id
             result["response_mode"] = response_mode
             if pointer:
-                result["selected"] = select_dataset_record_value(
-                    response.value, pointer, response, store
+                result["selected"] = await run_sync(
+                    select_dataset_record_value, response.value, pointer, response, store
                 )
             try:
                 return success_result(
@@ -586,7 +574,8 @@ def register_dataset_record_tools(
                 )
             except ResponseTooLargeError:
                 if selected_pointers is None:
-                    result = profiled_row(
+                    result = await run_sync(
+                        profiled_row,
                         response.value,
                         response,
                         snapshot_id,
@@ -598,7 +587,8 @@ def register_dataset_record_tools(
                         force_defer_fields=True,
                     )
                 else:
-                    result = pointer_selected_row(
+                    result = await run_sync(
+                        pointer_selected_row,
                         response.value,
                         response,
                         snapshot_id,
@@ -609,8 +599,8 @@ def register_dataset_record_tools(
                 result["snapshot_id"] = snapshot_id
                 result["response_mode"] = response_mode
                 if pointer:
-                    result["selected"] = select_dataset_record_value(
-                        response.value, pointer, response, store
+                    result["selected"] = await run_sync(
+                        select_dataset_record_value, response.value, pointer, response, store
                     )
                 return success_result(
                     result,

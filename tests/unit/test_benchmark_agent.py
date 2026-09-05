@@ -21,6 +21,93 @@ from scripts import benchmark_agent
 SCRIPT = Path(__file__).parents[2] / "scripts/benchmark_agent.py"
 
 
+def test_trace_timing_never_infers_send_times_and_extracts_only_reported_boundary_data():
+    state = benchmark_agent.EventState()
+    state.feed(b'{"type":"system","subtype":"init"}\n')
+    state.feed(
+        json.dumps(
+            {
+                "type": "assistant",
+                "message": {
+                    "model": "opus",
+                    "content": [
+                        {"type": "tool_use", "id": "one", "name": "mcp__clinpgx__get_record"}
+                    ],
+                },
+            }
+        ).encode()
+        + b"\n"
+    )
+    envelope = {
+        "success": True,
+        "result": {"secret": "never retain"},
+        "_meta": {"elapsed_ms": 12.345, "timing_scope": "tool_boundary", "data_source": "cache"},
+    }
+    state.feed(
+        json.dumps(
+            {
+                "type": "user",
+                "message": {
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": "one",
+                            "content": [{"type": "text", "text": json.dumps(envelope)}],
+                        }
+                    ]
+                },
+            }
+        ).encode()
+        + b"\n"
+    )
+    timing = state.calls[0].get("timing")
+    assert timing is not None
+    assert timing["send_monotonic"] is None
+    assert timing["result_monotonic"] is None
+    assert timing["scheduler_queue_ms"] is None
+    assert timing["execution_ms"] is None
+    assert timing["unavailable_reason"] == "trace_has_no_transport_timestamps_or_scheduler_spans"
+    assert timing["boundary_elapsed_ms"] == 12.345
+    assert state.calls[0]["source_kind"] == "cache"
+    assert "never retain" not in json.dumps(state.calls)
+
+
+def test_missing_or_nonfinite_reported_timing_is_unavailable():
+    state = benchmark_agent.EventState()
+    state._tool_use({"id": "one", "name": "mcp__clinpgx__get_record"})
+    state._tool_result(
+        {
+            "tool_use_id": "one",
+            "content": json.dumps(
+                {
+                    "success": False,
+                    "_meta": {"elapsed_ms": float("nan"), "timing_scope": "tool_boundary"},
+                }
+            ),
+        }
+    )
+    assert state.calls[0].get("timing", {}).get("boundary_elapsed_ms", "missing") is None
+    assert state.calls[0]["is_error"] is True
+
+
+def test_untrusted_trace_metadata_cannot_crash_summary():
+    state = benchmark_agent.EventState()
+    state._tool_use({"id": "one", "name": "mcp__clinpgx__get_record"})
+    state._tool_result(
+        {
+            "tool_use_id": "one",
+            "content": json.dumps(
+                {
+                    "success": True,
+                    "_meta": {"data_source": {"untrusted": "value"}, "elapsed_ms": []},
+                }
+            ),
+        }
+    )
+    assert state.calls[0]["source_kind"] is None
+    assert state.calls[0]["timing"]["boundary_elapsed_ms"] is None
+
+
 def _stub(tmp_path: Path, body: str) -> Path:
     executable = tmp_path / "bin" / "claude"
     executable.parent.mkdir()
@@ -163,6 +250,16 @@ def test_success_preserves_complete_private_trace_and_resolved_metadata(tmp_path
             "name": "mcp__clinpgx__search_records",
             "is_error": False,
             "result_received": True,
+            "source_kind": None,
+            "timing": {
+                "send_monotonic": None,
+                "result_monotonic": None,
+                "scheduler_queue_ms": None,
+                "execution_ms": None,
+                "boundary_elapsed_ms": None,
+                "unavailable_reason": "trace_has_no_transport_timestamps_or_scheduler_spans",
+                "boundary_unavailable_reason": "no_reported_boundary_measurement",
+            },
         }
     ]
     assert summary["errors"] == []

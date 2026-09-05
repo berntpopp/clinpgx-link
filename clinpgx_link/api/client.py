@@ -10,7 +10,7 @@ import time
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 from urllib.parse import urlsplit
 
 import httpx
@@ -144,6 +144,14 @@ def _validate_relative_path(path: str, *, cpic: bool) -> None:
         raise InvalidInputError("Unsupported upstream path.", field="operation")
 
 
+class AsyncWorker(Protocol):
+    """Injected execution policy; source clients do not depend on an MCP boundary."""
+
+    def __call__[T](
+        self, function: Callable[..., T], /, *args: Any, **kwargs: Any
+    ) -> Awaitable[T]: ...
+
+
 class ClinPGxClient:
     """Fetch complete source bodies under shared rate, time, size and origin bounds."""
 
@@ -154,8 +162,10 @@ class ClinPGxClient:
         content_store: ContentStore | None = None,
         *,
         scheduler: RequestScheduler | None = None,
+        worker: AsyncWorker = asyncio.to_thread,
     ) -> None:
         self._settings = settings
+        self.worker = worker
         self._http = http_client or httpx.AsyncClient(follow_redirects=False)
         self.content_store = content_store or ContentStore(
             Path(settings.cache_root) / "content.sqlite",
@@ -340,7 +350,7 @@ class ClinPGxClient:
             details["source_pointer"] = source_pointer
         if content_range := response.headers.get("content-range"):
             details["content_range"] = content_range
-        details["content_ref"] = self.content_store.put(raw, source, media_type)
+        details["content_ref"] = await self.worker(self.content_store.put, raw, source, media_type)
         result = SourceResponse(value, source, details)
         self._cache.put(key, result, size=len(raw))
         return result
@@ -437,7 +447,7 @@ class ClinPGxClient:
         if status in {400, 406, 415, 422}:
             raise InvalidInputError("Source rejected the validated request.")
         if status == 429:
-            raise RateLimitedError("Source request was rate limited.")
+            raise RateLimitedError("Source request was rate limited.", subtype="upstream_throttle")
         raise UpstreamUnavailableError("Source returned an unavailable status.")
 
     @staticmethod

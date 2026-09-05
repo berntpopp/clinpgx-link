@@ -28,6 +28,45 @@ TERMINATION_GRACE_SECONDS = 0.25
 MCP_TOOL_PREFIX = "mcp__clinpgx__"
 
 
+def _reported_envelope(content: object) -> dict[str, Any] | None:
+    """Extract bounded metadata from the actual returned JSON, never source bodies."""
+    texts = (
+        [content]
+        if isinstance(content, str)
+        else (
+            [
+                item.get("text")
+                for item in content
+                if isinstance(item, dict) and item.get("type") == "text"
+            ]
+            if isinstance(content, list)
+            else []
+        )
+    )
+    for text in texts:
+        if not isinstance(text, str):
+            continue
+        try:
+            value = json.loads(text)
+        except (ValueError, RecursionError):
+            continue
+        if isinstance(value, dict) and isinstance(value.get("success"), bool):
+            return value
+    return None
+
+
+def _trace_timing() -> dict[str, Any]:
+    return {
+        "send_monotonic": None,
+        "result_monotonic": None,
+        "scheduler_queue_ms": None,
+        "execution_ms": None,
+        "boundary_elapsed_ms": None,
+        "unavailable_reason": "trace_has_no_transport_timestamps_or_scheduler_spans",
+        "boundary_unavailable_reason": "no_reported_boundary_measurement",
+    }
+
+
 class RunInputError(ValueError):
     """A safe, pre-launch validation failure."""
 
@@ -218,7 +257,14 @@ class EventState:
             return
         self._call_indexes[call_id] = len(self.calls)
         self.calls.append(
-            {"id": call_id, "name": name, "is_error": False, "result_received": False}
+            {
+                "id": call_id,
+                "name": name,
+                "is_error": False,
+                "result_received": False,
+                "timing": _trace_timing(),
+                "source_kind": None,
+            }
         )
 
     def _tool_result(self, block: dict[str, Any]) -> None:
@@ -231,6 +277,36 @@ class EventState:
             self.parse_errors += 1
             return
         is_error = block.get("is_error") is True
+        envelope = _reported_envelope(block.get("content"))
+        if envelope is not None:
+            is_error = is_error or envelope["success"] is False
+            meta = envelope.get("_meta")
+            if isinstance(meta, dict):
+                elapsed = meta.get("elapsed_ms")
+                if (
+                    type(elapsed) in (int, float)
+                    and math.isfinite(elapsed)
+                    and elapsed >= 0
+                    and meta.get("timing_scope") == "tool_boundary"
+                ):
+                    self.calls[index]["timing"].update(
+                        boundary_elapsed_ms=elapsed, boundary_unavailable_reason=None
+                    )
+                kind = meta.get("data_source")
+                if isinstance(kind, str) and kind in {
+                    "cache",
+                    "api",
+                    "website",
+                    "download",
+                    "server",
+                }:
+                    self.calls[index]["source_kind"] = (
+                        "live"
+                        if kind in {"api", "website"}
+                        else "local"
+                        if kind in {"download", "server"}
+                        else kind
+                    )
         self.calls[index]["result_received"] = True
         self.calls[index]["is_error"] = is_error
         if is_error:

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import time
 from typing import Annotated, Literal
 
@@ -23,6 +22,7 @@ from clinpgx_link.exceptions import (
 )
 from clinpgx_link.mcp import recovery as recovery_help
 from clinpgx_link.mcp.adapter_selection import adapter_profile, adapter_selection_result
+from clinpgx_link.mcp.admission import run_sync
 from clinpgx_link.mcp.envelope import error_result
 from clinpgx_link.mcp.pagination import CursorCodec
 from clinpgx_link.mcp.record_shaping import (
@@ -208,7 +208,7 @@ def register_record_tools(
                 assert translated is not None
                 state_ref = None
                 if cursor is not None:
-                    response, offset, state_ref = await asyncio.to_thread(
+                    response, offset, state_ref = await run_sync(
                         presenter.resume, cursor, selectors, offset=offset
                     )
                 else:
@@ -216,7 +216,7 @@ def register_record_tools(
                         raise UpstreamUnavailableError("API service is not configured.")
                     response = await api.search(entity_type, translated, view)
                 assert response is not None
-                return await asyncio.to_thread(
+                return await run_sync(
                     presenter.present,
                     response,
                     selectors=selectors,
@@ -226,7 +226,7 @@ def register_record_tools(
                     response_mode=response_mode,
                     profile=adapter_profile("", family=entity_type),
                 )
-            local_snapshot = await asyncio.to_thread(snapshot_id, repository)
+            local_snapshot = await run_sync(snapshot_id, repository)
             if entity_type not in recovery_help.LOCAL_ENTITIES:
                 recovery = recovery_help.unsupported_search_plan(entity_type, source, view)
                 raise InvalidInputError(
@@ -240,7 +240,7 @@ def register_record_tools(
                     )
                 offset = position.offset
             assert repository is not None
-            response = await asyncio.to_thread(
+            response = await run_sync(
                 repository.search_entities,
                 entity_type,
                 query=query,
@@ -249,7 +249,7 @@ def register_record_tools(
                 offset=offset,
                 expected_snapshot=local_snapshot,
             )
-            return await asyncio.to_thread(
+            return await run_sync(
                 local_collection_result,
                 response,
                 snapshot=local_snapshot,
@@ -311,8 +311,10 @@ def register_record_tools(
                     )
                 response = await api.get(entity_type, record_id, view)
                 if selected_pointers is not None:
-                    return adapter_selection_result(response, selected_pointers, store)
-                return await asyncio.to_thread(
+                    return await run_sync(
+                        adapter_selection_result, response, selected_pointers, store
+                    )
+                return await run_sync(
                     presenter.present,
                     _select(response, pointer),
                     selectors={
@@ -344,8 +346,10 @@ def register_record_tools(
                     {"view": view} if entity_type == "guideline" else {},
                 )
                 if selected_pointers is not None:
-                    return adapter_selection_result(response, selected_pointers, store)
-                return await asyncio.to_thread(
+                    return await run_sync(
+                        adapter_selection_result, response, selected_pointers, store
+                    )
+                return await run_sync(
                     presenter.present,
                     _select(response, pointer),
                     selectors={
@@ -359,7 +363,7 @@ def register_record_tools(
                     response_mode=response_mode,
                     profile=None if pointer else adapter_profile("", family=entity_type),
                 )
-            local_snapshot = await asyncio.to_thread(snapshot_id, repository)
+            local_snapshot = await run_sync(snapshot_id, repository)
             if entity_type not in recovery_help.LOCAL_ENTITIES:
                 recovery = recovery_help.unsupported_detail_plan(
                     entity_type, record_id, source, view
@@ -368,7 +372,7 @@ def register_record_tools(
                     "This entity type is not indexed in the local snapshot.", field="entity_type"
                 )
             assert repository is not None
-            matches = await asyncio.to_thread(
+            matches = await run_sync(
                 repository.search_entities,
                 entity_type,
                 filters={"id": record_id},
@@ -383,12 +387,12 @@ def register_record_tools(
                 raise AmbiguousQueryError(
                     "The external identity matches more than one installed row.", field="record_id"
                 )
-            response = await asyncio.to_thread(
+            response = await run_sync(
                 repository.get_record,
                 matches.value[0]["record_id"],
                 expected_snapshot=local_snapshot,
             )
-            return await asyncio.to_thread(
+            return await run_sync(
                 local_singleton_result,
                 response,
                 snapshot=local_snapshot,
@@ -522,7 +526,7 @@ def register_record_tools(
                     query_parameters = {"view": view}
                 state_ref = None
                 if cursor is not None:
-                    response, offset, state_ref = await asyncio.to_thread(
+                    response, offset, state_ref = await run_sync(
                         presenter.resume, cursor, selectors, offset=offset
                     )
                 else:
@@ -534,7 +538,7 @@ def register_record_tools(
                         query_parameters=query_parameters,
                     )
                 assert response is not None
-                return await asyncio.to_thread(
+                return await run_sync(
                     presenter.present,
                     response,
                     selectors=selectors,
@@ -548,7 +552,7 @@ def register_record_tools(
                         else adapter_profile("", family=result_type)
                     ),
                 )
-            local_snapshot = await asyncio.to_thread(snapshot_id, repository)
+            local_snapshot = await run_sync(snapshot_id, repository)
             if cursor is not None:
                 position = cursors.decode(cursor, selectors)
                 if position.identity != local_snapshot:
@@ -557,7 +561,7 @@ def register_record_tools(
                     )
                 offset = position.offset
             assert repository is not None
-            response = await asyncio.to_thread(
+            response = await run_sync(
                 repository.related,
                 record_id,
                 result_type=result_type,
@@ -566,7 +570,7 @@ def register_record_tools(
                 offset=offset,
                 expected_snapshot=local_snapshot,
             )
-            return await asyncio.to_thread(
+            return await run_sync(
                 local_collection_result,
                 response,
                 snapshot=local_snapshot,

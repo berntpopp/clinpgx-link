@@ -15,6 +15,7 @@ from clinpgx_link.api.registry import ApiRegistry
 from clinpgx_link.api.website_operations import WebsiteRegistry
 from clinpgx_link.content.store import ContentStore
 from clinpgx_link.exceptions import ClinPGxError, InvalidInputError
+from clinpgx_link.mcp.admission import run_sync
 from clinpgx_link.mcp.envelope import error_result, success_result
 from clinpgx_link.mcp.pagination import CursorCodec
 from clinpgx_link.mcp.untrusted_content import fence_text
@@ -117,7 +118,7 @@ def register_schema_tool(server: FastMCP, store: ContentStore) -> None:
                     entry["schema"], ensure_ascii=False, separators=(",", ":")
                 ).encode()
                 provenance = source(hashlib.sha256(raw).hexdigest())
-                ref = store.put(raw, provenance, "application/json")
+                ref = await run_sync(store.put, raw, provenance, "application/json")
                 result: dict[str, Any] = {key: val for key, val in entry.items() if key != "schema"}
                 result.update(
                     content_ref=ref,

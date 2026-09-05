@@ -76,6 +76,7 @@ class Settings(BaseSettings):
     source_auth_token: SecretStr | None = Field(default=None, exclude=True, repr=False)
 
     api_requests_per_second: float = Field(default=2.0, gt=0, le=2.0)
+    max_active_calls: int = Field(default=16, ge=2, le=128)
     request_timeout_seconds: float = Field(default=30.0, gt=0, le=300.0)
     request_deadline_seconds: float = Field(default=60.0, gt=0, le=600.0)
     max_redirects: int = Field(default=5, ge=0, le=5)

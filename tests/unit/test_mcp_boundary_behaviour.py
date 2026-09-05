@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 
@@ -17,6 +18,108 @@ from clinpgx_link.content.store import ContentStore
 from clinpgx_link.mcp.facade import create_mcp
 from clinpgx_link.services.api import ApiService
 from tests.unit.test_repository import _repository
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("arguments", [{"limit": 0}, {}, {"untrusted": "secret"}])
+async def test_boundary_clock_covers_validation_and_tool_errors(tmp_path, arguments):
+    from clinpgx_link.mcp.middleware import BoundaryGuard
+
+    store = ContentStore(tmp_path / "clock.sqlite")
+    server = create_mcp(content_store=store)
+    guard = next(item for item in server.middleware if isinstance(item, BoundaryGuard))
+    ticks = iter([10.0, 10.012345])
+    guard.clock = lambda: next(ticks)
+    try:
+        async with Client(server) as client:
+            call = await client.call_tool("list_datasets", arguments, raise_on_error=False)
+        assert call.structured_content["_meta"]["elapsed_ms"] == 12.345
+        assert call.structured_content["_meta"]["timing_scope"] == "tool_boundary"
+        assert json.loads(call.content[0].text) == call.structured_content
+    finally:
+        store.close()
+
+
+@pytest.mark.asyncio
+async def test_overload_timing_measures_preflight_and_admission(tmp_path):
+    from clinpgx_link.mcp.admission import Admission
+    from clinpgx_link.mcp.middleware import BoundaryGuard
+
+    admission = Admission(2)
+    store = ContentStore(tmp_path / "overload.sqlite")
+    server = create_mcp(content_store=store, admission=admission)
+    guard = next(item for item in server.middleware if isinstance(item, BoundaryGuard))
+    ticks = iter([5.0, 5.00789])
+    guard.clock = lambda: next(ticks)
+    started, release = asyncio.Event(), asyncio.Event()
+
+    async def work():
+        started.set()
+        await release.wait()
+
+    active = asyncio.create_task(admission.run("local", work))
+    await started.wait()
+    try:
+        async with Client(server) as client:
+            result = await client.call_tool("get_server_capabilities", {}, raise_on_error=False)
+        assert result.structured_content["subtype"] == "admission_capacity"
+        assert result.structured_content["_meta"]["elapsed_ms"] == 7.89
+        assert result.structured_content["_meta"]["timing_scope"] == "tool_boundary"
+        assert json.loads(result.content[0].text) == result.structured_content
+    finally:
+        release.set()
+        await active
+        store.close()
+
+
+@pytest.mark.asyncio
+async def test_boundary_timing_growth_preserves_bounded_error_envelope():
+    from fastmcp import FastMCP
+
+    from clinpgx_link.mcp.envelope import wire_result
+    from clinpgx_link.mcp.middleware import BoundaryGuard
+
+    server = FastMCP("bounded timing")
+    ticks = iter([1.0, 1.01, 1.02])
+    server.add_middleware(BoundaryGuard(server, clock=lambda: next(ticks)))
+
+    @server.tool(output_schema=None)
+    async def get_server_capabilities():
+        payload = {
+            "success": True,
+            "result": "",
+            "_meta": {"request_id": "a", "elapsed_ms": 0, "timing_scope": "tool_body"},
+        }
+        size = len(json.dumps(payload, separators=(",", ":")).encode())
+        payload["result"] = "x" * (100_000 - size)
+        return wire_result(payload)
+
+    async with Client(server) as client:
+        result = await client.call_tool("get_server_capabilities", {}, raise_on_error=False)
+    assert result.structured_content["error_code"] == "invalid_input"
+    assert result.structured_content["subtype"] == "response_too_large"
+    assert result.structured_content["_meta"]["timing_scope"] == "tool_boundary"
+    assert result.structured_content["_meta"]["elapsed_ms"] == 20.0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("delta", [0.0000001, 0.123456])
+async def test_measured_success_timing_can_round_to_zero(tmp_path, delta):
+    from clinpgx_link.mcp.middleware import BoundaryGuard
+
+    store = ContentStore(tmp_path / "success-clock.sqlite")
+    server = create_mcp(content_store=store)
+    guard = next(item for item in server.middleware if isinstance(item, BoundaryGuard))
+    ticks = iter([10.0, 10.0 + delta])
+    guard.clock = lambda: next(ticks)
+    try:
+        async with Client(server) as client:
+            call = await client.call_tool("get_server_capabilities", {})
+        assert call.structured_content["_meta"]["elapsed_ms"] == round(delta * 1000, 3)
+        assert call.structured_content["_meta"]["timing_scope"] == "tool_boundary"
+        assert "timing_unavailable_reason" not in call.structured_content["_meta"]
+    finally:
+        store.close()
 
 
 @pytest.mark.asyncio

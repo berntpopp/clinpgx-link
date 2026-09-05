@@ -73,6 +73,49 @@ selection does not silently switch providers. Local literature joins return orig
 citing evidence rows and PMIDs, not full bibliographic metadata; live API detail is
 the richer-data path. Source payloads remain untrusted evidence, never instructions.
 
+Every HTTP MCP tool success and error now reports measured `_meta.elapsed_ms` and
+`_meta.timing_scope="tool_boundary"`, identically in text and structured content.
+Timing starts at tool-boundary receipt, includes validation, admission and result
+construction, and excludes HTTP serialization and network transit. A measured
+submillisecond duration can round to zero. Standalone envelope constructors have no
+boundary timer and report timing as unavailable unless a caller supplies a measured
+tool-body duration; constructor defaults must not be interpreted as execution time.
+
+`CLINPGX_MAX_ACTIVE_CALLS` defaults to 16 and accepts 2–128 per process. Half the
+capacity, rounded up, is reserved for local metadata, installed datasets and retained
+content; the remainder is reserved for upstream work. Pools never borrow. Validated
+source contracts determine the pool; uncertain automatic routes reserve upstream.
+`get_diagnostics(probe_upstream=true)` uses upstream capacity. Excess requests are
+rejected promptly with `rate_limited/admission_capacity` and a fixed one-second retry
+interval. Upstream HTTP throttling uses `rate_limited/upstream_throttle` with a fixed
+30-second retry interval. Normal outbound scheduler waiting is part of active
+upstream work and preserves the existing maximum of two outbound requests per second.
+
+Active tool work has a 60-second deadline, including outbound scheduler waiting.
+Expiry reports `upstream_unavailable/execution_deadline`, which describes execution
+expiry and does not establish an upstream outage. Configure clients to allow more
+than 60 seconds plus transport overhead if they need to receive this response.
+Cancelling a client await alone may not notify the server; closing the HTTP request
+is observed as a disconnect. Neither cancellation nor a deadline can forcibly kill
+an arbitrary Python worker thread. Its slot remains occupied until the worker
+finishes; repository lock waits and SQLite execution cooperate with the deadline.
+Diagnostics and health expose pending termination and degrade readiness while such
+work remains. A worker that cannot terminate requires completion or a supervised
+process restart. A cancelled call receives no cancellation-status envelope.
+Graceful shutdown drains admitted work before closing the repository or retained
+content store; it can therefore wait for a worker that has not terminated.
+
+Local free-text `query` uses literal ANDed tokens: ASCII `*` is rejected in this
+field. Exact `gene` and `name` filters preserve star-allele spellings such as
+`CYP2C19*2`; other query punctuation still separates tokens. Exact zero-result
+diagnostics may be unavailable when their bounded work budget expires. Their
+observed examples are distinct stored values, never aliases or equivalence claims.
+
+The agent benchmark records reported boundary duration and known local/cache/live
+source classification separately from success/error status. Claude completion traces
+do not establish precise monotonic send/result times or scheduler/execution spans;
+these remain `null` with an explicit reason, rather than reconstructed timestamps.
+
 ## Verification and contributor guide
 
 `make ci-local` checks formatting, lint, module-size budgets, the pinned fleet schema,

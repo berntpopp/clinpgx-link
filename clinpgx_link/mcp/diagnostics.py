@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import json
 import re
@@ -17,6 +16,7 @@ from clinpgx_link.api.website import WebsiteClient
 from clinpgx_link.data.catalog import is_canonical_release_tag
 from clinpgx_link.data.repository import DatasetRepository
 from clinpgx_link.exceptions import ClinPGxError
+from clinpgx_link.mcp.admission import Admission, run_sync
 from clinpgx_link.mcp.envelope import error_result, success_result
 from clinpgx_link.models import SourceInfo
 from clinpgx_link.services.api import ApiService
@@ -50,6 +50,7 @@ def register_diagnostics(
     api: ApiService | None,
     website: WebsiteClient | None,
     repository: DatasetRepository | None,
+    admission: Admission | None = None,
 ) -> None:
     @server.tool(
         annotations={
@@ -92,10 +93,11 @@ def register_diagnostics(
             result = {
                 "api_configured": api is not None,
                 "website_configured": website is not None,
-                "local_snapshot": await asyncio.to_thread(_local_status, repository),
+                "local_snapshot": await run_sync(_local_status, repository),
                 "upstream_probe": probe,
                 "implementation_status": "in_progress",
                 "response_mode": response_mode,
+                "admission": admission.snapshot() if admission is not None else None,
             }
             raw = json.dumps(result, sort_keys=True, separators=(",", ":")).encode()
             source = SourceInfo(

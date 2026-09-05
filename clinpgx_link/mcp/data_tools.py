@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from collections.abc import Awaitable, Callable
 from typing import Annotated, Any, Literal
 
@@ -15,6 +14,7 @@ from clinpgx_link.content.reader import select_value
 from clinpgx_link.content.store import ContentStore
 from clinpgx_link.exceptions import ClinPGxError, InvalidInputError, UpstreamUnavailableError
 from clinpgx_link.mcp.adapter_selection import adapter_profile, adapter_selection_result
+from clinpgx_link.mcp.admission import run_sync
 from clinpgx_link.mcp.envelope import error_result
 from clinpgx_link.mcp.selection import validate_pointers
 from clinpgx_link.mcp.shaping import SourcePresenter, source_pointer
@@ -55,13 +55,15 @@ def register_data_tools(
             )
             state_ref = None
             if cursor:
-                response, offset, state_ref = await asyncio.to_thread(
+                response, offset, state_ref = await run_sync(
                     presenter.resume, cursor, selectors, offset=offset
                 )
             else:
                 response = await fetch()
                 if selected_pointers is not None:
-                    return adapter_selection_result(response, selected_pointers, store)
+                    return await run_sync(
+                        adapter_selection_result, response, selected_pointers, store
+                    )
                 response = SourceResponse(
                     select_value(response.value, selectors["pointer"]),
                     response.source,
@@ -70,7 +72,7 @@ def register_data_tools(
                 response.details["source_pointer"] = source_pointer(
                     response.details.get("source_pointer"), selectors["pointer"]
                 )
-            return await asyncio.to_thread(
+            return await run_sync(
                 presenter.present,
                 response,
                 selectors=selectors,

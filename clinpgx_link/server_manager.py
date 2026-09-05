@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import ipaddress
 import re
 import uuid
@@ -31,8 +32,10 @@ from clinpgx_link.logging_config import (
     clear_request_context,
     configure_logging,
 )
+from clinpgx_link.mcp.admission import Admission
 from clinpgx_link.mcp.envelope import REQUEST_ID
 from clinpgx_link.mcp.facade import create_mcp
+from clinpgx_link.mcp.http_lifetime import serve_with_disconnect
 from clinpgx_link.services.api import ApiService
 
 _SNAPSHOT_ID = re.compile(r"sha256:[0-9a-f]{64}\Z")
@@ -288,14 +291,18 @@ def create_app(runtime_settings: Settings | None = None) -> FastAPI:
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         nonlocal repository, mcp_app
         logger = structlog.get_logger("clinpgx_link")
+        admission: Admission | None = None
         try:
             repository = _open_snapshot(selected)
             _app.state.repository = repository
+            admission = Admission(selected.max_active_calls)
+            _app.state.admission = admission
             mcp = create_mcp(
                 content_store=store,
                 api_service=api_service,
                 website_client=website_client,
                 repository=repository,
+                admission=admission,
                 source_access_allowed=selected.runtime_mode != "production"
                 or repository is not None,
             )
@@ -313,6 +320,8 @@ def create_app(runtime_settings: Settings | None = None) -> FastAPI:
                 yield
         finally:
             mcp_app = None
+            if admission is not None:
+                await admission.drain()
             try:
                 await source_client.close()
             finally:
@@ -346,7 +355,14 @@ def create_app(runtime_settings: Settings | None = None) -> FastAPI:
     @app.get("/health")
     @app.get("/api/health")
     async def health() -> JSONResponse:
-        payload, status_code = _health(selected, repository)
+        admission_status = app.state.admission.snapshot()
+        payload, status_code = await asyncio.to_thread(
+            _health, selected, repository if admission_status["ready"] else None
+        )
+        payload["admission"] = admission_status
+        if not admission_status["ready"]:
+            payload.update(status="degraded", ready=False)
+            status_code = 503 if selected.runtime_mode == "production" else 200
         return JSONResponse(payload, status_code=status_code)
 
     async def dispatch_mcp(scope: Scope, receive: Receive, send: Send) -> None:
@@ -355,7 +371,7 @@ def create_app(runtime_settings: Settings | None = None) -> FastAPI:
                 scope, receive, send
             )
             return
-        await mcp_app(scope, receive, send)
+        await serve_with_disconnect(mcp_app, scope, receive, send)
 
     app.add_middleware(
         CORSMiddleware,

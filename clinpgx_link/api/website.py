@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from clinpgx_link.api.client import ClinPGxClient
+from clinpgx_link.api.client import AsyncWorker, ClinPGxClient
 from clinpgx_link.api.website_operations import WebsiteRegistry
 from clinpgx_link.exceptions import DataValidationError
 from clinpgx_link.models import SourceResponse
@@ -64,6 +64,10 @@ class WebsiteClient:
         self._client = client
         self.registry = registry or WebsiteRegistry()
 
+    def configure_worker(self, worker: AsyncWorker) -> None:
+        """Bind the host's worker lifetime policy before serving requests."""
+        self._client.worker = worker
+
     def list_operations(self) -> list[dict[str, Any]]:
         return self.registry.list_operations()
 
@@ -98,7 +102,9 @@ class WebsiteClient:
                     representation=request.representation,
                 )
             if decoder == "json_envelope":
-                stored = self._client.content_store.get(response.details["content_ref"])
+                stored = await self._client.worker(
+                    self._client.content_store.get, response.details["content_ref"]
+                )
                 decoded, source_pointer = _decode_text_json(stored.raw.decode("utf-8"))
                 if source_pointer != "/data":
                     raise DataValidationError(
