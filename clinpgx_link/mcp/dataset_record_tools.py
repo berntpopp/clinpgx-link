@@ -23,6 +23,7 @@ from clinpgx_link.exceptions import (
     ResponseTooLargeError,
     UpstreamUnavailableError,
 )
+from clinpgx_link.mcp.dataset_record_fields import trusted_fields_for_row
 from clinpgx_link.mcp.envelope import error_result, success_result
 from clinpgx_link.mcp.pagination import CursorCodec
 from clinpgx_link.mcp.untrusted_content import fence_text
@@ -107,7 +108,9 @@ def _has_unsafe_field_key(
                 or "~" in key_text
             ):
                 return True
-            if _has_unsafe_field_key(item, trusted_field_names=None, depth=depth + 1):
+            if _has_unsafe_field_key(
+                item, trusted_field_names=trusted_field_names, depth=depth + 1
+            ):
                 return True
     elif isinstance(value, list):
         if depth >= _MAX_POINTER_SEGMENTS:
@@ -256,8 +259,14 @@ def _shape_row(
 ) -> dict[str, Any]:
     source_ref = _asset_reference(asset_response or response, snapshot_id)
     fields = row.get("fields", {})
+    owned_names = trusted_fields_for_row(row)
+    trusted_names = (
+        owned_names
+        if trusted_field_names is None
+        else frozenset(trusted_field_names).intersection(owned_names)
+    )
     defer_fields = force_defer_fields or _needs_deferred_fields(
-        fields, trusted_field_names=trusted_field_names
+        fields, trusted_field_names=trusted_names
     )
     derived_ref = (
         _retain_row(store, row, response.source)
@@ -359,18 +368,6 @@ def select_dataset_record_value(
     return _selected_value(row, pointer, response, store)
 
 
-def _trusted_fields(description: SourceResponse, member: str) -> frozenset[str]:
-    for candidate in description.value.get("members", []):
-        if candidate.get("path") != member:
-            continue
-        return frozenset(
-            str(field["name"])
-            for field in candidate.get("fields", [])
-            if isinstance(field, dict) and isinstance(field.get("name"), str)
-        )
-    return frozenset()
-
-
 def register_dataset_record_tools(
     server: FastMCP, repository: DatasetRepository | None, store: ContentStore
 ) -> None:
@@ -449,11 +446,6 @@ def register_dataset_record_tools(
                 raise UpstreamUnavailableError(
                     "The local snapshot identity changed.", subtype="snapshot_mismatch"
                 )
-            description = await asyncio.to_thread(repository.describe, dataset_id)
-            trusted_by_member = {
-                str(member["path"]): _trusted_fields(description, str(member["path"]))
-                for member in description.value.get("members", [])
-            }
             asset_responses = await asyncio.gather(
                 *(
                     asyncio.to_thread(
@@ -475,7 +467,7 @@ def register_dataset_record_tools(
                         snapshot_id,
                         store,
                         asset_response=asset_response,
-                        trusted_field_names=trusted_by_member.get(str(row["member"])),
+                        trusted_field_names=trusted_fields_for_row(row),
                         force_defer_fields=force_defer_fields,
                     )
                     for row, asset_response in visible_inputs
@@ -539,14 +531,12 @@ def register_dataset_record_tools(
                 raise UpstreamUnavailableError(
                     "The local snapshot identity changed.", subtype="snapshot_mismatch"
                 )
-            description = await asyncio.to_thread(repository.describe, response.value["dataset_id"])
-            trusted_names = _trusted_fields(description, str(response.value["member"]))
             result = shape_dataset_row(
                 response.value,
                 response,
                 snapshot_id,
                 store,
-                trusted_field_names=trusted_names,
+                trusted_field_names=trusted_fields_for_row(response.value),
             )
             result["snapshot_id"] = snapshot_id
             result["response_mode"] = response_mode
@@ -565,9 +555,15 @@ def register_dataset_record_tools(
                     response,
                     snapshot_id,
                     store,
-                    trusted_field_names=trusted_names,
+                    trusted_field_names=trusted_fields_for_row(response.value),
                     force_defer_fields=True,
                 )
+                result["snapshot_id"] = snapshot_id
+                result["response_mode"] = response_mode
+                if pointer:
+                    result["selected"] = select_dataset_record_value(
+                        response.value, pointer, response, store
+                    )
                 return success_result(
                     result,
                     source=response.source,
