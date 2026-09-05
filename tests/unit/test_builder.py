@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import shutil
 import sqlite3
 import zipfile
 from pathlib import Path
@@ -141,6 +142,27 @@ def test_snapshot_identity_binds_ingest_configuration(
 
     assert first.snapshot_id != second.snapshot_id
     assert first.manifest["build_config"] != second.manifest["build_config"]
+
+
+@pytest.mark.parametrize("relative_path", ["data/catalog.py", "ingest/acquire.py"])
+def test_transform_identity_binds_source_admission_modules(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, relative_path: str
+) -> None:
+    """Catch source-admission changes being omitted from the transform identity."""
+    from clinpgx_link.ingest import builder as builder_module
+
+    source_package = Path(builder_module.__file__).parents[1]
+    temporary_package = tmp_path / "clinpgx_link"
+    shutil.copytree(source_package, temporary_package)
+    monkeypatch.setattr(
+        builder_module, "__file__", str(temporary_package / "ingest" / "builder.py")
+    )
+
+    before = builder_module._transform_identity()
+    target = temporary_package / relative_path
+    target.write_bytes(target.read_bytes() + b"\n# admission contract change\n")
+
+    assert builder_module._transform_identity() != before
 
 
 def test_builder_returns_frozen_per_source_manifest_without_a_global_date(tmp_path: Path) -> None:

@@ -35,8 +35,10 @@ from clinpgx_link.ingest.tabular import TabularReader
 _SCHEMA_VERSION = 1
 _TRANSFORM_CONTRACT = "clinpgx-link-ingest-v1"
 _TRANSFORM_FILES = (
+    "data/catalog.py",
     "data/coverage.py",
     "data/schema.sql",
+    "ingest/acquire.py",
     "ingest/builder.py",
     "ingest/json_records.py",
     "ingest/spreadsheets.py",
