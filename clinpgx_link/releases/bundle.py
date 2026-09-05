@@ -39,6 +39,7 @@ class BundleLimits:
     max_compressed_bytes: int = 256 * _MIB
     max_expanded_bytes: int = 2 * _GIB
     max_member_bytes: int = 2 * _GIB
+    max_window_bytes: int = 8 * _MIB
     max_members: int = field(default=4, init=False)
 
     def __post_init__(self) -> None:
@@ -46,6 +47,7 @@ class BundleLimits:
             self.max_compressed_bytes,
             self.max_expanded_bytes,
             self.max_member_bytes,
+            self.max_window_bytes,
         ):
             if type(value) is not int or value <= 0:
                 raise DataValidationError("Bundle limits must be positive integers")
@@ -352,6 +354,8 @@ def _header(block: bytes) -> tuple[str, int]:
         raise DataValidationError("Bundle tar header is invalid")
     if block[345:500].strip(b"\0") or block[157:257].strip(b"\0"):
         raise DataValidationError("Bundle tar extensions and links are forbidden")
+    if block[265:345] != b"\0" * 80:
+        raise DataValidationError("Bundle tar identity metadata is noncanonical")
     if block[156:157] not in {b"\0", b"0"}:
         raise DataValidationError("Bundle tar member is not a regular file")
     try:
@@ -369,7 +373,11 @@ def _header(block: bytes) -> tuple[str, int]:
 
 
 def _extract_tar(
-    reader: _DecodedReader, staging_fd: int, limits: BundleLimits
+    reader: _DecodedReader,
+    staging_fd: int,
+    limits: BundleLimits,
+    *,
+    expanded_maximum: int,
 ) -> ExpandedTreeIdentity:
     files: list[BundleFile] = []
     seen: set[str] = set()
@@ -385,11 +393,11 @@ def _extract_tar(
         name, size = _header(block)
         if name in seen or len(seen) >= limits.max_members:
             raise DataValidationError("Bundle tar contains duplicate or excess members")
-        if size > limits.max_member_bytes:
+        if size > min(limits.max_member_bytes, expanded_maximum):
             raise DataValidationError("Bundle member exceeds its byte limit")
         seen.add(name)
         expanded += size
-        if expanded > limits.max_expanded_bytes:
+        if expanded > expanded_maximum:
             raise DataValidationError("Expanded bundle exceeds its byte limit")
         descriptor = -1
         try:
@@ -425,8 +433,8 @@ def _extract_tar(
     return _tree(files)
 
 
-def _decoded_limit(limits: BundleLimits) -> int:
-    return limits.max_expanded_bytes + limits.max_members * (2 * _BLOCK) + 10 * 1024
+def _decoded_limit(expanded_maximum: int, member_count: int) -> int:
+    return expanded_maximum + member_count * (2 * _BLOCK) + 10 * 1024
 
 
 def _verify_artifact(
@@ -474,10 +482,16 @@ def _match_expected(
         raise DataValidationError("Expanded bundle identity does not match reviewed identity")
 
 
-def _validate_zstd_frame(descriptor: int, decoded_maximum: int) -> None:
-    """Require one complete checksummed frame without retaining decoded content."""
-    os.lseek(descriptor, 0, os.SEEK_SET)
-    header = os.read(descriptor, 18)
+def _pread_exact(descriptor: int, size: int, offset: int) -> bytes:
+    raw = os.pread(descriptor, size, offset)
+    if len(raw) != size:
+        raise DataValidationError("Bundle zstd frame is truncated")
+    return raw
+
+
+def _validate_zstd_frame(descriptor: int, compressed_size: int, window_maximum: int) -> None:
+    """Structurally admit exactly one bounded zstd frame without decoding output."""
+    header = os.pread(descriptor, min(18, compressed_size), 0)
     try:
         parameters = zstandard.get_frame_parameters(header)
     except zstandard.ZstdError as exc:
@@ -486,22 +500,47 @@ def _validate_zstd_frame(descriptor: int, decoded_maximum: int) -> None:
         not parameters.has_checksum
         or parameters.content_size != zstandard.CONTENTSIZE_UNKNOWN
         or parameters.dict_id != 0
-        or parameters.window_size > decoded_maximum
+        or parameters.window_size > window_maximum
     ):
         raise DataValidationError("Bundle zstd frame parameters are invalid")
+
+    descriptor_byte = header[4]
+    single_segment = bool(descriptor_byte & 0x20)
+    dictionary_size = (0, 1, 2, 4)[descriptor_byte & 0x03]
+    content_flag = descriptor_byte >> 6
+    content_size = (1 if single_segment else 0, 2, 4, 8)[content_flag]
+    offset = 5 + (0 if single_segment else 1) + dictionary_size + content_size
+    while True:
+        block = int.from_bytes(_pread_exact(descriptor, 3, offset), "little")
+        offset += 3
+        last_block = bool(block & 1)
+        block_type = (block >> 1) & 0x03
+        block_size = block >> 3
+        if block_type == 3:
+            raise DataValidationError("Bundle zstd frame contains a reserved block")
+        payload_size = 1 if block_type == 1 else block_size
+        if offset + payload_size > compressed_size:
+            raise DataValidationError("Bundle zstd frame is truncated")
+        offset += payload_size
+        if last_block:
+            break
+    offset += 4  # The required content checksum.
+    if offset != compressed_size:
+        raise DataValidationError("Bundle must contain exactly one zstd frame")
     os.lseek(descriptor, 0, os.SEEK_SET)
-    decoder = zstandard.ZstdDecompressor(
-        max_window_size=min(decoded_maximum, (1 << 31) - 1)
-    ).decompressobj(write_size=_CHUNK, read_across_frames=False)
-    decoded = 0
-    while raw := os.read(descriptor, 1):
-        output = decoder.decompress(raw)
-        decoded += len(output)
-        if decoded > decoded_maximum or decoder.unused_data:
-            raise DataValidationError("Bundle zstd frame exceeds its bounds")
-    if not decoder.eof:
-        raise DataValidationError("Bundle zstd frame is truncated")
-    os.lseek(descriptor, 0, os.SEEK_SET)
+
+
+def _reviewed_expanded_maximum(expected: ArtifactIdentity, limits: BundleLimits) -> int:
+    if expected.member_count != limits.max_members or expected.max_members < limits.max_members:
+        raise DataValidationError("Reviewed bundle member bounds are impossible")
+    maximum = min(
+        limits.max_expanded_bytes,
+        expected.max_expanded_size,
+        expected.expanded_size,
+    )
+    if expected.expanded_size > maximum:
+        raise DataValidationError("Reviewed bundle expanded bounds exceed local limits")
+    return maximum
 
 
 def verify_and_extract_bundle(
@@ -520,20 +559,28 @@ def verify_and_extract_bundle(
     staging_name: str | None = None
     published = False
     try:
+        expanded_maximum = _reviewed_expanded_maximum(expected, limits)
         destination_parent_fd, destination_name = _destination_parent(destination)
         staging_fd, staging_name = bundle_io.create_private_directory(
             destination_parent_fd, destination_name
         )
-        decoded_maximum = _decoded_limit(limits)
-        _validate_zstd_frame(artifact_fd, decoded_maximum)
+        decoded_maximum = _decoded_limit(expanded_maximum, expected.member_count)
+        _validate_zstd_frame(
+            artifact_fd,
+            expected.compressed_size,
+            limits.max_window_bytes,
+        )
         with os.fdopen(os.dup(artifact_fd), "rb") as compressed:
-            decompressor = zstandard.ZstdDecompressor(
-                max_window_size=min(decoded_maximum, (1 << 31) - 1)
-            )
+            decompressor = zstandard.ZstdDecompressor(max_window_size=limits.max_window_bytes)
             with decompressor.stream_reader(
                 compressed, read_across_frames=False, closefd=False
             ) as decoded:
-                tree = _extract_tar(_DecodedReader(decoded, decoded_maximum), staging_fd, limits)
+                tree = _extract_tar(
+                    _DecodedReader(decoded, decoded_maximum),
+                    staging_fd,
+                    limits,
+                    expanded_maximum=expanded_maximum,
+                )
         bundle_io.revalidate_regular(
             artifact_fd, artifact_parent_fd, artifact_path.name, artifact_before
         )
@@ -545,7 +592,10 @@ def verify_and_extract_bundle(
         bundle_io.revalidate_directory(destination_parent_fd, destination.parent)
         bundle_io.rename_noreplace(destination_parent_fd, staging_name, destination_name)
         published = True
-        os.fsync(destination_parent_fd)
+        try:
+            os.fsync(destination_parent_fd)
+        except OSError as exc:
+            raise DataValidationError("Bundle staging publication is not durable") from exc
         staging_name = None
         return BundleReceipt(
             sha256=expected.sha256,
@@ -564,11 +614,9 @@ def verify_and_extract_bundle(
             with suppress(OSError):
                 os.close(staging_fd)
         if staging_name is not None and destination_parent_fd >= 0:
+            cleanup_name = destination.name if published else staging_name
             with suppress(DataValidationError):
-                bundle_io.remove_directory(destination_parent_fd, staging_name)
-        if published and staging_name is not None and destination_parent_fd >= 0:
-            with suppress(DataValidationError):
-                bundle_io.remove_directory(destination_parent_fd, destination.name)
+                bundle_io.remove_directory(destination_parent_fd, cleanup_name)
         if destination_parent_fd >= 0:
             with suppress(OSError):
                 os.close(destination_parent_fd)

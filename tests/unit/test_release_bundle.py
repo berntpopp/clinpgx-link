@@ -13,6 +13,7 @@ import pytest
 import zstandard
 
 from clinpgx_link.exceptions import DataValidationError
+from clinpgx_link.releases import bundle, bundle_io
 from clinpgx_link.releases.bundle import (
     BundleLimits,
     expanded_tree_identity,
@@ -27,6 +28,8 @@ _FILES = {
     "schema.json": b'{"schema":1}\n',
     "source-manifest.json": b'{"sources":[]}\n',
 }
+_TREE_SHA256 = "beab6e5c7c12d5c69248e8dae8ef3621e34b5649972945f78f6fabf2428286bd"
+_EXPANDED_SIZE = 37
 
 
 def _private(path: Path) -> Path:
@@ -59,6 +62,7 @@ def _expected(path: Path, receipt=None, **updates: object) -> ArtifactIdentity:
         values.update(
             expanded_tree_sha256=receipt.expanded_tree_sha256,
             expanded_size=receipt.expanded_size,
+            max_expanded_size=max(receipt.expanded_size, 1024 * 1024),
             member_count=receipt.member_count,
         )
     values.update(updates)
@@ -106,17 +110,28 @@ def _artifact(parent: Path, raw_tar: bytes) -> Path:
     return path
 
 
+def _rewrite_header(raw_tar: bytes, start: int, replacement: bytes) -> bytes:
+    changed = bytearray(raw_tar)
+    changed[start : start + len(replacement)] = replacement
+    changed[148:156] = b"        "
+    changed[148:156] = f"{sum(changed[:512]):06o}\0 ".encode()
+    return bytes(changed)
+
+
 def test_bundle_limits_are_strict_frozen_and_exact_inventory() -> None:
     limits = BundleLimits()
     assert limits.max_compressed_bytes == 256 * 1024 * 1024
     assert limits.max_expanded_bytes == 2 * 1024 * 1024 * 1024
     assert limits.max_member_bytes == 2 * 1024 * 1024 * 1024
+    assert limits.max_window_bytes == 8 * 1024 * 1024
     assert limits.max_members == 4
     with pytest.raises((AttributeError, TypeError)):
         limits.max_members = 5  # type: ignore[misc]
     for value in (True, 0, -1, 1.5):
         with pytest.raises(DataValidationError):
             BundleLimits(max_compressed_bytes=value)  # type: ignore[arg-type]
+        with pytest.raises(DataValidationError):
+            BundleLimits(max_window_bytes=value)  # type: ignore[arg-type]
 
 
 def test_expanded_tree_identity_matches_literal_golden(tmp_path: Path) -> None:
@@ -127,9 +142,7 @@ def test_expanded_tree_identity_matches_literal_golden(tmp_path: Path) -> None:
         b"schema.json\x000444\x0013\x006b823fa123b900a4139de2101277275af8329f3a3d34c00ef3bf4fc6bf60287e\n"
         b"source-manifest.json\x000444\x0015\x00bee7a88039d6c7375b5ec2d8eb062c1766a9113ff51c2a15c5290d27e4d8841d\n"
     )
-    assert hashlib.sha256(literal_listing).hexdigest() == (
-        "beab6e5c7c12d5c69248e8dae8ef3621e34b5649972945f78f6fabf2428286bd"
-    )
+    assert hashlib.sha256(literal_listing).hexdigest() == _TREE_SHA256
     assert identity.expanded_tree_sha256 == hashlib.sha256(literal_listing).hexdigest()
     assert identity.expanded_size == 37
     assert identity.member_count == 4
@@ -332,6 +345,34 @@ def test_verifier_rejects_unsafe_type_mode_or_extension_format(
     assert list(output_parent.iterdir()) == []
 
 
+@pytest.mark.parametrize(
+    ("offset", "replacement"),
+    [
+        (265, b"root"),
+        (297, b"root"),
+        (329, b"0000001\0"),
+        (337, b"0000001\0"),
+    ],
+)
+def test_verifier_rejects_noncanonical_ustar_identity_fields(
+    tmp_path: Path, offset: int, replacement: bytes
+) -> None:
+    entries = [(_info(name), raw) for name, raw in sorted(_FILES.items())]
+    malformed = _rewrite_header(_raw_tar(entries), offset, replacement)
+    artifact = _artifact(_private(tmp_path / "artifacts"), malformed)
+    with pytest.raises(DataValidationError):
+        verify_and_extract_bundle(
+            artifact,
+            _private(tmp_path / "output") / "staged",
+            _expected(
+                artifact,
+                expanded_tree_sha256=_TREE_SHA256,
+                expanded_size=_EXPANDED_SIZE,
+            ),
+            limits=BundleLimits(),
+        )
+
+
 @pytest.mark.parametrize("names", [["schema.json", "schema.json"], ["schema.json"], ["unknown"]])
 def test_verifier_rejects_duplicate_missing_or_unknown_inventory(
     tmp_path: Path, names: list[str]
@@ -383,6 +424,166 @@ def test_verifier_rejects_truncated_zstd_frame(tmp_path: Path) -> None:
             ),
             limits=BundleLimits(),
         )
+
+
+@pytest.mark.parametrize("mutation", ["checksum", "second-frame"])
+def test_verifier_rejects_checksum_failure_and_multiple_frames(
+    tmp_path: Path, mutation: str
+) -> None:
+    entries = [(_info(name), raw) for name, raw in sorted(_FILES.items())]
+    compressed = _compress(_raw_tar(entries))
+    if mutation == "checksum":
+        changed = bytearray(compressed)
+        changed[-1] ^= 1
+        compressed = bytes(changed)
+    else:
+        compressed += _compress(b"")
+    artifact = _private(tmp_path / "artifacts") / "bundle.zst"
+    artifact.write_bytes(compressed)
+    artifact.chmod(0o600)
+    with pytest.raises(DataValidationError):
+        verify_and_extract_bundle(
+            artifact,
+            _private(tmp_path / "output") / "staged",
+            _expected(
+                artifact,
+                expanded_tree_sha256=_TREE_SHA256,
+                expanded_size=_EXPANDED_SIZE,
+            ),
+            limits=BundleLimits(),
+        )
+
+
+def test_verifier_scans_frame_without_byte_at_a_time_reads(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    files = dict(_FILES)
+    files["clinpgx.sqlite"] = os.urandom(1024 * 1024)
+    source = _source(tmp_path / "source", files)
+    artifact = _private(tmp_path / "artifacts") / "bundle.zst"
+    receipt = pack_bundle(source, artifact, source_date_epoch=1, limits=BundleLimits())
+    original = os.read
+    one_byte_reads = 0
+
+    def count_reads(descriptor: int, size: int) -> bytes:
+        nonlocal one_byte_reads
+        one_byte_reads += size == 1
+        return original(descriptor, size)
+
+    monkeypatch.setattr(os, "read", count_reads)
+    verify_and_extract_bundle(
+        artifact,
+        _private(tmp_path / "output") / "staged",
+        _expected(artifact, receipt),
+        limits=BundleLimits(),
+    )
+    assert one_byte_reads == 0
+
+
+def test_verifier_rejects_over_window_frame_before_decoder_allocation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    entries = [(_info(name), raw) for name, raw in sorted(_FILES.items())]
+    compressed = bytearray(_compress(_raw_tar(entries)))
+    compressed[5] = 112  # window descriptor: 16 MiB
+    assert zstandard.get_frame_parameters(compressed).window_size == 16 * 1024 * 1024
+    artifact = _private(tmp_path / "artifacts") / "bundle.zst"
+    artifact.write_bytes(compressed)
+    artifact.chmod(0o600)
+
+    monkeypatch.setattr(
+        zstandard,
+        "ZstdDecompressor",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("decoder reached")),
+    )
+    with pytest.raises(DataValidationError):
+        verify_and_extract_bundle(
+            artifact,
+            _private(tmp_path / "output") / "staged",
+            _expected(artifact),
+            limits=BundleLimits(),
+        )
+
+
+@pytest.mark.parametrize(
+    ("updates", "limits"),
+    [
+        ({"expanded_size": 21}, BundleLimits(max_expanded_bytes=20)),
+        ({"member_count": 3}, BundleLimits()),
+    ],
+)
+def test_reviewed_impossible_bounds_are_rejected_before_decoder(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    updates: dict[str, object],
+    limits: BundleLimits,
+) -> None:
+    artifact = _artifact(_private(tmp_path / "artifacts"), b"not consulted")
+    monkeypatch.setattr(
+        bundle,
+        "_validate_zstd_frame",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("decoder reached")),
+    )
+    with pytest.raises(DataValidationError):
+        verify_and_extract_bundle(
+            artifact,
+            _private(tmp_path / "output") / "staged",
+            _expected(artifact, **updates),
+            limits=limits,
+        )
+
+
+def test_reviewed_expanded_size_stops_extraction_before_file_write(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    entries = [(_info(name), raw) for name, raw in sorted(_FILES.items())]
+    artifact = _artifact(_private(tmp_path / "artifacts"), _raw_tar(entries))
+    monkeypatch.setattr(
+        bundle.os,
+        "write",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("file write reached")),
+    )
+    with pytest.raises(DataValidationError):
+        verify_and_extract_bundle(
+            artifact,
+            _private(tmp_path / "output") / "staged",
+            _expected(artifact, expanded_size=1),
+            limits=BundleLimits(),
+        )
+
+
+@pytest.mark.parametrize("operation", ["directory", "regular"])
+def test_admission_closes_descriptor_when_fstat_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, operation: str
+) -> None:
+    parent = _private(tmp_path / "parent")
+    target = parent / "member"
+    target.write_bytes(b"member")
+    parent_fd = os.open(parent, os.O_RDONLY | os.O_DIRECTORY)
+    original_fstat = os.fstat
+    original_close = os.close
+    closed: list[int] = []
+
+    def fail_fstat(descriptor: int) -> os.stat_result:
+        if descriptor != parent_fd:
+            raise OSError("injected fstat failure")
+        return original_fstat(descriptor)
+
+    def record_close(descriptor: int) -> None:
+        closed.append(descriptor)
+        original_close(descriptor)
+
+    monkeypatch.setattr(os, "fstat", fail_fstat)
+    monkeypatch.setattr(os, "close", record_close)
+    try:
+        with pytest.raises(DataValidationError):
+            if operation == "directory":
+                bundle_io.open_private_directory(parent)
+            else:
+                bundle_io.open_regular(parent_fd, "member")
+        assert len(closed) == 1
+    finally:
+        original_close(parent_fd)
 
 
 def test_artifact_metadata_mutation_during_decode_is_rejected(
@@ -540,3 +741,38 @@ def test_rename_noreplace_preserves_destination_created_during_staging(
     assert destination.is_dir()
     assert list(destination.iterdir()) == []
     assert list(output_parent.iterdir()) == [destination]
+
+
+def test_publication_fsync_failure_is_reported_as_durability_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = _source(tmp_path / "source")
+    artifact = _private(tmp_path / "artifacts") / "bundle.zst"
+    receipt = pack_bundle(source, artifact, source_date_epoch=1, limits=BundleLimits())
+    output_parent = _private(tmp_path / "output")
+    destination = output_parent / "staged"
+    renamed = False
+    original_rename = bundle_io.rename_noreplace
+    original_fsync = os.fsync
+
+    def note_rename(directory_fd: int, source_name: str, destination_name: str) -> None:
+        nonlocal renamed
+        original_rename(directory_fd, source_name, destination_name)
+        renamed = True
+
+    def fail_commit_fsync(descriptor: int) -> None:
+        if renamed:
+            raise OSError("injected directory fsync failure")
+        original_fsync(descriptor)
+
+    monkeypatch.setattr(bundle_io, "rename_noreplace", note_rename)
+    monkeypatch.setattr(os, "fsync", fail_commit_fsync)
+    with pytest.raises(DataValidationError, match="publication is not durable"):
+        verify_and_extract_bundle(
+            artifact,
+            destination,
+            _expected(artifact, receipt),
+            limits=BundleLimits(),
+        )
+    assert not destination.exists()
+    assert list(output_parent.iterdir()) == []

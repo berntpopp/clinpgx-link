@@ -31,6 +31,7 @@ def open_private_directory(path: Path) -> int:
     """Open an existing real, private, same-UID directory."""
     if not isinstance(path, Path) or not path.is_absolute():
         raise DataValidationError("Bundle directory is not an absolute private path")
+    descriptor = -1
     try:
         before = path.lstat()
         if path.resolve(strict=True) != path:
@@ -48,12 +49,17 @@ def open_private_directory(path: Path) -> int:
         )
         after = os.fstat(descriptor)
         if (before.st_dev, before.st_ino) != (after.st_dev, after.st_ino):
-            os.close(descriptor)
             raise DataValidationError("Bundle directory changed during admission")
         return descriptor
     except DataValidationError:
+        if descriptor >= 0:
+            with suppress(OSError):
+                os.close(descriptor)
         raise
     except OSError as exc:
+        if descriptor >= 0:
+            with suppress(OSError):
+                os.close(descriptor)
         raise DataValidationError("Bundle directory cannot be admitted") from exc
 
 
@@ -104,6 +110,9 @@ def open_regular(
                 os.close(descriptor)
         raise
     except OSError as exc:
+        if descriptor >= 0:
+            with suppress(OSError):
+                os.close(descriptor)
         raise DataValidationError("Bundle input cannot be admitted") from exc
 
 
