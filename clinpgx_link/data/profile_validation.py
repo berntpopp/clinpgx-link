@@ -13,6 +13,8 @@ from clinpgx_link.data.record_profiles import (
     RECORD_PROFILES,
     RecordProfile,
     profile_declaration,
+    profile_for_row,
+    profile_for_shape,
     profiles_for_member,
 )
 
@@ -22,6 +24,7 @@ ProfileStatus = Literal["active", "profile_drift"]
 _RECEIPT_KEYS = frozenset(
     {
         "schema_version",
+        "snapshot_id",
         "profile_definition_digest",
         "gate_status",
         "profiles",
@@ -80,19 +83,17 @@ class LoadedProfileValidation:
     def row_profile(
         self, dataset_id: str, member: str, json_pointer: str | None
     ) -> dict[str, Any] | None:
-        for profile in profiles_for_member(dataset_id, member):
-            if profile.selector.matches(json_pointer):
-                assessment = self.assessments.get(profile.profile_id)
-                if assessment is None:
-                    assessment = _drift_assessment(profile)
-                return {
-                    **profile_declaration(profile),
-                    "status": assessment["status"],
-                    "missing_required_fields": list(
-                        cast(list[str], assessment["missing_required_fields"])
-                    ),
-                }
-        return None
+        profile = profile_for_row(dataset_id, member, json_pointer)
+        if profile is None:
+            return None
+        assessment = self.assessments.get(profile.profile_id)
+        if assessment is None:
+            assessment = _drift_assessment(profile)
+        return {
+            **profile_declaration(profile),
+            "status": assessment["status"],
+            "missing_required_fields": list(cast(list[str], assessment["missing_required_fields"])),
+        }
 
 
 def _drift_assessment(profile: RecordProfile) -> dict[str, Any]:
@@ -169,7 +170,7 @@ def _unprofiled_shape(
     return {"dataset_id": dataset_id, "member": member, "shape_id": shape_id}
 
 
-def validate_candidate_profiles(connection: sqlite3.Connection) -> dict[str, Any]:
+def validate_candidate_profiles(connection: sqlite3.Connection, snapshot_id: str) -> dict[str, Any]:
     """Assess installed declared shapes without changing parser or byte state."""
     members = connection.execute(
         "SELECT dataset_id,path,headers_json,parser_status,record_count "
@@ -188,18 +189,21 @@ def validate_candidate_profiles(connection: sqlite3.Connection) -> dict[str, Any
         if not profiles:
             unprofiled.append(_unprofiled_shape(dataset_id, member, row[2], str(row[3])))
             continue
-        profile = profiles[0]
-        if profile.selector.kind == "json_pointer":
+        if any(profile.selector.kind == "json_pointer" for profile in profiles):
             pointers = connection.execute(
                 "SELECT json_pointer FROM record WHERE dataset_id=? AND member=?",
                 (dataset_id, member),
             ).fetchall()
-            if any(not profile.selector.matches(pointer[0]) for pointer in pointers):
+            if any(
+                not any(profile.selector.matches(pointer[0]) for profile in profiles)
+                for pointer in pointers
+            ):
                 unprofiled.append(
                     {"dataset_id": dataset_id, "member": member, "shape_id": "unprofiled_json"}
                 )
     return {
         "schema_version": PROFILE_RECEIPT_SCHEMA_VERSION,
+        "snapshot_id": snapshot_id,
         "profile_definition_digest": PROFILE_DEFINITION_DIGEST,
         "gate_status": (
             "passing" if all(item["status"] == "active" for item in assessments) else "nonpassing"
@@ -223,7 +227,9 @@ def _fallback(installed_members: set[tuple[str, str]]) -> LoadedProfileValidatio
 
 
 def load_profile_validation(
-    raw: str | None, installed_members: set[tuple[str, str]]
+    raw: str | None,
+    installed_members: set[tuple[str, str]],
+    expected_snapshot: str,
 ) -> LoadedProfileValidation:
     """Strictly decode one bounded receipt; invalid state grants no active profile."""
     fallback = _fallback(installed_members)
@@ -237,6 +243,7 @@ def load_profile_validation(
         return fallback
     if (
         receipt.get("schema_version") != PROFILE_RECEIPT_SCHEMA_VERSION
+        or receipt.get("snapshot_id") != expected_snapshot
         or receipt.get("profile_definition_digest") != PROFILE_DEFINITION_DIGEST
         or receipt.get("gate_status") not in {"passing", "nonpassing"}
         or not isinstance(receipt.get("profiles"), list)
@@ -255,15 +262,17 @@ def load_profile_validation(
         if not isinstance(item, dict) or frozenset(item) != _ASSESSMENT_KEYS:
             return fallback
         profile_id = item.get("profile_id")
-        if not isinstance(profile_id, str):
+        dataset_id = item.get("dataset_id")
+        member = item.get("member")
+        shape_id = item.get("shape_id")
+        if not all(isinstance(value, str) for value in (profile_id, dataset_id, member, shape_id)):
             return fallback
-        profile = expected.get(profile_id)
+        profile = profile_for_shape(cast(str, dataset_id), cast(str, member), cast(str, shape_id))
         missing = item.get("missing_required_fields")
         if (
             profile is None
-            or item.get("dataset_id") != profile.dataset_id
-            or item.get("member") != profile.member
-            or item.get("shape_id") != profile.shape_id
+            or profile.profile_id != profile_id
+            or profile_id not in expected
             or item.get("status") not in {"active", "profile_drift"}
             or not isinstance(missing, list)
             or len(missing) > len(profile.required_fields)

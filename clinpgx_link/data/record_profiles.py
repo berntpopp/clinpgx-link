@@ -455,19 +455,35 @@ RECORD_PROFILES: tuple[RecordProfile, ...] = (
     ),
 )
 
-_PROFILES_BY_MEMBER = {(profile.dataset_id, profile.member): profile for profile in RECORD_PROFILES}
+_PROFILES_BY_KEY = {
+    (profile.dataset_id, profile.member, profile.shape_id): profile for profile in RECORD_PROFILES
+}
+if len(_PROFILES_BY_KEY) != len(RECORD_PROFILES):
+    raise RuntimeError("Record profile keys must be unique")
+_PROFILES_BY_MEMBER = {
+    key: tuple(
+        profile for profile in RECORD_PROFILES if (profile.dataset_id, profile.member) == key
+    )
+    for key in dict.fromkeys((profile.dataset_id, profile.member) for profile in RECORD_PROFILES)
+}
 
 
 def profile_for_row(dataset_id: str, member: str, json_pointer: str | None) -> RecordProfile | None:
-    profile = _PROFILES_BY_MEMBER.get((dataset_id, member))
-    if profile is None or not profile.selector.matches(json_pointer):
-        return None
-    return profile
+    matches = tuple(
+        profile
+        for profile in _PROFILES_BY_MEMBER.get((dataset_id, member), ())
+        if profile.selector.matches(json_pointer)
+    )
+    return matches[0] if len(matches) == 1 else None
+
+
+def profile_for_shape(dataset_id: str, member: str, shape_id: str) -> RecordProfile | None:
+    """Look up one declaration by its full stable shape key."""
+    return _PROFILES_BY_KEY.get((dataset_id, member, shape_id))
 
 
 def profiles_for_member(dataset_id: str, member: str) -> tuple[RecordProfile, ...]:
-    profile = _PROFILES_BY_MEMBER.get((dataset_id, member))
-    return (profile,) if profile is not None else ()
+    return _PROFILES_BY_MEMBER.get((dataset_id, member), ())
 
 
 def _mode_value(policy: ModeFieldPolicy) -> dict[str, object]:
@@ -537,5 +553,6 @@ __all__ = [
     "ShapeSelector",
     "profile_declaration",
     "profile_for_row",
+    "profile_for_shape",
     "profiles_for_member",
 ]

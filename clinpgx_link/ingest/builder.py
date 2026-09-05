@@ -530,7 +530,7 @@ def _create_database(
             artifact["limitations"] = limitations
             artifact["warnings"] = warnings
             artifacts.append(artifact)
-        record_profile_validation = validate_candidate_profiles(connection)
+        record_profile_validation = validate_candidate_profiles(connection, snapshot_id)
         manifest = {
             "build_config": build_config,
             "schema_version": _SCHEMA_VERSION,

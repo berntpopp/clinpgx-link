@@ -27,7 +27,7 @@ class RepositoryProfileSupport:
             "SELECT 1 FROM sqlite_master WHERE type='table' AND name='source_member'"
         ).fetchone()
         if has_member_inventory is None:
-            self._profile_validation = load_profile_validation(None, set())
+            self._profile_validation = load_profile_validation(None, set(), self._snapshot_id)
             return
         installed_members = {
             (str(row[0]), str(row[1]))
@@ -39,7 +39,9 @@ class RepositoryProfileSupport:
             "SELECT value FROM metadata WHERE key='record_profile_validation_json'"
         ).fetchone()
         self._profile_validation = load_profile_validation(
-            str(receipt[0]) if receipt is not None else None, installed_members
+            str(receipt[0]) if receipt is not None else None,
+            installed_members,
+            self._snapshot_id,
         )
 
     def _validate_snapshot(self, expected_snapshot: str | None) -> None:

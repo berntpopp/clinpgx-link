@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -17,7 +18,7 @@ def _pharmcat_candidate(tmp_path: Path, body: bytes):
     from clinpgx_link.ingest.builder import build_snapshot
 
     inputs = tmp_path / "inputs"
-    inputs.mkdir()
+    inputs.mkdir(parents=True)
     path = inputs / "pharmcat.zip"
     archive = _archive(path, {"phenotypes.json": body})
     return build_snapshot([_source(path)], tmp_path / "candidates", RELEASE_TAG), archive
@@ -67,6 +68,7 @@ def test_pharmcat_candidate_receipt_is_active_and_bound_to_retained_bytes(tmp_pa
 
     assert built.manifest["record_profile_validation"] == receipt
     assert receipt["schema_version"] == 1
+    assert receipt["snapshot_id"] == built.snapshot_id
     assert receipt["gate_status"] == "passing"
     assessment = receipt["profiles"][0]
     assert assessment == {
@@ -227,6 +229,142 @@ def test_tabular_missing_required_header_is_drift_not_parser_failure(tmp_path: P
         ).fetchone() == (body, "indexed", 1)
 
 
+def test_receipt_from_another_snapshot_cannot_confer_active_authority(tmp_path: Path) -> None:
+    from clinpgx_link.data.repository import DatasetRepository
+
+    original = (FIXTURES / "pharmcat_phenotypes.json").read_bytes()
+    active, _ = _pharmcat_candidate(tmp_path / "active", original)
+    changed = json.loads(original)
+    changed[0]["diplotypes"][0].pop("lookupkey")
+    drift, _ = _pharmcat_candidate(
+        tmp_path / "drift", json.dumps(changed, separators=(",", ":")).encode()
+    )
+    transplanted = _receipt(active.database)
+    assert transplanted["snapshot_id"] == active.snapshot_id
+    assert active.snapshot_id != drift.snapshot_id
+    with sqlite3.connect(drift.database) as connection:
+        connection.execute(
+            "UPDATE metadata SET value=? WHERE key='record_profile_validation_json'",
+            (json.dumps(transplanted, separators=(",", ":")),),
+        )
+        connection.commit()
+
+    repository = DatasetRepository(drift.database)
+    try:
+        described = repository.describe("data/pharmcat.zip").value
+        assert described["profile_gate_status"] == "unknown"
+        assert described["members"][0]["record_profile_status"] == "profile_drift"
+        assert (
+            repository.record_profile("data/pharmcat.zip", "phenotypes.json", "/0/diplotypes/1")[
+                "status"
+            ]
+            == "profile_drift"
+        )
+    finally:
+        repository.close()
+
+
+def test_multiple_profiles_on_one_member_match_all_selectors_without_overwrite(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from clinpgx_link.data import profile_validation, record_profiles
+    from clinpgx_link.data.record_profiles import (
+        FieldDeclaration,
+        ModeFieldPolicy,
+        ProfileModes,
+        ShapeSelector,
+    )
+
+    diplotype = record_profiles.profile_for_row(
+        "data/pharmcat.zip", "phenotypes.json", "/0/diplotypes/0"
+    )
+    assert diplotype is not None
+    second = replace(
+        diplotype,
+        profile_id="test.pharmcat.named_allele.v1",
+        shape_id="named_allele",
+        selector=ShapeSelector(
+            "json_pointer",
+            r"/[0-9]+/namedAlleles/[0-9]+",
+            "Test-only second shape.",
+        ),
+        fields=(FieldDeclaration("name", True, "Test name.", "Test identity."),),
+        modes=ProfileModes(
+            *(ModeFieldPolicy(("name",)) for _ in range(3)),
+            ModeFieldPolicy(("name",), include_all_reachable=True),
+        ),
+        description="Test-only second profile sharing the real member.",
+    )
+    profiles = (diplotype, second)
+    monkeypatch.setattr(profile_validation, "RECORD_PROFILES", profiles)
+    monkeypatch.setattr(
+        record_profiles,
+        "_PROFILES_BY_MEMBER",
+        {("data/pharmcat.zip", "phenotypes.json"): profiles},
+    )
+    monkeypatch.setattr(
+        record_profiles,
+        "_PROFILES_BY_KEY",
+        {(profile.dataset_id, profile.member, profile.shape_id): profile for profile in profiles},
+        raising=False,
+    )
+    connection = sqlite3.connect(":memory:")
+    connection.executescript(
+        "CREATE TABLE source_member(dataset_id,path,headers_json,parser_status,record_count);"
+        "CREATE TABLE record(dataset_id,member,ordinal,json_pointer,fields_json);"
+    )
+    connection.execute(
+        "INSERT INTO source_member VALUES (?,?,?,?,?)",
+        ("data/pharmcat.zip", "phenotypes.json", None, "indexed", 2),
+    )
+    connection.executemany(
+        "INSERT INTO record VALUES (?,?,?,?,?)",
+        [
+            (
+                "data/pharmcat.zip",
+                "phenotypes.json",
+                1,
+                "/0/diplotypes/0",
+                json.dumps(
+                    {
+                        "diplotype": "*1/*1",
+                        "diplotypekey": {"*1": 2},
+                        "generesult": "Normal Metabolizer",
+                        "lookupkey": "Normal Metabolizer",
+                        "phenotype": "Normal Metabolizer",
+                    }
+                ),
+            ),
+            (
+                "data/pharmcat.zip",
+                "phenotypes.json",
+                2,
+                "/0/namedAlleles/0",
+                '{"name":"*1"}',
+            ),
+        ],
+    )
+    try:
+        receipt = profile_validation.validate_candidate_profiles(connection, "sha256:" + "a" * 64)
+    finally:
+        connection.close()
+
+    assert [item["profile_id"] for item in receipt["profiles"]] == [
+        "pharmcat.diplotype.v1",
+        "test.pharmcat.named_allele.v1",
+    ]
+    assert {item["status"] for item in receipt["profiles"]} == {"active"}
+    assert receipt["unprofiled_shapes"] == []
+    assert (
+        record_profiles.profile_for_row("data/pharmcat.zip", "phenotypes.json", "/0/namedAlleles/0")
+        == second
+    )
+    assert (
+        record_profiles.profile_for_shape("data/pharmcat.zip", "phenotypes.json", "named_allele")
+        == second
+    )
+
+
 @pytest.mark.parametrize("receipt_kind", ["absent", "digest_mismatch", "malformed"])
 def test_repository_invalid_receipt_never_confers_active_authority(
     tmp_path: Path, receipt_kind: str
@@ -297,6 +435,32 @@ async def test_real_get_dataset_discloses_candidate_profile_state_within_bound(
         assert profile["missing_required_fields"] == ["lookupkey"]
         assert payload["result"]["members"][0]["content_ref"].startswith("asset:")
         assert len(json.dumps(payload, separators=(",", ":")).encode()) < 100_000
+    finally:
+        repository.close()
+        store.close()
+
+
+@pytest.mark.asyncio
+async def test_real_get_dataset_active_profile_matches_repository_metadata(tmp_path: Path) -> None:
+    from clinpgx_link.content.store import ContentStore
+    from clinpgx_link.data.repository import DatasetRepository
+    from clinpgx_link.mcp.dataset_tools import register_dataset_tools
+
+    built, _ = _pharmcat_candidate(tmp_path, (FIXTURES / "pharmcat_phenotypes.json").read_bytes())
+    repository = DatasetRepository(built.database)
+    expected = repository.describe("data/pharmcat.zip").value
+    store = ContentStore(tmp_path / "content.sqlite")
+    server = FastMCP("active-profile-test", mask_error_details=True, dereference_schemas=False)
+    register_dataset_tools(server, repository, store)
+    try:
+        async with Client(server) as client:
+            call = await client.call_tool("get_dataset", {"dataset_id": "data/pharmcat.zip"})
+        result = call.structured_content["result"]
+        assert result["profile_gate_status"] == expected["profile_gate_status"] == "passing"
+        assert result["members"][0]["record_profile_status"] == "active"
+        assert result["members"][0]["record_profiles"] == expected["members"][0]["record_profiles"]
+        assert result["members"][0]["record_profiles"][0]["fields"][0]["name"] == "diplotype"
+        assert len(json.dumps(call.structured_content, separators=(",", ":")).encode()) < 100_000
     finally:
         repository.close()
         store.close()
