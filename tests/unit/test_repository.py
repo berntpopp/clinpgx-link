@@ -275,6 +275,63 @@ def test_summary_annotation_joins_return_each_original_child_once_with_provenanc
     assert all(row["fields"]["Summary Annotation ID"] == "655384602" for row in joined.value)
 
 
+def test_summary_literature_join_returns_only_citing_evidence_rows_and_filters_pmids(
+    tmp_path: Path,
+) -> None:
+    """Literature joins retain citing rows and use declared PMID member semantics."""
+    from clinpgx_link.data.catalog import SourceInput
+    from clinpgx_link.data.repository import DatasetRepository
+    from clinpgx_link.ingest.builder import build_snapshot
+
+    archive = tmp_path / "summaryAnnotations.zip"
+    _archive(
+        archive,
+        {
+            "summary_annotations.tsv": (b"Summary Annotation ID\tGene\n42\tCYP2C19\n43\tCYP2D6\n"),
+            "summary_ann_evidence.tsv": (
+                b"Summary Annotation ID\tEvidence ID\tPMID\tSummary\n"
+                b"42\tE1\t111;222\tfirst\n"
+                b"42\tE2\t\tuncited\n"
+                b"42\tE3\t222\tsecond\n"
+                b"43\tE4\t222\tother annotation\n"
+            ),
+        },
+    )
+    source = SourceInput.from_path(
+        dataset_id="data/summaryAnnotations.zip",
+        path=archive,
+        source_url="https://api.clinpgx.org/v1/download/file/data/summaryAnnotations.zip",
+        retrieved_at="2026-09-05T08:00:00Z",
+        published_at="2026-08-05T01:12:00-07:00",
+        media_type="application/zip",
+        license_id="operator-local-only",
+        tier="approved_registry",
+    )
+    built = build_snapshot([source], tmp_path / "out", RELEASE_TAG)
+    repository = DatasetRepository(built.database)
+    parent = repository.search(
+        "data/summaryAnnotations.zip",
+        member="summary_annotations.tsv",
+        filters={"annotation_id": "42"},
+    ).value[0]
+
+    all_citations = repository.related(parent["record_id"], result_type="literature")
+    pmid_222 = repository.related(parent["record_id"], result_type="literature", other_id="222")
+    mismatch = repository.related(parent["record_id"], result_type="literature", other_id="999")
+
+    assert [row["fields"]["Evidence ID"] for row in all_citations.value] == ["E1", "E3"]
+    assert [row["fields"]["Evidence ID"] for row in pmid_222.value] == ["E1", "E3"]
+    assert len({row["record_id"] for row in pmid_222.value}) == 2
+    assert all(row["join"]["relation_kind"] == "literature" for row in pmid_222.value)
+    assert all(
+        row["join"]["limitation"] == "citing_evidence_row_not_bibliographic_detail"
+        for row in pmid_222.value
+    )
+    assert mismatch.value == []
+    assert mismatch.details["total_count"] == 0
+    repository.close()
+
+
 def test_summary_join_without_parent_annotation_identity_fails_closed(tmp_path: Path) -> None:
     """Catch an incomplete installed join key broadening into every evidence row."""
     from clinpgx_link.data.catalog import SourceInput

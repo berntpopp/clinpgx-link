@@ -405,7 +405,10 @@ class DatasetRepository:
         if parent is None:
             raise NotFoundError("Related-record parent is not installed", field="record_id")
         dataset = self._dataset(str(parent["dataset_id"]))
-        if result_type in {"evidence", "allele"} and parent["member"] == "summary_annotations.tsv":
+        if (
+            result_type in {"evidence", "allele", "literature"}
+            and parent["member"] == "summary_annotations.tsv"
+        ):
             annotation = self._connection.execute(
                 "SELECT m.value FROM membership m JOIN record r ON r.record_pk=m.record_pk "
                 "WHERE r.record_id=? AND m.kind='annotation_id' "
@@ -417,13 +420,17 @@ class DatasetRepository:
                     "Summary annotation identity is unavailable for this installed row"
                 )
             target = (
-                "summary_ann_evidence.tsv"
-                if result_type == "evidence"
-                else "summary_ann_alleles.tsv"
+                "summary_ann_alleles.tsv" if result_type == "allele" else "summary_ann_evidence.tsv"
             )
             clauses = ["r.dataset_id=?", "r.member=?"]
             parameters: list[Any] = [parent["dataset_id"], target]
             filters = {"annotation_id": str(annotation[0])}
+            if result_type == "literature":
+                clauses.append(
+                    "EXISTS (SELECT 1 FROM membership citation "
+                    "WHERE citation.record_pk=r.record_pk "
+                    "AND citation.kind='literature')"
+                )
         elif result_type == "relationship" and parent["member"] == "relationships.tsv":
             clauses = ["r.dataset_id=?", "r.member='relationships.tsv'", "r.record_id=?"]
             parameters = [parent["dataset_id"], record_id]
@@ -433,7 +440,7 @@ class DatasetRepository:
                 "Result type is not declared for this source record", field="result_type"
             )
         if other_id is not None:
-            filters["id"] = other_id
+            filters["literature" if result_type == "literature" else "id"] = other_id
         values, total = self._query_records(
             clauses=clauses,
             parameters=parameters,
@@ -445,6 +452,9 @@ class DatasetRepository:
             join_parent=record_id,
             relation_kind=result_type,
         )
+        if result_type == "literature":
+            for value in values:
+                value["join"]["limitation"] = "citing_evidence_row_not_bibliographic_detail"
         return self._page_response(values, total, offset, dataset)
 
     def _asset_metadata(
