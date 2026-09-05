@@ -7,9 +7,12 @@ import re
 from dataclasses import dataclass
 from typing import Any, Literal
 
+from fastmcp.tools.base import ToolResult
+
 from clinpgx_link.content.reader import select_value
 from clinpgx_link.content.store import ContentStore
-from clinpgx_link.exceptions import InvalidInputError
+from clinpgx_link.exceptions import InvalidInputError, ResponseTooLargeError
+from clinpgx_link.mcp.envelope import success_result
 from clinpgx_link.mcp.selection import finite_json_bytes, resolve_scalars
 from clinpgx_link.mcp.shaping import source_pointer
 from clinpgx_link.mcp.untrusted_content import fence_text
@@ -26,19 +29,22 @@ class AdapterProfile:
     minimal: tuple[str, ...]
     compact: tuple[str, ...]
     standard: tuple[str, ...]
+    required: tuple[str, ...]
 
 
-_IDENTITY = AdapterProfile(("id",), ("id", "name"), ("id", "name", "objCls"))
+_IDENTITY = AdapterProfile(("id",), ("id", "name"), ("id", "name", "objCls"), ("id",))
 _PROFILES: dict[str, AdapterProfile] = {
     "gene": AdapterProfile(
         ("id",),
         ("id", "name", "symbol"),
         ("id", "name", "symbol", "description", "objCls", "buildVersion"),
+        ("id", "name", "symbol"),
     ),
     "chemical": AdapterProfile(
         ("id",),
         ("id", "name", "types"),
         ("id", "name", "types", "objCls", "altNames", "linkOuts"),
+        ("id", "name"),
     ),
     "guideline": AdapterProfile(
         ("id",),
@@ -51,6 +57,7 @@ _PROFILES: dict[str, AdapterProfile] = {
             "relatedChemicals",
             "summaryMarkdown",
         ),
+        ("id", "name"),
     ),
     "guideline_annotation": AdapterProfile(
         ("id",),
@@ -63,21 +70,64 @@ _PROFILES: dict[str, AdapterProfile] = {
             "relatedChemicals",
             "summaryMarkdown",
         ),
+        ("id", "name"),
     ),
     "connected_object": AdapterProfile(
         ("connectedObject",),
+        ("connectedObject", "connectionTypes"),
         ("connectedObject", "connectionTypes"),
         ("connectedObject", "connectionTypes"),
     ),
     "pathway_category": _IDENTITY,
     "identity": _IDENTITY,
 }
+_FAMILY_PROFILES = {
+    "gene": "gene",
+    "chemical": "chemical",
+    "guideline": "guideline",
+    "guideline_annotation": "guideline_annotation",
+    "haplotype": "identity",
+    "allele": "identity",
+    "annotation_id": "identity",
+    "connection": "identity",
+    "data_annotation": "identity",
+    "disease": "identity",
+    "evidence": "identity",
+    "label": "identity",
+    "literature": "identity",
+    "literature_annotation": "identity",
+    "multilink_annotation": "identity",
+    "ontology_term": "identity",
+    "pathway": "identity",
+    "relationship": "identity",
+    "summary_annotation": "identity",
+    "variant": "identity",
+    "variant_annotation": "identity",
+    "vip": "identity",
+    "vip_variant": "identity",
+}
+_ROUTE_PROFILES = {
+    "pathway": "identity",
+    "gene": "gene",
+    "chemical": "chemical",
+    "disease": "identity",
+    "variant": "identity",
+    "literature": "identity",
+    "guidelineAnnotation": "guideline_annotation",
+    "label": "identity",
+    "summaryAnnotation": "identity",
+    "variantAnnotation": "identity",
+    "vip": "identity",
+    "ontologyTerm": "identity",
+    "dataAnnotation": "identity",
+    "connection": "identity",
+}
 
 
-def adapter_profile(operation: str, *, family: str | None = None) -> str | None:
+def adapter_profile(operation: str, *, family: str | None = None) -> str:
     """Map only verified route/family names onto code-owned profiles."""
     if family is not None:
-        return family if family in _PROFILES else "identity"
+        return _FAMILY_PROFILES.get(family, "unprofiled")
     if operation == "GET /report/stats":
         return "stats"
     if operation == "GET /site/pathwayCategories":
@@ -86,20 +136,50 @@ def adapter_profile(operation: str, *, family: str | None = None) -> str | None:
     if match is None:
         return "unprofiled"
     namespace, segment = match.groups()
-    aliases = {
+    if namespace == "data":
+        return _ROUTE_PROFILES.get(segment, "unprofiled")
+    return {
         "gene": "gene",
-        "chemical": "chemical",
         "guideline": "guideline",
         "guidelineAnnotation": "guideline_annotation",
-    }
-    if segment in aliases:
-        return aliases[segment]
-    return "identity" if namespace == "data" else "unprofiled"
+        "pathway": "identity",
+    }.get(segment, "unprofiled")
+
+
+def adapter_profile_status(value: Any, profile_name: str | None) -> str | None:
+    """Validate one code-owned profile against the source value before projection."""
+    if profile_name is None:
+        return None
+    if profile_name == "stats":
+        if not isinstance(value, dict) or not value:
+            return "unprofiled"
+        stat_name_shape = isinstance(value.get("statName"), str)
+        count_shape = all(
+            isinstance(item, dict) and type(item.get("count")) in {int, float}
+            for item in value.values()
+        )
+        return "active" if stat_name_shape or count_shape else "unprofiled"
+    profile = _PROFILES.get(profile_name)
+    if not isinstance(value, dict) or profile is None:
+        return "unprofiled"
+    if any(name not in value for name in profile.required):
+        return "unprofiled"
+    if profile_name == "connected_object":
+        if not isinstance(value["connectedObject"], dict) or not isinstance(
+            value["connectionTypes"], list
+        ):
+            return "unprofiled"
+    elif any(not isinstance(value[name], str) for name in profile.required):
+        return "unprofiled"
+    return "active"
 
 
 def project_adapter_value(value: Any, profile_name: str | None, mode: ResponseMode) -> Any:
     """Apply one source-family profile without deriving authority from source keys."""
-    if mode == "full" or not isinstance(value, dict) or profile_name is None:
+    status = adapter_profile_status(value, profile_name)
+    if status == "unprofiled":
+        return value if mode == "full" else _UNPROFILED
+    if mode == "full" or profile_name is None:
         return value
     if profile_name == "stats":
         # This scalar aggregate endpoint has no optional row payload to tier.
@@ -109,10 +189,6 @@ def project_adapter_value(value: Any, profile_name: str | None, mode: ResponseMo
         return _UNPROFILED
     names = getattr(profile, mode)
     return {name: value[name] for name in names if name in value}
-
-
-def adapter_profile_known(profile_name: str | None) -> bool:
-    return profile_name == "stats" or profile_name in _PROFILES
 
 
 def adapter_projection_is_unprofiled(value: Any) -> bool:
@@ -228,11 +304,26 @@ def render_adapter_selections(
     return result
 
 
+def adapter_selection_result(
+    response: SourceResponse, pointers: tuple[str, ...], store: ContentStore
+) -> ToolResult:
+    """Apply the shared live-selection row and envelope budgets at the MCP boundary."""
+    selected = render_adapter_selections(response, pointers, store)
+    if len(finite_json_bytes(selected)) > 70_000:
+        raise ResponseTooLargeError("The selected source row exceeds its bounded descriptor size.")
+    return success_result(
+        selected,
+        source=response.source,
+        content_ref=response.details["content_ref"],
+    )
+
+
 __all__ = [
     "ResponseMode",
     "adapter_profile",
-    "adapter_profile_known",
+    "adapter_profile_status",
     "adapter_projection_is_unprofiled",
+    "adapter_selection_result",
     "ensure_json_selection",
     "project_adapter_value",
     "render_adapter_selections",

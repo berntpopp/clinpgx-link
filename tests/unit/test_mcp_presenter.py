@@ -107,6 +107,55 @@ def test_presenter_keeps_scalar_null_distinct_from_unprofiled_shape(source_store
     assert "record_profile_status" not in envelope["result"]
 
 
+def test_unprofiled_adapter_shape_is_explicit_in_partial_and_full_modes(source_store):
+    from clinpgx_link.mcp.shaping import SourcePresenter
+
+    original = response(source_store, {"id": "PA1", "unknown": "retained"})
+    original.details["source_pointer"] = "/data"
+    presenter = SourcePresenter(source_store)
+
+    compact = presenter.present(
+        original, selectors={}, response_mode="compact", profile="unmapped"
+    ).structured_content
+    full = presenter.present(
+        original, selectors={}, response_mode="full", profile="unmapped"
+    ).structured_content
+
+    compact_row = compact["result"]
+    assert compact_row["record_profile_status"] == "unprofiled"
+    assert "source_profile" not in compact_row
+    assert "data" not in compact_row
+    assert compact_row["fallback_tool"] == "get_source_content"
+    assert compact_row["fallback_args"]["pointer"] == "/data"
+    assert compact_row["fallback_args"]["representation"] == "structure"
+    full_row = full["result"]
+    assert full_row["record_profile_status"] == "unprofiled"
+    assert "source_profile" not in full_row
+    assert json.loads(full_row["data"]["text"]) == original.value
+    assert full["_meta"]["next_commands"][0]["tool"] == "get_source_content"
+
+
+def test_named_adapter_profile_rejects_a_mismatched_source_shape_in_all_modes(source_store):
+    from clinpgx_link.mcp.shaping import SourcePresenter
+
+    original = response(source_store, {"id": "PA1", "unexpected": "retained"})
+    original.details["source_pointer"] = "/data"
+    presenter = SourcePresenter(source_store)
+
+    for mode in ("minimal", "compact", "standard", "full"):
+        payload = presenter.present(
+            original, selectors={}, response_mode=mode, profile="gene"
+        ).structured_content
+        row = payload["result"]
+        assert row["record_profile_status"] == "unprofiled"
+        assert "source_profile" not in row
+        if mode == "full":
+            assert json.loads(row["data"]["text"]) == original.value
+        else:
+            assert "data" not in row
+            assert row["fallback_args"]["representation"] == "structure"
+
+
 def test_empty_collection_preserves_original_reference_and_executable_recovery(source_store):
     from clinpgx_link.mcp.shaping import SourcePresenter
 

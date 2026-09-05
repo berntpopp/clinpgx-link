@@ -298,3 +298,61 @@ async def test_jsonld_and_large_guideline_projection_keep_later_small_value(tmp_
         ]
     finally:
         await upstream.close()
+
+
+@pytest.mark.asyncio
+async def test_raw_unmapped_route_and_mismatched_known_shape_are_never_profiled(tmp_path) -> None:
+    calls: list[str] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        calls.append(request.url.path)
+        if request.url.path == "/v1/report/crossReference":
+            return httpx.Response(200, json=[{"id": "X1", "resource": "Example"}])
+        return httpx.Response(200, json={"status": "success", "data": {"id": "PA124"}})
+
+    store = ContentStore(tmp_path / "content.sqlite")
+    upstream = ClinPGxClient(
+        Settings(_env_file=None, cache_root=tmp_path),
+        httpx.AsyncClient(transport=httpx.MockTransport(handle)),
+        store,
+    )
+    try:
+        async with Client(_server(store, upstream)) as client:
+            calls_by_case = {}
+            for label, arguments in (
+                (
+                    "unmapped",
+                    {
+                        "operation": "GET /report/crossReference",
+                        "query_parameters": {"type": "Gene", "accId": "PA124"},
+                    },
+                ),
+                (
+                    "mismatch",
+                    {
+                        "operation": "GET /data/gene/{id}",
+                        "path_parameters": {"id": "PA124"},
+                    },
+                ),
+            ):
+                compact = await client.call_tool(
+                    "get_api_data", {**arguments, "response_mode": "compact"}
+                )
+                full = await client.call_tool(
+                    "get_api_data", {**arguments, "response_mode": "full"}
+                )
+                calls_by_case[label] = (compact.structured_content, full.structured_content)
+
+        for compact, full in calls_by_case.values():
+            compact_row = compact["result"] if "result" in compact else compact["results"][0]
+            full_row = full["result"] if "result" in full else full["results"][0]
+            assert compact_row["record_profile_status"] == "unprofiled"
+            assert "source_profile" not in compact_row
+            assert "data" not in compact_row
+            assert compact_row["fallback_tool"] == "get_source_content"
+            assert full_row["record_profile_status"] == "unprofiled"
+            assert "source_profile" not in full_row
+            assert json.loads(full_row["data"]["text"])
+        assert calls == ["/v1/report/crossReference", "/v1/data/gene/PA124"]
+    finally:
+        await upstream.close()

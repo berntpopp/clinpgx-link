@@ -888,7 +888,10 @@ async def test_unsupported_detail_pair_lists_real_choices_and_callable_explicit_
     def handle(request):
         paths.append(request.url.path)
         if request.url.path == "/v1/data/chemical/PA123":
-            return httpx.Response(200, json={"status": "success", "data": {"id": "PA123"}})
+            return httpx.Response(
+                200,
+                json={"status": "success", "data": {"id": "PA123", "name": "warfarin"}},
+            )
         assert request.url.path == "/v1/report/connectedObjects/PA123/Chemical"
         return httpx.Response(200, json=[])
 

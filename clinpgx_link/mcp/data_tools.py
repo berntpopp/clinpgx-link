@@ -14,9 +14,9 @@ from clinpgx_link.api.website import WebsiteClient
 from clinpgx_link.content.reader import select_value
 from clinpgx_link.content.store import ContentStore
 from clinpgx_link.exceptions import ClinPGxError, InvalidInputError, UpstreamUnavailableError
-from clinpgx_link.mcp.adapter_selection import adapter_profile, render_adapter_selections
-from clinpgx_link.mcp.envelope import error_result, success_result
-from clinpgx_link.mcp.selection import finite_json_bytes, validate_pointers
+from clinpgx_link.mcp.adapter_selection import adapter_profile, adapter_selection_result
+from clinpgx_link.mcp.envelope import error_result
+from clinpgx_link.mcp.selection import validate_pointers
 from clinpgx_link.mcp.shaping import SourcePresenter, source_pointer
 from clinpgx_link.models import SourceResponse
 from clinpgx_link.services.api import ApiService
@@ -61,18 +61,7 @@ def register_data_tools(
             else:
                 response = await fetch()
                 if selected_pointers is not None:
-                    selected = render_adapter_selections(response, selected_pointers, store)
-                    if len(finite_json_bytes(selected)) > 70_000:
-                        from clinpgx_link.exceptions import ResponseTooLargeError
-
-                        raise ResponseTooLargeError(
-                            "The selected source row exceeds its bounded descriptor size."
-                        )
-                    return success_result(
-                        selected,
-                        source=response.source,
-                        content_ref=response.details["content_ref"],
-                    )
+                    return adapter_selection_result(response, selected_pointers, store)
                 response = SourceResponse(
                     select_value(response.value, selectors["pointer"]),
                     response.source,

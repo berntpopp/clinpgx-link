@@ -19,12 +19,11 @@ from clinpgx_link.exceptions import (
     ClinPGxError,
     InvalidInputError,
     NotFoundError,
-    ResponseTooLargeError,
     UpstreamUnavailableError,
 )
 from clinpgx_link.mcp import recovery as recovery_help
-from clinpgx_link.mcp.adapter_selection import adapter_profile, render_adapter_selections
-from clinpgx_link.mcp.envelope import error_result, success_result
+from clinpgx_link.mcp.adapter_selection import adapter_profile, adapter_selection_result
+from clinpgx_link.mcp.envelope import error_result
 from clinpgx_link.mcp.pagination import CursorCodec
 from clinpgx_link.mcp.record_shaping import (
     local_collection_result,
@@ -40,7 +39,7 @@ from clinpgx_link.mcp.record_types import (
     View,
 )
 from clinpgx_link.mcp.search_contracts import FILTER_DESCRIPTION, resolve_search_route
-from clinpgx_link.mcp.selection import finite_json_bytes, validate_pointers
+from clinpgx_link.mcp.selection import validate_pointers
 from clinpgx_link.mcp.shaping import SourcePresenter, source_pointer
 from clinpgx_link.models import SourceResponse
 from clinpgx_link.services.api import ApiService
@@ -153,20 +152,6 @@ def register_record_tools(
     """Register stable entity tools even when one or more sources are absent."""
     presenter = SourcePresenter(store)
     cursors = CursorCodec(clock=store.now)
-
-    def selected_live_result(
-        response: SourceResponse, selected_pointers: tuple[str, ...]
-    ) -> ToolResult:
-        selected = render_adapter_selections(response, selected_pointers, store)
-        if len(finite_json_bytes(selected)) > 70_000:
-            raise ResponseTooLargeError(
-                "The selected source row exceeds its bounded descriptor size."
-            )
-        return success_result(
-            selected,
-            source=response.source,
-            content_ref=response.details["content_ref"],
-        )
 
     @server.tool(annotations=_ANNOTATIONS, tags={"entity", "search"}, output_schema=None)
     async def search_records(
@@ -326,7 +311,7 @@ def register_record_tools(
                     )
                 response = await api.get(entity_type, record_id, view)
                 if selected_pointers is not None:
-                    return selected_live_result(response, selected_pointers)
+                    return adapter_selection_result(response, selected_pointers, store)
                 return await asyncio.to_thread(
                     presenter.present,
                     _select(response, pointer),
@@ -359,7 +344,7 @@ def register_record_tools(
                     {"view": view} if entity_type == "guideline" else {},
                 )
                 if selected_pointers is not None:
-                    return selected_live_result(response, selected_pointers)
+                    return adapter_selection_result(response, selected_pointers, store)
                 return await asyncio.to_thread(
                     presenter.present,
                     _select(response, pointer),

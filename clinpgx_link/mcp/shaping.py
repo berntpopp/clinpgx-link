@@ -101,11 +101,12 @@ class SourcePresenter:
     ) -> dict[str, Any]:
         # Import lazily because adapter selection reuses source_pointer from this module.
         from clinpgx_link.mcp.adapter_selection import (
-            adapter_profile_known,
+            adapter_profile_status,
             adapter_projection_is_unprofiled,
             project_adapter_value,
         )
 
+        profile_status = adapter_profile_status(value, profile)
         projected = project_adapter_value(value, profile, response_mode)
         unprofiled = adapter_projection_is_unprofiled(projected)
         raw = _json(value if unprofiled else projected)
@@ -135,9 +136,10 @@ class SourcePresenter:
             "CC0-1.0",
         }:
             row["source_details"] = {"license": {"spdx": license_info["spdx"]}}
+        if profile_status == "unprofiled":
+            row["record_profile_status"] = "unprofiled"
         if unprofiled:
             row.update(
-                record_profile_status="unprofiled",
                 deferred_content=True,
                 recovery_action="read_original_source_structure",
                 fallback_tool="get_source_content",
@@ -160,7 +162,7 @@ class SourcePresenter:
                     "pointer": pointer if pointer is not None else "",
                 },
             )
-        if profile is not None and adapter_profile_known(profile):
+        if profile_status == "active":
             row["source_profile"] = profile
         return row
 
