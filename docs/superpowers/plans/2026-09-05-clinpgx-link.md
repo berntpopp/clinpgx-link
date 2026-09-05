@@ -65,6 +65,14 @@ class SourceResponse:
     source: SourceInfo
     details: dict[str, Any] = field(default_factory=dict)
 
+@dataclass(frozen=True)
+class BoundRequest:
+    method: str
+    path: str
+    params: dict[str, Any]
+    form: dict[str, Any] | None = None
+    representation: str = "json"
+
 # Domain errors contain fixed safe messages and structured developer-owned details.
 # SourceResponse is a data-plane result, never an MCP success/error envelope.
 ```
@@ -105,7 +113,9 @@ class ApiRegistry:
     def list_operations(self) -> list[dict[str, Any]]: ...
     def describe(self, operation: str) -> dict[str, Any]: ...
     def bind(self, operation: str, path_parameters: dict[str, Any],
-             query_parameters: dict[str, Any]) -> tuple[str, str, dict[str, Any]]: ...
+             query_parameters: dict[str, Any], *,
+             form_parameters: dict[str, Any] | None = None,
+             representation: str = "json") -> BoundRequest: ...
 
 class ApiService:
     async def call(self, operation: str, *, path_parameters: dict[str, Any] | None = None,
@@ -127,6 +137,13 @@ class DatasetRepository:
                expected_snapshot: str | None = None) -> SourceResponse: ...
     def get_record(self, record_id: str, *,
                    expected_snapshot: str | None = None) -> SourceResponse: ...
+    def search_entities(self, entity_type: str, *, query: str | None = None,
+                        filters: dict[str, str] | None = None, limit: int = 20,
+                        offset: int = 0,
+                        expected_snapshot: str | None = None) -> SourceResponse: ...
+    def related(self, record_id: str, *, result_type: str,
+                other_id: str | None = None, limit: int = 20, offset: int = 0,
+                expected_snapshot: str | None = None) -> SourceResponse: ...
 ```
 
 These are interface signatures, not placeholder implementation bodies. The concrete

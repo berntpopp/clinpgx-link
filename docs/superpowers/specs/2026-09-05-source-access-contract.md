@@ -113,6 +113,32 @@ text similarity. Reverse relationship export rows preserve their published direc
 and do not imply biological causality. No source enum excludes Swissmedic, FDA or
 non-CPIC/DPWG records from local discovery. Every joined component retains provenance.
 
+Local `search_records.filters` accepts canonical `id`, `name`, `gene`, `chemical`,
+`variant`, `source`, and `annotation_id` keys, AND across keys; entity-specific
+unsupported keys fail. `id` is exact normalized identifier, `name` includes declared
+aliases, relation fields mean exact member identity or source label, not whole-cell
+equality. `query` is literal FTS token search (AND tokens) across indexed source text.
+Capabilities declare which entity/filter combinations exist in the installed profile.
+`get_related_records(source=download,result_type=evidence|allele|literature)` resolves
+summary annotation IDs through validated membership tables and returns original joined
+rows; other result types use the declared entity/relationship projection. Pagination
+counts refer to joined source rows, not distinct biological claims. Implementations
+use DatasetRepository.search_entities and .related; do not route these through the
+API-only ApiService. Form/representation validation returns one BoundRequest carrying
+all validated query and form values; the client never receives unvalidated form data.
+
+`get_server_capabilities.result.local_search` publishes per-entity filter keys,
+operators and supported result types. `get_dataset.result.members[].fields[]`
+publishes exact field names plus `match_modes`, delimiter/quoting tokenizer IDs and
+semantic target (if known). Joined rows retain the standard repository row shape
+(`record_id`, `dataset_id`, `member`, `ordinal`, `fields`) plus `join` containing
+validated parent record ID, relation kind and contributing source row IDs; `_meta`
+identifies the pinned snapshot. No joined text replaces its original source row.
+Required real-MCP acceptance examples: canonical gene+chemical filters find a member
+inside multigene/multidrug annotation cells; annotation ID→evidence and →allele return
+all fixture child rows once; reverse relationship rows retain endpoints; Swissmedic
+labels and non-CPIC/DPWG guidelines remain discoverable with source=download.
+
 ## Snapshot/activation and release boundaries
 
 Builder creates candidates only. The release installer exclusively owns activation.
