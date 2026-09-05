@@ -20,6 +20,7 @@ from clinpgx_link.exceptions import DataValidationError, InvalidInputError, Resp
 _MAX_POINTER_CHARACTERS = 4096
 _MAX_POINTER_SEGMENTS = 128
 _MAX_STRUCTURE_DESCRIPTOR_BYTES = 32 * 1024
+_MAX_INLINE_SCALAR_BYTES = 256
 
 
 def _invalid(field: str, hint: str, *, subtype: str | None = None) -> InvalidInputError:
@@ -112,13 +113,16 @@ def _describe(value: Any) -> dict[str, Any]:
         return {"type": "array", "length": len(value)}
     if isinstance(value, str):
         selected = value.encode("utf-8")
-        return {
+        descriptor = {
             "type": "string",
             "length": len(value),
             "unit": "characters",
             "digest_representation": "utf8_decoded_string",
             "sha256": hashlib.sha256(selected).hexdigest(),
         }
+        if len(selected) <= _MAX_INLINE_SCALAR_BYTES:
+            descriptor["value"] = value
+        return descriptor
     selected = json.dumps(value, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode(
         "utf-8"
     )
@@ -128,13 +132,16 @@ def _describe(value: Any) -> dict[str, Any]:
         scalar_type = "boolean"
     else:
         scalar_type = "number"
-    return {
+    descriptor = {
         "type": scalar_type,
         "length": len(selected),
         "unit": "bytes",
         "digest_representation": "canonical_json_scalar",
         "sha256": hashlib.sha256(selected).hexdigest(),
     }
+    if len(selected) <= _MAX_INLINE_SCALAR_BYTES:
+        descriptor["value"] = value
+    return descriptor
 
 
 def _page(total: int, start: int, length: int) -> dict[str, Any]:

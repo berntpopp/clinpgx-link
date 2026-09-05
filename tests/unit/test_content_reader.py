@@ -218,6 +218,55 @@ def test_scalar_structure_describes_selected_digest_and_length(
     assert result["source_sha256"] == hashlib.sha256(raw).hexdigest()
 
 
+@pytest.mark.parametrize(
+    ("encoded", "expected"),
+    [
+        ('"short evidence"', "short evidence"),
+        ("17", 17),
+        ("1.25", 1.25),
+        ("true", True),
+        ("null", None),
+    ],
+)
+def test_short_selected_scalars_are_inlined_without_losing_descriptor_metadata(encoded, expected):
+    from clinpgx_link.content.reader import read_content
+
+    raw = f'{{"x":{encoded}}}'.encode()
+    result = read_content(raw, media_type="application/json", pointer="/x")
+
+    assert "value" in result
+    assert result["value"] == expected
+    assert result["sha256"]
+    assert result["length"] >= 1
+
+
+def test_scalar_inline_threshold_counts_utf8_bytes_and_never_inlines_containers():
+    from clinpgx_link.content.reader import read_content
+
+    at_limit = "é" * 128
+    over_limit = "é" * 129
+    raw = json.dumps(
+        {
+            "at_limit": at_limit,
+            "over_limit": over_limit,
+            "object": {"nested": "not recursively inlined"},
+            "array": ["not recursively inlined"],
+        },
+        ensure_ascii=False,
+    ).encode()
+
+    result = read_content(raw, media_type="application/json", length=4)
+    by_key = {item["key"]: item for item in result["items"]}
+
+    assert by_key["at_limit"]["value"] == at_limit
+    assert "value" not in by_key["over_limit"]
+    assert "value" not in by_key["object"]
+    assert "value" not in by_key["array"]
+
+    selected_over_limit = read_content(raw, media_type="application/json", pointer="/over_limit")
+    assert "value" not in selected_over_limit
+
+
 def test_scalar_children_also_include_selected_digest_metadata():
     from clinpgx_link.content.reader import read_content
 
@@ -233,8 +282,25 @@ def test_scalar_children_also_include_selected_digest_metadata():
             "unit": "characters",
             "digest_representation": "utf8_decoded_string",
             "sha256": hashlib.sha256("\N{GREEK SMALL LETTER ALPHA}".encode()).hexdigest(),
+            "value": "\N{GREEK SMALL LETTER ALPHA}",
         }
     ]
+
+
+def test_scalar_children_inline_numeric_boolean_and_null_as_typed_values():
+    from clinpgx_link.content.reader import read_content
+
+    result = read_content(
+        b'{"number":7,"boolean":false,"nothing":null}',
+        media_type="application/json",
+        length=3,
+    )
+    by_key = {item["key"]: item for item in result["items"]}
+
+    assert by_key["number"]["value"] == 7
+    assert by_key["boolean"]["value"] is False
+    assert "value" in by_key["nothing"]
+    assert by_key["nothing"]["value"] is None
 
 
 def test_structure_pointer_at_character_limit_is_advertised_and_traversable():

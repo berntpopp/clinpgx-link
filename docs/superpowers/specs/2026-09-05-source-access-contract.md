@@ -71,10 +71,15 @@ bind immutable snapshot identity and survive while that release is retained.
 
 `get_source_content` traverses RFC 6901 pointers after validation. `structure` returns
 scalar type/length/digest, or bounded object-key/array-index descriptors with child
-pointers, lengths and types. Large keysets are sliced by start/length. No descriptor
-recursively embeds the large value. The normal record tools may return a typed
-content descriptor for an oversized field, explicitly marking deferred_content=true;
-they may not silently omit the field. All descriptor names are safely fenced.
+pointers, lengths and types. A directly selected scalar and immediate scalar children
+include `value` when the existing finite scalar serialization is at most 256 UTF-8 bytes;
+strings are fully fenced at the MCP boundary while numbers, booleans and null retain their
+JSON types. The presence of `value: null` distinguishes an inlined null from no inline
+value. Large keysets are sliced by start/length. Containers and larger scalars remain
+descriptor-only, and no descriptor recursively embeds a container. The normal record
+tools may return a typed content descriptor for an oversized field, explicitly marking
+deferred_content=true; they may not silently omit the field. All descriptor names are
+safely fenced.
 
 `text` returns lossless Unicode codepoint slices of string values, with start,
 returned_characters, total_characters, has_more, next_start and full UTF-8 raw digest.

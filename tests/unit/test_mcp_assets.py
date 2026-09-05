@@ -1,6 +1,7 @@
 """Installed source bytes are retrieved through actual MCP calls, offline."""
 
 import base64
+import hashlib
 import json
 
 import pytest
@@ -9,7 +10,41 @@ from fastmcp import Client
 from clinpgx_link.content.assets import AssetReference
 from clinpgx_link.content.store import ContentStore
 from clinpgx_link.mcp.facade import create_mcp
+from clinpgx_link.models import SourceInfo, SourceResponse
 from tests.unit.test_repository import FIXTURES, _repository
+
+
+class _LongReferenceJsonRepository:
+    def __init__(self, raw: bytes, reference: AssetReference) -> None:
+        self.raw = raw
+        self.reference = reference
+
+    def asset_content(self, dataset_id, *, member=None, expected_snapshot=None):
+        assert dataset_id == self.reference.dataset_id
+        assert member == self.reference.member
+        assert expected_snapshot == self.reference.snapshot_id
+        return SourceResponse(
+            self.raw,
+            SourceInfo(
+                "ClinPGx",
+                "https://api.clinpgx.org/v1/download/file/data/test.json.zip",
+                "2026-09-05T10:00:00Z",
+                self.reference.sha256,
+                "download",
+                warnings=tuple(f"warning-{index}" for index in range(5)),
+            ),
+            {"media_type": "application/json"},
+        )
+
+
+def _fence_count(value):
+    if isinstance(value, dict):
+        return int(value.get("kind") == "untrusted_text") + sum(
+            _fence_count(child) for child in value.values()
+        )
+    if isinstance(value, list):
+        return sum(_fence_count(child) for child in value)
+    return 0
 
 
 @pytest.mark.asyncio
@@ -67,6 +102,51 @@ async def test_installed_member_reconstructs_offline_through_mcp(tmp_path):
     finally:
         repository.close()
         store.close()
+
+
+@pytest.mark.asyncio
+async def test_long_asset_reference_structure_pages_stay_mirrored_and_progress(tmp_path):
+    values = {f"field-{index}": f"value-{index}" for index in range(12)}
+    raw = json.dumps(values).encode()
+    reference = AssetReference(
+        "sha256:" + "a" * 64,
+        "data/test.json.zip",
+        "m" * 4096,
+        hashlib.sha256(raw).hexdigest(),
+    )
+    encoded = reference.encode()
+    repository = _LongReferenceJsonRepository(raw, reference)
+    store = ContentStore(tmp_path / "cache.sqlite")
+    returned_keys = []
+    start = 0
+    try:
+        async with Client(create_mcp(content_store=store, repository=repository)) as client:
+            while True:
+                call = await client.call_tool(
+                    "get_source_content",
+                    {
+                        "content_ref": encoded,
+                        "representation": "structure",
+                        "start": start,
+                        "length": 8192,
+                    },
+                )
+                envelope = call.structured_content
+                payload = envelope["result"]
+                assert json.loads(call.content[0].text) == envelope
+                assert len(call.content[0].text.encode()) <= 100_000
+                assert _fence_count(envelope) <= 128
+                assert payload["returned"] > 0
+                returned_keys.extend(item["key"]["text"] for item in payload["items"])
+                if not payload["has_more"]:
+                    break
+                assert payload["next_start"] == start + payload["returned"]
+                start = payload["next_start"]
+    finally:
+        store.close()
+
+    assert len(encoded) > 5_000
+    assert returned_keys == list(values)
 
 
 @pytest.mark.asyncio

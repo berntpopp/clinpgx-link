@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import time
 from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
@@ -17,7 +18,7 @@ from clinpgx_link.content.reader import read_content
 from clinpgx_link.content.repository_assets import read_repository_content
 from clinpgx_link.content.store import ContentStore, StoredContent
 from clinpgx_link.data.repository import DatasetRepository
-from clinpgx_link.exceptions import ClinPGxError, UpstreamUnavailableError
+from clinpgx_link.exceptions import ClinPGxError, ResponseTooLargeError, UpstreamUnavailableError
 from clinpgx_link.identity_contracts import detail_identifier_capabilities
 from clinpgx_link.mcp.admission import Admission, run_sync
 from clinpgx_link.mcp.data_tools import register_data_tools
@@ -40,6 +41,8 @@ _ANNOTATIONS = {
     "idempotentHint": True,
     "openWorldHint": True,
 }
+_CONTENT_ENVELOPE_LIMIT_BYTES = 100_000
+_BOUNDARY_TIMING_RESERVE_BYTES = 100
 
 
 def _content_payload(payload: dict[str, Any], source: SourceInfo, reference: str) -> dict[str, Any]:
@@ -53,6 +56,8 @@ def _content_payload(payload: dict[str, Any], source: SourceInfo, reference: str
     output = dict(payload)
     if "text" in output:
         output["text"] = fence(output["text"])
+    if isinstance(output.get("value"), str):
+        output["value"] = fence(output["value"])
     if output.get("pointer"):
         output["pointer"] = fence(output["pointer"])
     if "items" in output:
@@ -61,8 +66,60 @@ def _content_payload(payload: dict[str, Any], source: SourceInfo, reference: str
             if isinstance(item["key"], str):
                 item["key"] = fence(item["key"])
             item["pointer"] = fence(item["pointer"])
+            if isinstance(item.get("value"), str):
+                item["value"] = fence(item["value"])
     enforce_limits(fences)
     return output
+
+
+def _content_result(
+    payload: dict[str, Any],
+    source: SourceInfo,
+    reference: str,
+    *,
+    began: float,
+    snapshot_id: str | None = None,
+) -> ToolResult:
+    """Fit structure pages after string fencing without losing continuation."""
+    items = payload.get("items")
+    if payload.get("representation") != "structure" or not isinstance(items, list):
+        return success_result(
+            _content_payload(payload, source, reference),
+            source=source,
+            snapshot_id=snapshot_id,
+            elapsed_ms=(time.monotonic() - began) * 1000,
+        )
+
+    start = int(payload["start"])
+    total = int(payload["total"])
+    minimum = 0 if start == total else 1
+    for returned in range(len(items), minimum - 1, -1):
+        next_start = start + returned
+        candidate = {
+            **payload,
+            "items": items[:returned],
+            "returned": returned,
+            "has_more": next_start < total,
+            "next_start": next_start if next_start < total else None,
+        }
+        try:
+            result = success_result(
+                _content_payload(candidate, source, reference),
+                source=source,
+                snapshot_id=snapshot_id,
+                elapsed_ms=(time.monotonic() - began) * 1000,
+            )
+        except ResponseTooLargeError:
+            continue
+        serialized = json.dumps(
+            result.structured_content,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            allow_nan=False,
+        ).encode("utf-8")
+        if len(serialized) <= _CONTENT_ENVELOPE_LIMIT_BYTES - _BOUNDARY_TIMING_RESERVE_BYTES:
+            return result
+    raise ResponseTooLargeError("A structure item cannot fit in the MCP response envelope.")
 
 
 def create_mcp(
@@ -153,7 +210,7 @@ def create_mcp(
         representation: Annotated[
             Literal["structure", "text", "base64"],
             Field(
-                description="Structure discovers JSON values; text reads strings; base64 returns exact original bytes. Numeric, boolean, or null values use scalar selectors in the owning read tool."
+                description="Structure discovers JSON values and includes short scalar values through 256 UTF-8 bytes; text reads strings; base64 returns exact original bytes."
             ),
         ] = "structure",
         start: Annotated[
@@ -191,11 +248,12 @@ def create_mcp(
                     length=min(length, 40) if representation == "structure" else length,
                 )
                 asset.value["response_mode"] = response_mode
-                return success_result(
-                    _content_payload(asset.value, asset.source, content_ref),
-                    source=asset.source,
+                return _content_result(
+                    asset.value,
+                    asset.source,
+                    content_ref,
                     snapshot_id=asset.value["snapshot_id"],
-                    elapsed_ms=(time.monotonic() - began) * 1000,
+                    began=began,
                 )
             stored = await run_sync(content_store.get, content_ref)
             payload = await run_sync(
@@ -210,10 +268,11 @@ def create_mcp(
             payload["content_ref"] = content_ref
             payload["expires_at"] = stored.expires_at
             payload["response_mode"] = response_mode
-            return success_result(
-                _content_payload(payload, stored.source, content_ref),
-                source=stored.source,
-                elapsed_ms=(time.monotonic() - began) * 1000,
+            return _content_result(
+                payload,
+                stored.source,
+                content_ref,
+                began=began,
             )
         except ClinPGxError as exc:
             recoverable_ref = getattr(exc, "content_ref", None)
