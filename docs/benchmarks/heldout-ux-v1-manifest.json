@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "suite_id": "heldout-ux-v1",
+  "frozen_at": "2026-09-05T19:54:23+02:00",
+  "author": {
+    "provider": "OpenAI",
+    "requested_model": "gpt-5.6-sol",
+    "requested_reasoning_effort": "high",
+    "observed_model": null,
+    "client": "Codex",
+    "observed_model_note": "No response metadata exposing the actual runtime deployment was available to the authoring agent; requested identity is not represented as observed identity."
+  },
+  "hash_contract": {
+    "algorithm": "sha256",
+    "scope": "Exact artifact bytes, including final newline.",
+    "encoding": "UTF-8"
+  },
+  "privacy": {
+    "question_bodies": "private ignored artifacts",
+    "answer_assertions": "private ignored artifact",
+    "judge_rubric": "private ignored artifact",
+    "limitation": "Blinding is procedural only. The shared filesystem is not security isolation, so implementers and controllers must not inspect the private paths."
+  },
+  "budgets": {
+    "instructed_mcp_calls": 35,
+    "hard_mcp_calls": 40,
+    "deadline_seconds": 600,
+    "trace_ceiling_bytes": 33554432,
+    "trace_ceiling_mib": 32,
+    "note": "The hard safeguard does not excuse exceeding the 35-call instructed budget."
+  },
+  "validation_policy": {
+    "included_in_every_validation_batch": true,
+    "all_attempts_retained": true,
+    "failures_count_in_batch_denominator": true,
+    "any_heldout_failure_fails_batch": true,
+    "transport_acceptance_is_answer_acceptance": false,
+    "source_assertions_must_all_pass": true,
+    "upstream_drift": "nonpassing until a separately versioned source-assertion update",
+    "aspect_coverage": "At least one actually observed task per aspect across the combined frozen-twelve and held-out validation batch; all held-out observed scores enter the minimum. Null stays visible and is not a pass."
+  },
+  "tasks": [
+    {
+      "id": "HUX-01",
+      "coverage": "local_exact_retrieval",
+      "private_path": ".superpowers/sdd/2026-09-05-mcp-ux-remediation/heldout/task-01.md",
+      "bytes": 1634,
+      "sha256": "8c7cd79646250c4c26f043eaa0d0cf4a393cd4f8df237d825272060ab01ab538"
+    },
+    {
+      "id": "HUX-02",
+      "coverage": "grounded_negative",
+      "private_path": ".superpowers/sdd/2026-09-05-mcp-ux-remediation/heldout/task-02.md",
+      "bytes": 1635,
+      "sha256": "9506afa32aadc0ee2beea8fe770d5e06de074b4649567a55780ebe42e1f2b29a"
+    },
+    {
+      "id": "HUX-03",
+      "coverage": "live_relationship",
+      "private_path": ".superpowers/sdd/2026-09-05-mcp-ux-remediation/heldout/task-03.md",
+      "bytes": 1651,
+      "sha256": "2563ffa82c8dde2a11cd95238a167da1b29372779199381bb5e859c3c5b01986"
+    },
+    {
+      "id": "HUX-04",
+      "coverage": "source_distinction",
+      "private_path": ".superpowers/sdd/2026-09-05-mcp-ux-remediation/heldout/task-04.md",
+      "bytes": 1800,
+      "sha256": "787820d8453dcd1b21ee959af1529d64060962f5a0f3be54fc1b6bc09c8bd9b4"
+    },
+    {
+      "id": "HUX-05",
+      "coverage": "invalid_filter_and_cursor_recovery",
+      "private_path": ".superpowers/sdd/2026-09-05-mcp-ux-remediation/heldout/task-05.md",
+      "bytes": 1843,
+      "sha256": "4de18e6804ff4b41e3f1ae6ba7814a4b6d7c4b5ec6c83e583962801c80bb114e"
+    }
+  ],
+  "independent_assertions": {
+    "private_path": ".superpowers/sdd/2026-09-05-mcp-ux-remediation/heldout/source-assertions-v1.json",
+    "bytes": 5131,
+    "sha256": "828a0fc6c8767b76a284d9ba2a5e681e94714b2a20d9aa7f00835449597a603d"
+  },
+  "judge": {
+    "requested_model": "Fable 5.1",
+    "judgments_per_trace": 1,
+    "private_rubric_path": ".superpowers/sdd/2026-09-05-mcp-ux-remediation/heldout/fable-judge-rubric-v1.md",
+    "rubric_bytes": 5429,
+    "rubric_sha256": "0ed588f1f7a7d9768ff6da4215f039f002c769b6beb078263ee40da4ca65cfbe",
+    "visible_inputs": [
+      "frozen task",
+      "complete bounded tool trace and final answer",
+      "independently verified factual assertions"
+    ],
+    "hidden_inputs": [
+      "task-runner self-rating",
+      "desired threshold",
+      "candidate label",
+      "other candidate results"
+    ],
+    "runtime_identity_policy": "Record the actual resolved grader model and effort for every judgment; no substitution can pass silently.",
+    "sampling_policy": "Record exposed sampling settings. Temperature or other unavailable controls are unconfigured, never described as deterministic."
+  }
+}
