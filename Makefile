@@ -1,4 +1,4 @@
-.PHONY: install lock format format-check lint typecheck test test-fast test-foundation check-fastmcp ci-local
+.PHONY: install lock format format-check lint check-file-size typecheck test test-fast test-foundation check-fastmcp ci-local
 
 install:
 	uv sync --group dev
@@ -7,14 +7,17 @@ lock:
 	uv lock
 
 format:
-	uv run ruff format clinpgx_link tests
-	uv run ruff check --fix clinpgx_link tests
+	uv run ruff format clinpgx_link tests scripts
+	uv run ruff check --fix clinpgx_link tests scripts
 
 format-check:
-	uv run ruff format --check clinpgx_link tests
+	uv run ruff format --check clinpgx_link tests scripts
 
 lint:
-	uv run ruff check clinpgx_link tests
+	uv run ruff check clinpgx_link tests scripts
+
+check-file-size:
+	uv run python scripts/check_file_size.py
 
 typecheck:
 	uv run mypy clinpgx_link
@@ -31,5 +34,4 @@ test-foundation:
 check-fastmcp:
 	uv run python -c "from fastmcp import Client, FastMCP; from mcp.types import CallToolResult; print(FastMCP, Client, CallToolResult)"
 
-ci-local: format-check lint typecheck test-fast check-fastmcp
-
+ci-local: format-check lint check-file-size typecheck test-fast check-fastmcp
