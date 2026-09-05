@@ -278,9 +278,7 @@ def contextual_json_memberships(
     return tuple(memberships)
 
 
-def _member(
-    memberships: list[Membership], value: Any, kind: str, source_field: str
-) -> None:
+def _member(memberships: list[Membership], value: Any, kind: str, source_field: str) -> None:
     if isinstance(value, (str, int)) and not isinstance(value, bool) and str(value):
         memberships.append(Membership(kind, str(value), "exact", source_field))
 

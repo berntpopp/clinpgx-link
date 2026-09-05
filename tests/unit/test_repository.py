@@ -142,11 +142,7 @@ def test_unknown_json_shape_cannot_create_or_advertise_guessed_entities(tmp_path
     path = tmp_path / "unknown.json.zip"
     _archive(
         path,
-        {
-            "unknown.json": (
-                b'{"id":"PA1","name":"not an entity","relatedGenes":[{"id":"PA2"}]}'
-            )
-        },
+        {"unknown.json": (b'{"id":"PA1","name":"not an entity","relatedGenes":[{"id":"PA2"}]}')},
     )
     source = SourceInput.from_path(
         dataset_id="data/unknown.json.zip",
@@ -292,9 +288,7 @@ def test_summary_join_without_parent_annotation_identity_fails_closed(tmp_path: 
         {
             "summary_annotations.tsv": b"Summary Annotation ID\tGene\nparent\tCYP2C19\n",
             "summary_ann_evidence.tsv": (
-                b"Summary Annotation ID\tEvidence ID\tPMID\n"
-                b"one\tE1\t1\n"
-                b"two\tE2\t2\n"
+                b"Summary Annotation ID\tEvidence ID\tPMID\none\tE1\t1\ntwo\tE2\t2\n"
             ),
         },
     )
@@ -310,9 +304,7 @@ def test_summary_join_without_parent_annotation_identity_fails_closed(tmp_path: 
     )
     built = build_snapshot([source], tmp_path / "out", RELEASE_TAG)
     with sqlite3.connect(built.database) as connection:
-        connection.execute(
-            "DELETE FROM membership WHERE kind='annotation_id' AND value='parent'"
-        )
+        connection.execute("DELETE FROM membership WHERE kind='annotation_id' AND value='parent'")
     repository = DatasetRepository(built.database)
     parent = repository.search(
         "data/summaryAnnotations.zip", member="summary_annotations.tsv"

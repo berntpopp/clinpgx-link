@@ -198,11 +198,7 @@ def test_catalog_rejects_boolean_or_negative_reported_sizes(
     )
     coverage.write_text(
         json.dumps(
-            {
-                "datasets": [
-                    {"dataset_id": "data/genes.zip", "limitations": [], "evidence": []}
-                ]
-            }
+            {"datasets": [{"dataset_id": "data/genes.zip", "limitations": [], "evidence": []}]}
         )
     )
 

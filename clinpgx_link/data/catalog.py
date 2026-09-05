@@ -86,7 +86,9 @@ def _validate_source_url(value: str, dataset_id: str) -> None:
         else f"/{dataset_id}"
     )
     if parsed.path != expected_path:
-        raise InvalidInputError("Source URL does not match its dataset identity", field="source_url")
+        raise InvalidInputError(
+            "Source URL does not match its dataset identity", field="source_url"
+        )
 
 
 def is_canonical_release_tag(value: object) -> bool:
@@ -235,11 +237,17 @@ class SourceInput:
             raise InvalidInputError("Source receipt byte count is invalid", field="byte_count")
         if self.media_type != "application/zip":
             raise InvalidInputError("Snapshot source must be a ZIP archive", field="media_type")
-        if not isinstance(self.license_id, str) or not self.license_id or len(self.license_id) > 256:
+        if (
+            not isinstance(self.license_id, str)
+            or not self.license_id
+            or len(self.license_id) > 256
+        ):
             raise InvalidInputError("Source license identifier is invalid", field="license_id")
         for value in (self.etag, self.last_modified, self.version_id):
             if value is not None and (not isinstance(value, str) or len(value) > 4096):
-                raise InvalidInputError("Source version metadata is invalid", field="source_metadata")
+                raise InvalidInputError(
+                    "Source version metadata is invalid", field="source_metadata"
+                )
 
     @classmethod
     def from_path(

@@ -21,9 +21,10 @@ def _workbook_bytes() -> bytes:
 
 def _replace_part(raw: bytes, path: str, transform) -> bytes:
     output = io.BytesIO()
-    with zipfile.ZipFile(io.BytesIO(raw)) as source, zipfile.ZipFile(
-        output, "w", compression=zipfile.ZIP_DEFLATED
-    ) as target:
+    with (
+        zipfile.ZipFile(io.BytesIO(raw)) as source,
+        zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as target,
+    ):
         for info in source.infolist():
             body = source.read(info)
             target.writestr(info, transform(body) if info.filename == path else body)
@@ -32,9 +33,10 @@ def _replace_part(raw: bytes, path: str, transform) -> bytes:
 
 def _relocate_worksheet(raw: bytes, target_name: str, target_ref: str, transform) -> bytes:
     output = io.BytesIO()
-    with zipfile.ZipFile(io.BytesIO(raw)) as source, zipfile.ZipFile(
-        output, "w", compression=zipfile.ZIP_DEFLATED
-    ) as target:
+    with (
+        zipfile.ZipFile(io.BytesIO(raw)) as source,
+        zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as target,
+    ):
         for info in source.infolist():
             body = source.read(info)
             name = info.filename
@@ -149,8 +151,7 @@ def test_utf16_worksheet_cannot_hide_giant_merge(monkeypatch: pytest.MonkeyPatch
             body,
             lambda text: text.replace(
                 "</worksheet>",
-                '<mergeCells count="1"><mergeCell ref="A1:XFD1048576"/></mergeCells>'
-                "</worksheet>",
+                '<mergeCells count="1"><mergeCell ref="A1:XFD1048576"/></mergeCells></worksheet>',
             ),
         )
 
@@ -237,9 +238,10 @@ def test_content_types_cannot_select_an_unvalidated_workbook(
 
     raw = _workbook_bytes()
     output = io.BytesIO()
-    with zipfile.ZipFile(io.BytesIO(raw)) as source, zipfile.ZipFile(
-        output, "w", compression=zipfile.ZIP_DEFLATED
-    ) as target:
+    with (
+        zipfile.ZipFile(io.BytesIO(raw)) as source,
+        zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as target,
+    ):
         workbook = source.read("xl/workbook.xml")
         for info in source.infolist():
             body = source.read(info)
@@ -260,9 +262,10 @@ def test_content_type_selected_xml_alias_cannot_bypass_admission(
     from clinpgx_link.ingest import spreadsheets
 
     output = io.BytesIO()
-    with zipfile.ZipFile(io.BytesIO(_workbook_bytes())) as source, zipfile.ZipFile(
-        output, "w", compression=zipfile.ZIP_DEFLATED
-    ) as target:
+    with (
+        zipfile.ZipFile(io.BytesIO(_workbook_bytes())) as source,
+        zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as target,
+    ):
         for info in source.infolist():
             body = source.read(info)
             if info.filename == "[Content_Types].xml":
@@ -293,9 +296,10 @@ def test_shared_string_count_is_bounded_before_openpyxl(
     from clinpgx_link.ingest import spreadsheets
 
     output = io.BytesIO()
-    with zipfile.ZipFile(io.BytesIO(_workbook_bytes())) as source, zipfile.ZipFile(
-        output, "w", compression=zipfile.ZIP_DEFLATED
-    ) as target:
+    with (
+        zipfile.ZipFile(io.BytesIO(_workbook_bytes())) as source,
+        zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as target,
+    ):
         for info in source.infolist():
             body = source.read(info)
             if info.filename == "[Content_Types].xml":

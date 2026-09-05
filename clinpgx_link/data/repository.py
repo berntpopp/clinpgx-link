@@ -355,9 +355,9 @@ class DatasetRepository:
             "WHERE entity.kind=?",
             (entity_type,),
         ).fetchall()
-        supported_filters = {
-            str(row[0]) for row in supported_rows if str(row[0]) in _FILTERS
-        } | {"id"}
+        supported_filters = {str(row[0]) for row in supported_rows if str(row[0]) in _FILTERS} | {
+            "id"
+        }
         unsupported = set(selected_filters) - supported_filters
         if unsupported:
             raise InvalidInputError(

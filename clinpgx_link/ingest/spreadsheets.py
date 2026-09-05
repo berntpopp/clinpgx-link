@@ -232,9 +232,7 @@ def _validate_worksheet_xml(raw: bytes, limits: SpreadsheetLimits) -> None:
                 attributes.get("ref", ""), context="merge range"
             )
             merge_count += 1
-            merged_cells += (maximum_row - minimum_row + 1) * (
-                maximum_column - minimum_column + 1
-            )
+            merged_cells += (maximum_row - minimum_row + 1) * (maximum_column - minimum_column + 1)
             if (
                 merge_count > limits.max_merged_ranges
                 or merged_cells > limits.max_merged_cells
@@ -295,9 +293,7 @@ def _supported_part_content_type(name: str) -> str | None:
     return None
 
 
-def _validate_content_types(
-    raw: bytes, part_by_name: dict[str, zipfile.ZipInfo]
-) -> dict[str, str]:
+def _validate_content_types(raw: bytes, part_by_name: dict[str, zipfile.ZipInfo]) -> dict[str, str]:
     workbook_parts: list[str] = []
     defaults: dict[str, str] = {}
     overrides: dict[str, str] = {}
@@ -346,9 +342,7 @@ def _validate_content_types(
     return resolved
 
 
-def _validate_xml_structure(
-    raw: bytes, limits: SpreadsheetLimits, *, shared_strings: bool
-) -> None:
+def _validate_xml_structure(raw: bytes, limits: SpreadsheetLimits, *, shared_strings: bool) -> None:
     elements = 0
     strings = 0
 
@@ -403,7 +397,9 @@ def _workbook_sheet_ids(raw: bytes, limits: SpreadsheetLimits) -> tuple[str, ...
     except expat.ExpatError as exc:
         raise DataValidationError("Spreadsheet workbook XML is invalid") from exc
     if not identifiers or len(identifiers) != len(set(identifiers)):
-        raise DataValidationError("Spreadsheet sheet relationship identities are missing or duplicate")
+        raise DataValidationError(
+            "Spreadsheet sheet relationship identities are missing or duplicate"
+        )
     return tuple(identifiers)
 
 
