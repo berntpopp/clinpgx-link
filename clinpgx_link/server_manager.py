@@ -356,9 +356,12 @@ def create_app(runtime_settings: Settings | None = None) -> FastAPI:
     @app.get("/api/health")
     async def health() -> JSONResponse:
         admission_status = app.state.admission.snapshot()
-        payload, status_code = await asyncio.to_thread(
-            _health, selected, repository if admission_status["ready"] else None
-        )
+        if admission_status["ready"]:
+            payload, status_code = await asyncio.to_thread(_health, selected, repository)
+        else:
+            # Pending workers may fill the shared executor. This bounded branch
+            # consults no repository and must remain available without a worker.
+            payload, status_code = _health(selected, None)
         payload["admission"] = admission_status
         if not admission_status["ready"]:
             payload.update(status="degraded", ready=False)
