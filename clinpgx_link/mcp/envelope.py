@@ -234,6 +234,10 @@ def error_result(
             "This detail route requires the internal numeric id returned by supported discovery.",
             None,
         ),
+        "unsupported_related_mode": (
+            "The relationship arguments do not match a supported connected-object or pair mode.",
+            None,
+        ),
     }
     if public_subtype in guidance:
         message, retry_after_seconds = guidance[public_subtype]

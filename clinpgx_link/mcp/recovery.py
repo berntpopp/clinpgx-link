@@ -8,6 +8,12 @@ from typing import Any, Literal
 
 from clinpgx_link.exceptions import InvalidInputError
 from clinpgx_link.identity_contracts import numeric_identity_contract
+from clinpgx_link.mcp.relationship_contracts import (
+    RELATIONSHIP_OBJECT_TYPES,
+    connected_object_arguments,
+    pair_arguments,
+    relationship_recovery_choices,
+)
 from clinpgx_link.mcp.search_contracts import (
     CANONICAL_FILTERS,
     LOCAL_SEARCH_ENTITIES,
@@ -87,7 +93,7 @@ _RESULT_TYPES = frozenset(
         "vip_variant",
     }
 )
-_OBJECT_TYPES = frozenset({"Gene", "Chemical", "Disease", "Variant"})
+_OBJECT_TYPES = RELATIONSHIP_OBJECT_TYPES
 LOCAL_ENTITIES = LOCAL_SEARCH_ENTITIES
 WEBSITE_GET = {
     "allele": "GET /site/allele/{id}",
@@ -98,17 +104,6 @@ WEBSITE_GET = {
     "label": "GET /site/labelAnnotation/{id}",
     "pathway": "GET /site/pathway/{id}",
     "vip": "GET /site/vip/{id}",
-}
-API_RESULT = {
-    "guideline_annotation": "guidelineAnnotation",
-    "label": "label",
-    "literature_annotation": "literatureAnnotation",
-    "multilink_annotation": "multilinkAnnotation",
-    "pathway": "pathway",
-    "summary_annotation": "summaryAnnotation",
-    "variant_annotation": "variantAnnotation",
-    "vip": "vip",
-    "vip_variant": "vipVariant",
 }
 _API_DETAIL = frozenset(
     {
@@ -177,7 +172,6 @@ class RecoveryPlan:
             "unsupported_detail_source": (self.entity_type, self.record_id, self.source),
             "unsupported_api_filters": (self.entity_type, self.source),
             "unsupported_related_mode": (
-                self.record_id,
                 self.result_type,
                 self.other_type,
                 self.source,
@@ -287,13 +281,11 @@ def related_mode_plan(
     source: str,
     view: str,
 ) -> RecoveryPlan | None:
-    if not safe_identifier(record_id) or (other_id is not None and not safe_identifier(other_id)):
-        return None
     return RecoveryPlan(
         "unsupported_related_mode",
-        record_id=record_id,
+        record_id=record_id if safe_identifier(record_id) else None,
         result_type=result_type,
-        other_id=other_id,
+        other_id=other_id if other_id is not None and safe_identifier(other_id) else None,
         other_type=other_type,
         source=source,
         view=view,
@@ -459,19 +451,19 @@ def recovery_payload(plan: RecoveryPlan) -> dict[str, Any]:
             "Connected-object mode omits other_id and uses relationship; pair mode requires "
             "other_id and a documented pair result type."
         )
-        choices["mode"] = ["connected_object", "pair"]
-        commands.append(
-            _command(
-                "get_related_records",
-                {
-                    "record_id": record_id,
-                    "result_type": "relationship",
-                    "other_type": plan.other_type,
-                    "source": source,
-                    "view": plan.view,
-                },
+        choices.update(relationship_recovery_choices())
+        if record_id is not None:
+            commands.append(
+                _command(
+                    "get_related_records",
+                    connected_object_arguments(
+                        record_id,
+                        str(plan.other_type),
+                        source=str(source),
+                        view=plan.view,
+                    ),
+                )
             )
-        )
     if not commands:
         commands.append(_command("get_server_capabilities", {}))
     payload = {
@@ -501,22 +493,18 @@ def recovery_payload(plan: RecoveryPlan) -> dict[str, Any]:
             },
             {
                 "tool": "get_related_records",
-                "arguments_template": {
-                    "record_id": "{returned_gene_id}",
-                    "other_id": "{returned_chemical_id}",
-                    "entity_type": "Gene",
-                    "other_type": "Chemical",
-                    "result_type": "guideline_annotation",
-                    "source": "api",
-                    "view": plan.view,
-                },
+                "arguments_template": pair_arguments(
+                    "{returned_gene_id}",
+                    "{returned_chemical_id}",
+                    "guideline_annotation",
+                    view=plan.view,
+                ),
             },
         ]
     return payload
 
 
 __all__ = [
-    "API_RESULT",
     "LOCAL_ENTITIES",
     "WEBSITE_GET",
     "RecoveryPlan",

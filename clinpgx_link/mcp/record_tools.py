@@ -42,6 +42,7 @@ from clinpgx_link.mcp.record_types import (
     SearchEntity,
     View,
 )
+from clinpgx_link.mcp.relationship_contracts import resolve_api_relationship_route
 from clinpgx_link.mcp.search_contracts import FILTER_DESCRIPTION, resolve_search_route
 from clinpgx_link.mcp.selection import validate_pointers
 from clinpgx_link.mcp.shaping import SourcePresenter, source_pointer
@@ -59,7 +60,10 @@ DetailEntityArg = Annotated[
 ResultTypeArg = Annotated[
     ResultType,
     Field(
-        description="Connected-object report, API pair, or declared local join result type.",
+        description=(
+            "Use relationship without other_id for API connected-object mode; API pair mode "
+            "requires other_id and a mapped result type published by capabilities."
+        ),
         examples=["relationship"],
     ),
 ]
@@ -453,13 +457,20 @@ def register_record_tools(
         ] = None,
         entity_type: Annotated[
             ObjectType,
-            Field(description="Object class owning record_id.", examples=["Gene"]),
+            Field(
+                description=(
+                    "Object class owning record_id; documentation-only and cursor-bound, not "
+                    "sent upstream as a pair filter."
+                ),
+                examples=["Gene"],
+            ),
         ] = "Gene",
         other_type: Annotated[
             ObjectType,
             Field(
                 description=(
-                    "Target connected-object family without other_id; otherwise pair object class."
+                    "Target connected-object type sent upstream without other_id; documentation-only "
+                    "and cursor-bound in pair mode, not an upstream pair filter."
                 ),
                 examples=["Chemical"],
             ),
@@ -485,7 +496,7 @@ def register_record_tools(
         cursor: CursorArg = None,
         response_mode: ModeArg = "compact",
     ) -> ToolResult:
-        """Read live connected objects or pairs, or loss-preserving installed joins."""
+        """Use known IDs for live connected/pair reports or loss-preserving installed joins."""
         began = time.monotonic()
         response: SourceResponse | None = None
         recovery: recovery_help.RecoveryPlan | None = None
@@ -503,43 +514,15 @@ def register_record_tools(
                 "view": view,
             }
             if source == "api":
-                if other_id is None:
-                    if result_type == "relationship":
-                        operation = "GET /report/connectedObjects/{id}/{type}"
-                        path_parameters = {"id": record_id, "type": other_type}
-                        query_parameters = None
-                    elif result_type in recovery_help.API_RESULT:
-                        recovery = recovery_help.related_mode_plan(
-                            record_id, result_type, other_id, other_type, source, view
-                        )
-                        raise InvalidInputError(
-                            "The documented API pair route requires other_id.", field="other_id"
-                        )
-                    else:
-                        recovery = recovery_help.related_mode_plan(
-                            record_id, result_type, other_id, other_type, source, view
-                        )
-                        raise InvalidInputError(
-                            "This result type has no documented API report route.",
-                            field="result_type",
-                        )
-                else:
-                    api_type = recovery_help.API_RESULT.get(result_type)
-                    if api_type is None:
-                        recovery = recovery_help.related_mode_plan(
-                            record_id, result_type, other_id, other_type, source, view
-                        )
-                        raise InvalidInputError(
-                            "This result type has no documented API pair route.",
-                            field="result_type",
-                        )
-                    operation = "GET /report/pair/{firstObjId}/{secondObjId}/{resultType}"
-                    path_parameters = {
-                        "firstObjId": record_id,
-                        "secondObjId": other_id,
-                        "resultType": api_type,
-                    }
-                    query_parameters = {"view": view}
+                try:
+                    route = resolve_api_relationship_route(
+                        record_id, result_type, other_id, other_type, view
+                    )
+                except InvalidInputError:
+                    recovery = recovery_help.related_mode_plan(
+                        record_id, result_type, other_id, other_type, source, view
+                    )
+                    raise
                 state_ref = None
                 if cursor is not None:
                     response, offset, state_ref = await run_sync(
@@ -549,9 +532,9 @@ def register_record_tools(
                     if api is None:
                         raise UpstreamUnavailableError("API service is not configured.")
                     response = await api.call(
-                        operation,
-                        path_parameters=path_parameters,
-                        query_parameters=query_parameters,
+                        route.operation,
+                        path_parameters=route.path_parameters,
+                        query_parameters=route.query_parameters,
                     )
                 assert response is not None
                 return await run_sync(
@@ -564,7 +547,7 @@ def register_record_tools(
                     response_mode=response_mode,
                     profile=(
                         "connected_object"
-                        if other_id is None and result_type == "relationship"
+                        if route.mode == "connected_object"
                         else adapter_profile("", family=result_type)
                     ),
                 )

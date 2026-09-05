@@ -28,6 +28,7 @@ from clinpgx_link.mcp.diagnostics import register_diagnostics
 from clinpgx_link.mcp.envelope import MAX_ENVELOPE_BYTES, error_result, success_result
 from clinpgx_link.mcp.middleware import BoundaryGuard
 from clinpgx_link.mcp.record_tools import register_record_tools
+from clinpgx_link.mcp.relationship_contracts import relationship_capabilities_payload
 from clinpgx_link.mcp.schema_tools import register_schema_tool
 from clinpgx_link.mcp.search_contracts import api_filter_choices, capabilities_payload
 from clinpgx_link.mcp.untrusted_content import UntrustedText, enforce_limits, fence_text
@@ -185,6 +186,7 @@ def create_mcp(
                 "response_mode": response_mode,
                 "coverage_status": "implementation_in_progress",
                 "search_contracts": capabilities_payload(),
+                "relationship_contract": relationship_capabilities_payload(),
                 "detail_identifier_contracts": detail_identifier_capabilities(api_filter_choices),
             },
             source=source,

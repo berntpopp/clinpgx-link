@@ -76,6 +76,7 @@ PUBLIC_ERROR_SUBTYPES: frozenset[str] = frozenset(
         "text_selection_required",
         "unsupported_api_filter_value",
         "unsupported_api_filters",
+        "unsupported_related_mode",
         "unsupported_search_source",
         "upstream_throttle",
         "wildcard_query_unsupported",
