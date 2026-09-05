@@ -264,6 +264,52 @@ def test_correlated_logging_drops_payloads_queries_urls_and_secrets() -> None:
     assert not {"payload", "query", "url", "source_auth_token"} & event.keys()
 
 
+def test_stdlib_dependency_logs_never_render_request_or_exception_payloads() -> None:
+    """Catch http/framework log records bypassing the structured payload filter."""
+    import logging
+
+    import httpx
+
+    from clinpgx_link.logging_config import configure_logging
+
+    sentinel = "hostile-query-never-log"
+    stream = StringIO()
+    configure_logging(level="INFO", log_format="json", stream=stream)
+    records: list[logging.LogRecord] = []
+
+    class CaptureHandler(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            records.append(record)
+
+    capture = CaptureHandler()
+    logging.getLogger().addHandler(capture)
+
+    try:
+        with httpx.Client(
+            transport=httpx.MockTransport(lambda _request: httpx.Response(200, json={}))
+        ) as client:
+            client.get("https://api.clinpgx.org/v1/data/gene", params={"symbol": sentinel})
+        try:
+            raise RuntimeError(sentinel)
+        except RuntimeError:
+            logging.getLogger("fastmcp.server").exception(
+                "unsafe dependency message %s", sentinel
+            )
+    finally:
+        logging.getLogger().removeHandler(capture)
+
+    rendered = stream.getvalue()
+    assert sentinel not in rendered
+    assert "api.clinpgx.org" not in rendered
+    assert records
+    assert all(record.getMessage() == "dependency_event" for record in records)
+    assert all(record.exc_info is None for record in records)
+    events = [json.loads(line) for line in rendered.splitlines()]
+    assert events
+    assert all(event["event"] == "dependency_event" for event in events)
+    assert all(event["service"] == "clinpgx-link" for event in events)
+
+
 @pytest.mark.parametrize("unsafe", ["never-reflect-this-value", "hostile\nforged=value"])
 def test_logging_validates_every_retained_string_value_and_bound_context(unsafe: str) -> None:
     """Catch a sensitive value smuggled through an otherwise allowlisted log field."""

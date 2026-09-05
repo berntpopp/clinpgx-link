@@ -8,6 +8,7 @@ import math
 import re
 import sys
 import uuid
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TextIO
 
@@ -50,6 +51,7 @@ _EVENTS = frozenset(
     {
         _INVALID_EVENT,
         "cache_lookup",
+        "dependency_event",
         "request_complete",
         "request_failed",
         "request_started",
@@ -120,6 +122,16 @@ _SNAPSHOT_ID = re.compile(r"sha256:[0-9a-f]{64}\Z")
 _TIMESTAMP = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z\Z")
 _VERSION = re.compile(r"\d+\.\d+\.\d+(?:[+-][0-9A-Za-z.-]+)?\Z")
 _DROP = object()
+_DEPENDENCY_LOGGER_ROOTS = (
+    "fastapi",
+    "fastmcp",
+    "httpcore",
+    "httpx",
+    "mcp",
+    "starlette",
+    "uvicorn",
+)
+_BASE_LOG_RECORD_FACTORY = logging.getLogRecordFactory()
 
 
 def _registry_operations() -> frozenset[str]:
@@ -239,6 +251,64 @@ def clear_request_context() -> None:
     structlog.contextvars.clear_contextvars()
 
 
+class _PayloadFreeStdlibFormatter(logging.Formatter):
+    """Replace dependency-owned messages and tracebacks with fixed operational data."""
+
+    def __init__(self, log_format: str) -> None:
+        super().__init__()
+        self._log_format = log_format
+
+    def format(self, record: logging.LogRecord) -> str:
+        level = record.levelname.lower()
+        if level not in _LOG_LEVELS:
+            level = "info"
+        event: dict[str, str] = {
+            "event": "dependency_event",
+            "log_level": level,
+            "service": _SERVICE_NAME,
+            "timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+            "version": __version__,
+        }
+        request_id = _canonical_request_id(
+            structlog.contextvars.get_contextvars().get("request_id")
+        )
+        if request_id is not None:
+            event["request_id"] = request_id
+        if self._log_format == "json":
+            return json.dumps(event, sort_keys=True, separators=(",", ":"))
+        fields = " ".join(f"{key}={value}" for key, value in sorted(event.items()))
+        return fields
+
+
+def _payload_free_record_factory(*args: Any, **kwargs: Any) -> logging.LogRecord:
+    """Erase dependency messages before any attached handler or telemetry can observe them."""
+    record = _BASE_LOG_RECORD_FACTORY(*args, **kwargs)
+    if any(
+        record.name == root or record.name.startswith(root + ".")
+        for root in _DEPENDENCY_LOGGER_ROOTS
+    ):
+        record.msg = "dependency_event"
+        record.args = ()
+        record.exc_info = None
+        record.exc_text = None
+        record.stack_info = None
+    return record
+
+
+def _route_dependency_loggers_to_root() -> None:
+    """Remove dependency handlers that could bypass the payload-free root formatter."""
+    names = set(_DEPENDENCY_LOGGER_ROOTS)
+    names.update(
+        name
+        for name in logging.Logger.manager.loggerDict
+        if any(name == root or name.startswith(root + ".") for root in _DEPENDENCY_LOGGER_ROOTS)
+    )
+    for name in names:
+        logger = logging.getLogger(name)
+        logger.handlers.clear()
+        logger.propagate = True
+
+
 def configure_logging(
     level: str | None = None,
     log_format: str | None = None,
@@ -251,11 +321,13 @@ def configure_logging(
     output = stream or sys.stderr
 
     root = logging.getLogger()
+    logging.setLogRecordFactory(_payload_free_record_factory)
     root.handlers.clear()
     root.setLevel(getattr(logging, resolved_level))
     handler = logging.StreamHandler(output)
-    handler.setFormatter(logging.Formatter("%(message)s"))
+    handler.setFormatter(_PayloadFreeStdlibFormatter(resolved_format))
     root.addHandler(handler)
+    _route_dependency_loggers_to_root()
 
     processors: list[Any] = [
         structlog.contextvars.merge_contextvars,
