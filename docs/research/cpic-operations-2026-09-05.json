@@ -1,0 +1,5132 @@
+{
+  "schema_version": 1,
+  "as_of": "2026-09-05",
+  "source": {
+    "url": "https://api.cpicpgx.org/v1/",
+    "capture_path": "/tmp/clinpgx_gap_cpic_api.bin",
+    "source_sha256": "fcd91fbad3406b5797d0262e57634e2927e2be9b4427785d904a68740ab1aadc",
+    "vendored_path": "docs/research/cpic-openapi-2026-09-05.json",
+    "vendored_sha256": "e5d2bc201f0891c1b0c34c53ff57e6c6991bc1b3c222ca5ba0ca5cad8e71e18d",
+    "vendoring_note": "apply_patch adds one terminal newline; content bytes otherwise match the captured JSON."
+  },
+  "read_only_policy": "Only GET reference retrieval operations are listed. POST/PATCH/DELETE are omitted. RPC GET entries are retained as documented reference endpoints and are schema-only unless observed.",
+  "license": {
+    "source_url": "https://github.com/cpicpgx/cpic-data/blob/main/LICENSE.md",
+    "source_capture": "/tmp/clinpgx_gap_cpic_license.json",
+    "source_sha256": "20eb6c5251b91ec63ac765323a413d73ea82f1774d606c2614451640a9dc5a2c",
+    "curated_content": "CC0 1.0 Universal (as stated by the CPIC repository license)",
+    "attribution": "CPIC requests attribution, source URL, access date, and version; API terms point to the ClinPGx data usage policy. No ClinPGx license is inferred."
+  },
+  "observed_summary": {
+    "schema_paths": 40,
+    "get_operations": 40,
+    "observed_paths": 9,
+    "schema_only_paths": 31,
+    "pagination_probe": "GET /allele_definition?limit=2&offset=0 with Prefer: count=exact",
+    "content_range": "0-1/1354",
+    "returned_records": 2,
+    "total_count": 1354
+  },
+  "operations": [
+    {
+      "id": "CPIC GET /",
+      "path": "/",
+      "method": "GET",
+      "status": "observed",
+      "parameters": [],
+      "examples": [
+        {
+          "request": {},
+          "status": 200,
+          "content_type": "application/openapi+json; charset=utf-8",
+          "bytes": 182612,
+          "sha256": "fcd91fbad3406b5797d0262e57634e2927e2be9b4427785d904a68740ab1aadc",
+          "evidence_path": "/tmp/clinpgx_gap_cpic_api.bin"
+        }
+      ]
+    },
+    {
+      "id": "CPIC GET /file_artifact",
+      "path": "/file_artifact",
+      "method": "GET",
+      "status": "schema-only",
+      "parameters": [
+        {
+          "source_ref": "#/parameters/rowFilter.file_artifact.id",
+          "name": "id",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer",
+          "description": "A synthetic numerical ID, auto-assigned, primary key"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.file_artifact.entityids",
+          "name": "entityids",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text[]",
+          "description": "The IDs of the entities the file is for, required"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.file_artifact.type",
+          "name": "type",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The type of file"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.file_artifact.filename",
+          "name": "filename",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The name of the file (no path)"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.file_artifact.url",
+          "name": "url",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The permanent URL of the current version of this file"
+        },
+        {
+          "source_ref": "#/parameters/select",
+          "name": "select",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Filtering Columns"
+        },
+        {
+          "source_ref": "#/parameters/order",
+          "name": "order",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Ordering"
+        },
+        {
+          "source_ref": "#/parameters/range",
+          "name": "Range",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/rangeUnit",
+          "name": "Range-Unit",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination",
+          "default": "items"
+        },
+        {
+          "source_ref": "#/parameters/offset",
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/limit",
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/preferCount",
+          "name": "Prefer",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "count=none"
+          ],
+          "description": "Preference"
+        }
+      ]
+    },
+    {
+      "id": "CPIC GET /drug",
+      "path": "/drug",
+      "method": "GET",
+      "status": "schema-only",
+      "parameters": [
+        {
+          "source_ref": "#/parameters/rowFilter.drug.drugid",
+          "name": "drugid",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "character varying",
+          "description": "A unique identifier for this drug in the form \"source:id\" where source is some outside knowledge resource and id is their identifier, primary key"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.drug.name",
+          "name": "name",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The generic name for this drug, lower-cased, required"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.drug.clinpgxid",
+          "name": "clinpgxid",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "character varying",
+          "description": "The ClinPGx ID for this drug, optional"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.drug.rxnormid",
+          "name": "rxnormid",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "character varying",
+          "description": "The RxNorm ID for this drug, optional"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.drug.drugbankid",
+          "name": "drugbankid",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "character varying",
+          "description": "The DrugBank ID for this drug, optional"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.drug.atcid",
+          "name": "atcid",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text[]",
+          "description": "One or more ATC IDs for this drug in an array, optional"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.drug.umlscui",
+          "name": "umlscui",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "character varying",
+          "description": "The UMLS Concept Unique ID for this drug, optional"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.drug.flowchart",
+          "name": "flowchart",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "URL for the flow chart image of this drug"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.drug.version",
+          "name": "version",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.drug.guidelineid",
+          "name": "guidelineid",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer",
+          "description": "The guideline this drug is part of a guideline, null means not a part of any guideline"
+        },
+        {
+          "source_ref": "#/parameters/select",
+          "name": "select",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Filtering Columns"
+        },
+        {
+          "source_ref": "#/parameters/order",
+          "name": "order",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Ordering"
+        },
+        {
+          "source_ref": "#/parameters/range",
+          "name": "Range",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/rangeUnit",
+          "name": "Range-Unit",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination",
+          "default": "items"
+        },
+        {
+          "source_ref": "#/parameters/offset",
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/limit",
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/preferCount",
+          "name": "Prefer",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "count=none"
+          ],
+          "description": "Preference"
+        }
+      ]
+    },
+    {
+      "id": "CPIC GET /flyway_schema_history",
+      "path": "/flyway_schema_history",
+      "method": "GET",
+      "status": "schema-only",
+      "parameters": [
+        {
+          "source_ref": "#/parameters/rowFilter.flyway_schema_history.installed_rank",
+          "name": "installed_rank",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.flyway_schema_history.version",
+          "name": "version",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "character varying"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.flyway_schema_history.description",
+          "name": "description",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "character varying"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.flyway_schema_history.type",
+          "name": "type",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "character varying"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.flyway_schema_history.script",
+          "name": "script",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "character varying"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.flyway_schema_history.checksum",
+          "name": "checksum",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.flyway_schema_history.installed_by",
+          "name": "installed_by",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "character varying"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.flyway_schema_history.installed_on",
+          "name": "installed_on",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "timestamp without time zone"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.flyway_schema_history.execution_time",
+          "name": "execution_time",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.flyway_schema_history.success",
+          "name": "success",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "boolean"
+        },
+        {
+          "source_ref": "#/parameters/select",
+          "name": "select",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Filtering Columns"
+        },
+        {
+          "source_ref": "#/parameters/order",
+          "name": "order",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Ordering"
+        },
+        {
+          "source_ref": "#/parameters/range",
+          "name": "Range",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/rangeUnit",
+          "name": "Range-Unit",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination",
+          "default": "items"
+        },
+        {
+          "source_ref": "#/parameters/offset",
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/limit",
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/preferCount",
+          "name": "Prefer",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "count=none"
+          ],
+          "description": "Preference"
+        }
+      ]
+    },
+    {
+      "id": "CPIC GET /change_log",
+      "path": "/change_log",
+      "method": "GET",
+      "status": "schema-only",
+      "parameters": [
+        {
+          "source_ref": "#/parameters/rowFilter.change_log.date",
+          "name": "date",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "date",
+          "description": "The date the log note is applicable"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.change_log.type",
+          "name": "type",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The type of data this log message is about"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.change_log.entityid",
+          "name": "entityid",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "Optional, the specific entity this note is about. For example, could be a gene symbol or drug ID"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.change_log.note",
+          "name": "note",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The freeform text note about what the change was"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.change_log.version",
+          "name": "version",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer",
+          "description": "The version number, iterates on modification"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.change_log.deployedrelease",
+          "name": "deployedrelease",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The release this change was deployed with"
+        },
+        {
+          "source_ref": "#/parameters/select",
+          "name": "select",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Filtering Columns"
+        },
+        {
+          "source_ref": "#/parameters/order",
+          "name": "order",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Ordering"
+        },
+        {
+          "source_ref": "#/parameters/range",
+          "name": "Range",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/rangeUnit",
+          "name": "Range-Unit",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination",
+          "default": "items"
+        },
+        {
+          "source_ref": "#/parameters/offset",
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/limit",
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/preferCount",
+          "name": "Prefer",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "count=none"
+          ],
+          "description": "Preference"
+        }
+      ]
+    },
+    {
+      "id": "CPIC GET /sequence_location",
+      "path": "/sequence_location",
+      "method": "GET",
+      "status": "schema-only",
+      "parameters": [
+        {
+          "source_ref": "#/parameters/rowFilter.sequence_location.id",
+          "name": "id",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.sequence_location.version",
+          "name": "version",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.sequence_location.name",
+          "name": "name",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The short name of this sequence location, arbitrary but often the gene location and nucleotide change"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.sequence_location.chromosomelocation",
+          "name": "chromosomelocation",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The partial HGVS representation of the location on the chromosomal sequence"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.sequence_location.genelocation",
+          "name": "genelocation",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The partial HGVS representation of the location on the gene sequence"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.sequence_location.proteinlocation",
+          "name": "proteinlocation",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The partial HGVS representation of the location on the protein sequence"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.sequence_location.genesymbol",
+          "name": "genesymbol",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "character varying",
+          "description": "The HGNC symbol fo the gene this squence location falls in"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.sequence_location.dbsnpid",
+          "name": "dbsnpid",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The DBSNP identifier (rs#) for this location, optional"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.sequence_location.position",
+          "name": "position",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer",
+          "description": "The position, or starting position, of this variation on the chromosomal/mitochondrial sequence"
+        },
+        {
+          "source_ref": "#/parameters/select",
+          "name": "select",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Filtering Columns"
+        },
+        {
+          "source_ref": "#/parameters/order",
+          "name": "order",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Ordering"
+        },
+        {
+          "source_ref": "#/parameters/range",
+          "name": "Range",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/rangeUnit",
+          "name": "Range-Unit",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination",
+          "default": "items"
+        },
+        {
+          "source_ref": "#/parameters/offset",
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/limit",
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/preferCount",
+          "name": "Prefer",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "count=none"
+          ],
+          "description": "Preference"
+        }
+      ]
+    },
+    {
+      "id": "CPIC GET /allele_location_value",
+      "path": "/allele_location_value",
+      "method": "GET",
+      "status": "schema-only",
+      "parameters": [
+        {
+          "source_ref": "#/parameters/rowFilter.allele_location_value.alleledefinitionid",
+          "name": "alleledefinitionid",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer",
+          "description": "The reference to the allele this variant is on"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.allele_location_value.locationid",
+          "name": "locationid",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer",
+          "description": "The reference to the location this variant is for"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.allele_location_value.variantallele",
+          "name": "variantallele",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The allele of this location for the allele"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.allele_location_value.version",
+          "name": "version",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer",
+          "description": "The version number, iterates on modification"
+        },
+        {
+          "source_ref": "#/parameters/select",
+          "name": "select",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Filtering Columns"
+        },
+        {
+          "source_ref": "#/parameters/order",
+          "name": "order",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Ordering"
+        },
+        {
+          "source_ref": "#/parameters/range",
+          "name": "Range",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/rangeUnit",
+          "name": "Range-Unit",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination",
+          "default": "items"
+        },
+        {
+          "source_ref": "#/parameters/offset",
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/limit",
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/preferCount",
+          "name": "Prefer",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "count=none"
+          ],
+          "description": "Preference"
+        }
+      ]
+    },
+    {
+      "id": "CPIC GET /guideline",
+      "path": "/guideline",
+      "method": "GET",
+      "status": "observed",
+      "parameters": [
+        {
+          "source_ref": "#/parameters/rowFilter.guideline.id",
+          "name": "id",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer",
+          "description": "A synthetic numerical ID, primary key"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.guideline.version",
+          "name": "version",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer",
+          "description": "The version number, iterates on modification"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.guideline.name",
+          "name": "name",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The name (title) of this guideline, required"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.guideline.url",
+          "name": "url",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The URL of this guideline on the cpicpgx.org domain, optional"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.guideline.genes",
+          "name": "genes",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text[]",
+          "description": "The subject genes of this guideline"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.guideline.notesonusage",
+          "name": "notesonusage",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "Notes about using a particular guideline within this system. This may include. You may find information here when data for a guideline seems missing or incomplete."
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.guideline.clinpgxid",
+          "name": "clinpgxid",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The accession ID in ClinPGx for the guideline"
+        },
+        {
+          "source_ref": "#/parameters/select",
+          "name": "select",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Filtering Columns"
+        },
+        {
+          "source_ref": "#/parameters/order",
+          "name": "order",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Ordering"
+        },
+        {
+          "source_ref": "#/parameters/range",
+          "name": "Range",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/rangeUnit",
+          "name": "Range-Unit",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination",
+          "default": "items"
+        },
+        {
+          "source_ref": "#/parameters/offset",
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/limit",
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/preferCount",
+          "name": "Prefer",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "count=none"
+          ],
+          "description": "Preference"
+        }
+      ],
+      "examples": [
+        {
+          "request": {
+            "query": {
+              "limit": "1"
+            }
+          },
+          "status": 200,
+          "bytes": 204,
+          "sha256": "54bfc3cf35e13846aa7ee9eafbb292c1eefc10230f9afea87b90b960a9aa9b5a",
+          "evidence_path": "/tmp/clinpgx_gap_cpic_guideline_.json"
+        }
+      ]
+    },
+    {
+      "id": "CPIC GET /file_note",
+      "path": "/file_note",
+      "method": "GET",
+      "status": "schema-only",
+      "parameters": [
+        {
+          "source_ref": "#/parameters/rowFilter.file_note.type",
+          "name": "type",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The type of information this note is about"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.file_note.entityid",
+          "name": "entityid",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "Optional, the specific entity this note is about. For example, could be a gene symbol or drug ID"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.file_note.note",
+          "name": "note",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The freeform text note about the type/entity"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.file_note.ordinal",
+          "name": "ordinal",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer",
+          "description": "The index number for ordering notes of a given type/entity"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.file_note.version",
+          "name": "version",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer",
+          "description": "The version number, iterates on modification"
+        },
+        {
+          "source_ref": "#/parameters/select",
+          "name": "select",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Filtering Columns"
+        },
+        {
+          "source_ref": "#/parameters/order",
+          "name": "order",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Ordering"
+        },
+        {
+          "source_ref": "#/parameters/range",
+          "name": "Range",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/rangeUnit",
+          "name": "Range-Unit",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination",
+          "default": "items"
+        },
+        {
+          "source_ref": "#/parameters/offset",
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/limit",
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/preferCount",
+          "name": "Prefer",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "count=none"
+          ],
+          "description": "Preference"
+        }
+      ]
+    },
+    {
+      "id": "CPIC GET /recommendation_view",
+      "path": "/recommendation_view",
+      "method": "GET",
+      "status": "observed",
+      "parameters": [
+        {
+          "source_ref": "#/parameters/rowFilter.recommendation_view.recommendationid",
+          "name": "recommendationid",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.recommendation_view.lookupkey",
+          "name": "lookupkey",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "jsonb"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.recommendation_view.drugname",
+          "name": "drugname",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.recommendation_view.guidelinename",
+          "name": "guidelinename",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.recommendation_view.guidelineurl",
+          "name": "guidelineurl",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.recommendation_view.implications",
+          "name": "implications",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "jsonb"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.recommendation_view.drugrecommendation",
+          "name": "drugrecommendation",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.recommendation_view.classification",
+          "name": "classification",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "character varying"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.recommendation_view.phenotypes",
+          "name": "phenotypes",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "jsonb"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.recommendation_view.activityscore",
+          "name": "activityscore",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "jsonb"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.recommendation_view.population",
+          "name": "population",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.recommendation_view.comments",
+          "name": "comments",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text"
+        },
+        {
+          "source_ref": "#/parameters/select",
+          "name": "select",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Filtering Columns"
+        },
+        {
+          "source_ref": "#/parameters/order",
+          "name": "order",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Ordering"
+        },
+        {
+          "source_ref": "#/parameters/range",
+          "name": "Range",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/rangeUnit",
+          "name": "Range-Unit",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination",
+          "default": "items"
+        },
+        {
+          "source_ref": "#/parameters/offset",
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/limit",
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/preferCount",
+          "name": "Prefer",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "count=none"
+          ],
+          "description": "Preference"
+        }
+      ],
+      "examples": [
+        {
+          "request": {
+            "query": {
+              "limit": "1"
+            }
+          },
+          "status": 200,
+          "bytes": 438,
+          "sha256": "809ffc60e090e02a3539340fb9d5c28ee7307154c1f5e02c050c07b8f7beba26",
+          "evidence_path": "/tmp/clinpgx_gap_cpic_recommendation_view_.json"
+        }
+      ]
+    },
+    {
+      "id": "CPIC GET /population",
+      "path": "/population",
+      "method": "GET",
+      "status": "schema-only",
+      "parameters": [
+        {
+          "source_ref": "#/parameters/rowFilter.population.id",
+          "name": "id",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer",
+          "description": "A synthetic primary key ID"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.population.publicationid",
+          "name": "publicationid",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer",
+          "description": "A reference to a publication"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.population.ethnicity",
+          "name": "ethnicity",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The major ethnicity grouping of this population"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.population.population",
+          "name": "population",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The descriptive name of this population, optional"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.population.populationinfo",
+          "name": "populationinfo",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "Further information about this population, optional"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.population.subjecttype",
+          "name": "subjecttype",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "Information about the types of subjects in this population"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.population.subjectcount",
+          "name": "subjectcount",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer",
+          "description": "The total number of subjects in this population"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.population.version",
+          "name": "version",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer",
+          "description": "The version number, iterates on modification"
+        },
+        {
+          "source_ref": "#/parameters/select",
+          "name": "select",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Filtering Columns"
+        },
+        {
+          "source_ref": "#/parameters/order",
+          "name": "order",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Ordering"
+        },
+        {
+          "source_ref": "#/parameters/range",
+          "name": "Range",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/rangeUnit",
+          "name": "Range-Unit",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination",
+          "default": "items"
+        },
+        {
+          "source_ref": "#/parameters/offset",
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/limit",
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/preferCount",
+          "name": "Prefer",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "count=none"
+          ],
+          "description": "Preference"
+        }
+      ]
+    },
+    {
+      "id": "CPIC GET /statistic",
+      "path": "/statistic",
+      "method": "GET",
+      "status": "schema-only",
+      "parameters": [
+        {
+          "source_ref": "#/parameters/rowFilter.statistic.createdon",
+          "name": "createdon",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "timestamp without time zone"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.statistic.stattype",
+          "name": "stattype",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.statistic.statvalue",
+          "name": "statvalue",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "numeric"
+        },
+        {
+          "source_ref": "#/parameters/select",
+          "name": "select",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Filtering Columns"
+        },
+        {
+          "source_ref": "#/parameters/order",
+          "name": "order",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Ordering"
+        },
+        {
+          "source_ref": "#/parameters/range",
+          "name": "Range",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/rangeUnit",
+          "name": "Range-Unit",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination",
+          "default": "items"
+        },
+        {
+          "source_ref": "#/parameters/offset",
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/limit",
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/preferCount",
+          "name": "Prefer",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "count=none"
+          ],
+          "description": "Preference"
+        }
+      ]
+    },
+    {
+      "id": "CPIC GET /test_alert_view",
+      "path": "/test_alert_view",
+      "method": "GET",
+      "status": "schema-only",
+      "parameters": [
+        {
+          "source_ref": "#/parameters/rowFilter.test_alert_view.testalertid",
+          "name": "testalertid",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.test_alert_view.lookupkey",
+          "name": "lookupkey",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "jsonb"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.test_alert_view.drugname",
+          "name": "drugname",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.test_alert_view.population",
+          "name": "population",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.test_alert_view.alerttext",
+          "name": "alerttext",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text[]"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.test_alert_view.cdscontext",
+          "name": "cdscontext",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text"
+        },
+        {
+          "source_ref": "#/parameters/select",
+          "name": "select",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Filtering Columns"
+        },
+        {
+          "source_ref": "#/parameters/order",
+          "name": "order",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Ordering"
+        },
+        {
+          "source_ref": "#/parameters/range",
+          "name": "Range",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/rangeUnit",
+          "name": "Range-Unit",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination",
+          "default": "items"
+        },
+        {
+          "source_ref": "#/parameters/offset",
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/limit",
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/preferCount",
+          "name": "Prefer",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "count=none"
+          ],
+          "description": "Preference"
+        }
+      ]
+    },
+    {
+      "id": "CPIC GET /pair_view",
+      "path": "/pair_view",
+      "method": "GET",
+      "status": "observed",
+      "parameters": [
+        {
+          "source_ref": "#/parameters/rowFilter.pair_view.pairid",
+          "name": "pairid",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer",
+          "description": "The primary key ID of this pair"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.pair_view.drugid",
+          "name": "drugid",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "character varying",
+          "description": "The ID of the drug in the pair"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.pair_view.drugname",
+          "name": "drugname",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The name of the drug in the pair"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.pair_view.genesymbol",
+          "name": "genesymbol",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "character varying",
+          "description": "The symbol of the drug in the pair"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.pair_view.guidelinename",
+          "name": "guidelinename",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The name for the guideline of this pair"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.pair_view.guidelineurl",
+          "name": "guidelineurl",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The URL for the guideline of this pair"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.pair_view.cpiclevel",
+          "name": "cpiclevel",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The CPIC-assigned level of the pair"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.pair_view.clinpgxlevel",
+          "name": "clinpgxlevel",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "character varying",
+          "description": "The top level of ClinPGx Summary Annotation of the pair"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.pair_view.pgxtesting",
+          "name": "pgxtesting",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The testing level of the label annotation from ClinPGx for this pair"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.pair_view.pmids",
+          "name": "pmids",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text[]",
+          "description": "The PMIDs for guideline publications of this pair"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.pair_view.usedforrecommendation",
+          "name": "usedforrecommendation",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.pair_view.provisional",
+          "name": "provisional",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "boolean",
+          "description": "The CPIC level assigned to this pair is provisional, true if this pair is not part of a guideline"
+        },
+        {
+          "source_ref": "#/parameters/select",
+          "name": "select",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Filtering Columns"
+        },
+        {
+          "source_ref": "#/parameters/order",
+          "name": "order",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Ordering"
+        },
+        {
+          "source_ref": "#/parameters/range",
+          "name": "Range",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/rangeUnit",
+          "name": "Range-Unit",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination",
+          "default": "items"
+        },
+        {
+          "source_ref": "#/parameters/offset",
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/limit",
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/preferCount",
+          "name": "Prefer",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "count=none"
+          ],
+          "description": "Preference"
+        }
+      ],
+      "examples": [
+        {
+          "request": {
+            "query": {
+              "limit": "1"
+            }
+          },
+          "status": 200,
+          "bytes": 331,
+          "sha256": "b2e389e357c84c623da7755dc1fd95278fa315c6e834c7da12a192936963786f",
+          "evidence_path": "/tmp/clinpgx_gap_cpic_pair_view_.json"
+        }
+      ]
+    },
+    {
+      "id": "CPIC GET /pair",
+      "path": "/pair",
+      "method": "GET",
+      "status": "schema-only",
+      "parameters": [
+        {
+          "source_ref": "#/parameters/rowFilter.pair.pairid",
+          "name": "pairid",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer",
+          "description": "A synthetic numerical id, automatically assigned, primary key"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.pair.genesymbol",
+          "name": "genesymbol",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "character varying",
+          "description": "The HGNC symbol of the gene in this pair, required"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.pair.drugid",
+          "name": "drugid",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "character varying",
+          "description": "The ID of the drug in this pair, required"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.pair.guidelineid",
+          "name": "guidelineid",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer",
+          "description": "The ID of a guideline this pair is described in, optional"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.pair.usedforrecommendation",
+          "name": "usedforrecommendation",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "boolean",
+          "description": "Whether the gene is used for recommendation lookup for the drug if this pair is part of a guideline, default false"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.pair.version",
+          "name": "version",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer",
+          "description": "The version number, iterates on modification"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.pair.cpiclevel",
+          "name": "cpiclevel",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The CPIC level of this pair, required"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.pair.clinpgxlevel",
+          "name": "clinpgxlevel",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "character varying",
+          "description": "The top level of PharmGKB Clinical Annotation for this pair, optional"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.pair.pgxtesting",
+          "name": "pgxtesting",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The top level of PGx testing recommendation from PharmGKB label annotations, optional"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.pair.citations",
+          "name": "citations",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text[]",
+          "description": "The PMID citations in an array for this pair, optional"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.pair.removed",
+          "name": "removed",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "boolean",
+          "description": "Has this pair been \"removed\", eg is no longer a valid pair, default false"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.pair.removeddate",
+          "name": "removeddate",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "date",
+          "description": "If removed, when was this pair \"removed\""
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.pair.removedreason",
+          "name": "removedreason",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "If removed, why was this pair \"removed\""
+        },
+        {
+          "source_ref": "#/parameters/select",
+          "name": "select",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Filtering Columns"
+        },
+        {
+          "source_ref": "#/parameters/order",
+          "name": "order",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Ordering"
+        },
+        {
+          "source_ref": "#/parameters/range",
+          "name": "Range",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/rangeUnit",
+          "name": "Range-Unit",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination",
+          "default": "items"
+        },
+        {
+          "source_ref": "#/parameters/offset",
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/limit",
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/preferCount",
+          "name": "Prefer",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "count=none"
+          ],
+          "description": "Preference"
+        }
+      ]
+    },
+    {
+      "id": "CPIC GET /allele_frequency",
+      "path": "/allele_frequency",
+      "method": "GET",
+      "status": "schema-only",
+      "parameters": [
+        {
+          "source_ref": "#/parameters/rowFilter.allele_frequency.alleleid",
+          "name": "alleleid",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer",
+          "description": "The ID of the allele for this observation"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.allele_frequency.population",
+          "name": "population",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer",
+          "description": "The ID of the population for this observation"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.allele_frequency.frequency",
+          "name": "frequency",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "numeric",
+          "description": "The numeric representation of this frequency"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.allele_frequency.label",
+          "name": "label",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The textual label for this frequency, \"-\" means no observation made"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.allele_frequency.version",
+          "name": "version",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer",
+          "description": "The version number, iterates on modification"
+        },
+        {
+          "source_ref": "#/parameters/select",
+          "name": "select",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Filtering Columns"
+        },
+        {
+          "source_ref": "#/parameters/order",
+          "name": "order",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Ordering"
+        },
+        {
+          "source_ref": "#/parameters/range",
+          "name": "Range",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/rangeUnit",
+          "name": "Range-Unit",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination",
+          "default": "items"
+        },
+        {
+          "source_ref": "#/parameters/offset",
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/limit",
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/preferCount",
+          "name": "Prefer",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "count=none"
+          ],
+          "description": "Preference"
+        }
+      ]
+    },
+    {
+      "id": "CPIC GET /population_frequency_view",
+      "path": "/population_frequency_view",
+      "method": "GET",
+      "status": "schema-only",
+      "parameters": [
+        {
+          "source_ref": "#/parameters/rowFilter.population_frequency_view.genesymbol",
+          "name": "genesymbol",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "character varying",
+          "description": "The HGNC symbol of the gene"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.population_frequency_view.name",
+          "name": "name",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The allele name"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.population_frequency_view.population_group",
+          "name": "population_group",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The major grouping of population"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.population_frequency_view.subjectcount",
+          "name": "subjectcount",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "bigint",
+          "description": "The count of subjects assigned the population group for the given allele"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.population_frequency_view.freq_weighted_avg",
+          "name": "freq_weighted_avg",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "numeric",
+          "description": "The average frequency weighted by total subjects"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.population_frequency_view.freq_avg",
+          "name": "freq_avg",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "numeric",
+          "description": "The unweighted average frequency (use with caution)"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.population_frequency_view.freq_max",
+          "name": "freq_max",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "numeric",
+          "description": "The maximum frequency observed"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.population_frequency_view.freq_min",
+          "name": "freq_min",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "numeric",
+          "description": "The minimum frequency observed"
+        },
+        {
+          "source_ref": "#/parameters/select",
+          "name": "select",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Filtering Columns"
+        },
+        {
+          "source_ref": "#/parameters/order",
+          "name": "order",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Ordering"
+        },
+        {
+          "source_ref": "#/parameters/range",
+          "name": "Range",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/rangeUnit",
+          "name": "Range-Unit",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination",
+          "default": "items"
+        },
+        {
+          "source_ref": "#/parameters/offset",
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/limit",
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/preferCount",
+          "name": "Prefer",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "count=none"
+          ],
+          "description": "Preference"
+        }
+      ]
+    },
+    {
+      "id": "CPIC GET /file_status",
+      "path": "/file_status",
+      "method": "GET",
+      "status": "schema-only",
+      "parameters": [
+        {
+          "source_ref": "#/parameters/rowFilter.file_status.id",
+          "name": "id",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.file_status.entityids",
+          "name": "entityids",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text[]"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.file_status.type",
+          "name": "type",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.file_status.filename",
+          "name": "filename",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.file_status.url",
+          "name": "url",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.file_status.latest_change",
+          "name": "latest_change",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "timestamp without time zone"
+        },
+        {
+          "source_ref": "#/parameters/select",
+          "name": "select",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Filtering Columns"
+        },
+        {
+          "source_ref": "#/parameters/order",
+          "name": "order",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Ordering"
+        },
+        {
+          "source_ref": "#/parameters/range",
+          "name": "Range",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/rangeUnit",
+          "name": "Range-Unit",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination",
+          "default": "items"
+        },
+        {
+          "source_ref": "#/parameters/offset",
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/limit",
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/preferCount",
+          "name": "Prefer",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "count=none"
+          ],
+          "description": "Preference"
+        }
+      ]
+    },
+    {
+      "id": "CPIC GET /gene_result_lookup",
+      "path": "/gene_result_lookup",
+      "method": "GET",
+      "status": "observed",
+      "parameters": [
+        {
+          "source_ref": "#/parameters/rowFilter.gene_result_lookup.id",
+          "name": "id",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer",
+          "description": "A synthetic numerical ID, auto-assigned, primary key"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.gene_result_lookup.phenotypeid",
+          "name": "phenotypeid",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer",
+          "description": "An ID referencing the gene_result this is associated with, required"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.gene_result_lookup.lookupkey",
+          "name": "lookupkey",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "jsonb",
+          "description": "A normalized JSON format of the data used to lookup a diplotype. The keys of this field are either the functions, activity scores, or allele statuses depending on what the gene requires. Required."
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.gene_result_lookup.function1",
+          "name": "function1",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The first allele function"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.gene_result_lookup.function2",
+          "name": "function2",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The second allele function"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.gene_result_lookup.activityvalue1",
+          "name": "activityvalue1",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The activity score for the first allele function"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.gene_result_lookup.activityvalue2",
+          "name": "activityvalue2",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The activity score for the second allele function"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.gene_result_lookup.totalactivityscore",
+          "name": "totalactivityscore",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The sum activity score for the functions"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.gene_result_lookup.description",
+          "name": "description",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "A description of the diplotypes associated with this phenotype"
+        },
+        {
+          "source_ref": "#/parameters/select",
+          "name": "select",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Filtering Columns"
+        },
+        {
+          "source_ref": "#/parameters/order",
+          "name": "order",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Ordering"
+        },
+        {
+          "source_ref": "#/parameters/range",
+          "name": "Range",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/rangeUnit",
+          "name": "Range-Unit",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination",
+          "default": "items"
+        },
+        {
+          "source_ref": "#/parameters/offset",
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/limit",
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/preferCount",
+          "name": "Prefer",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "count=none"
+          ],
+          "description": "Preference"
+        }
+      ],
+      "examples": [
+        {
+          "request": {
+            "query": {
+              "limit": "1"
+            }
+          },
+          "status": 200,
+          "bytes": 285,
+          "sha256": "1ff23d9562fee43cd4e088d2f8e89ab2160d375a8f57c3924a8960b2b3a5bb9d",
+          "evidence_path": "/tmp/clinpgx_gap_cpic_gene_result_lookup_.json"
+        }
+      ]
+    },
+    {
+      "id": "CPIC GET /publication",
+      "path": "/publication",
+      "method": "GET",
+      "status": "schema-only",
+      "parameters": [
+        {
+          "source_ref": "#/parameters/rowFilter.publication.id",
+          "name": "id",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer",
+          "description": "A synthetic numerical ID, auto-assigned, primary key"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.publication.guidelineid",
+          "name": "guidelineid",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer",
+          "description": "The ID for the guideline this publication is about, optional"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.publication.title",
+          "name": "title",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.publication.authors",
+          "name": "authors",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text[]"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.publication.journal",
+          "name": "journal",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.publication.month",
+          "name": "month",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.publication.page",
+          "name": "page",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "character varying"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.publication.volume",
+          "name": "volume",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "character varying"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.publication.year",
+          "name": "year",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.publication.pmid",
+          "name": "pmid",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The PubMed identifier for this publication"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.publication.pmcid",
+          "name": "pmcid",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The PubMed Central identifier for this publication"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.publication.doi",
+          "name": "doi",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The Document Object Identifier (DOI) for this publication"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.publication.url",
+          "name": "url",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The URL for this publication"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.publication.version",
+          "name": "version",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.publication.highlightedonsite",
+          "name": "highlightedonsite",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "boolean",
+          "description": "true means this publication will show in the CPIC site Publications page, defaults to false"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.publication.fulltextfile",
+          "name": "fulltextfile",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "publicly-accessible URL to full text of publication"
+        },
+        {
+          "source_ref": "#/parameters/select",
+          "name": "select",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Filtering Columns"
+        },
+        {
+          "source_ref": "#/parameters/order",
+          "name": "order",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Ordering"
+        },
+        {
+          "source_ref": "#/parameters/range",
+          "name": "Range",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/rangeUnit",
+          "name": "Range-Unit",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination",
+          "default": "items"
+        },
+        {
+          "source_ref": "#/parameters/offset",
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/limit",
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/preferCount",
+          "name": "Prefer",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "count=none"
+          ],
+          "description": "Preference"
+        }
+      ]
+    },
+    {
+      "id": "CPIC GET /file_artifact_history",
+      "path": "/file_artifact_history",
+      "method": "GET",
+      "status": "schema-only",
+      "parameters": [
+        {
+          "source_ref": "#/parameters/rowFilter.file_artifact_history.id",
+          "name": "id",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer",
+          "description": "A synthetic numerical ID, auto-assigned, primary key"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.file_artifact_history.fileid",
+          "name": "fileid",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer",
+          "description": "The ID of the related File Artifact"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.file_artifact_history.source",
+          "name": "source",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "Where this history message originated from"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.file_artifact_history.changedate",
+          "name": "changedate",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "timestamp without time zone",
+          "description": "The date the change was applied"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.file_artifact_history.changemessage",
+          "name": "changemessage",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "A message describing the change that occurred"
+        },
+        {
+          "source_ref": "#/parameters/select",
+          "name": "select",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Filtering Columns"
+        },
+        {
+          "source_ref": "#/parameters/order",
+          "name": "order",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Ordering"
+        },
+        {
+          "source_ref": "#/parameters/range",
+          "name": "Range",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/rangeUnit",
+          "name": "Range-Unit",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination",
+          "default": "items"
+        },
+        {
+          "source_ref": "#/parameters/offset",
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/limit",
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/preferCount",
+          "name": "Prefer",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "count=none"
+          ],
+          "description": "Preference"
+        }
+      ]
+    },
+    {
+      "id": "CPIC GET /diplotype",
+      "path": "/diplotype",
+      "method": "GET",
+      "status": "observed",
+      "parameters": [
+        {
+          "source_ref": "#/parameters/rowFilter.diplotype.genesymbol",
+          "name": "genesymbol",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "character varying",
+          "description": "The HGNC symbol of the gene in this pair, required"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.diplotype.diplotype",
+          "name": "diplotype",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "A diplotype for the gene in the form Allele1/Allele2, required"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.diplotype.function1",
+          "name": "function1",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "A functional assignment of one of the alleles, optional"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.diplotype.function2",
+          "name": "function2",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "A functional assignment of one of the alleles, optional"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.diplotype.activityvalue1",
+          "name": "activityvalue1",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "An activity value assignment of one of the alleles, optional"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.diplotype.activityvalue2",
+          "name": "activityvalue2",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "An activity value assignment of one of the alleles, optional"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.diplotype.totalactivityscore",
+          "name": "totalactivityscore",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The total Activity Score number, optional"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.diplotype.description",
+          "name": "description",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The long-form description of the diplotype"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.diplotype.diplotypekey",
+          "name": "diplotypekey",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "jsonb",
+          "description": "A normalized version of the diplotype that can be used for DB lookups"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.diplotype.generesult",
+          "name": "generesult",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The result for a gene, can either be a phenotype or \"allele status\" depending on the lookup method for the gene (see lookupMethod in gene table), required"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.diplotype.ehrpriority",
+          "name": "ehrpriority",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.diplotype.consultationtext",
+          "name": "consultationtext",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.diplotype.lookupkey",
+          "name": "lookupkey",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "json",
+          "description": "A normalized version of the gene phenotype that can be used for recommendation or test alert lookup"
+        },
+        {
+          "source_ref": "#/parameters/select",
+          "name": "select",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Filtering Columns"
+        },
+        {
+          "source_ref": "#/parameters/order",
+          "name": "order",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Ordering"
+        },
+        {
+          "source_ref": "#/parameters/range",
+          "name": "Range",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/rangeUnit",
+          "name": "Range-Unit",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination",
+          "default": "items"
+        },
+        {
+          "source_ref": "#/parameters/offset",
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/limit",
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/preferCount",
+          "name": "Prefer",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "count=none"
+          ],
+          "description": "Preference"
+        }
+      ],
+      "examples": [
+        {
+          "request": {
+            "query": {
+              "limit": "1"
+            }
+          },
+          "status": 200,
+          "bytes": 555,
+          "sha256": "39dbd4c7c92dc01d656dd315592b5e07cb648e9fba63dc3d0d5a32a23346b060",
+          "evidence_path": "/tmp/clinpgx_gap_cpic_diplotype_.json"
+        }
+      ]
+    },
+    {
+      "id": "CPIC GET /allele_guideline_view",
+      "path": "/allele_guideline_view",
+      "method": "GET",
+      "status": "observed",
+      "parameters": [
+        {
+          "source_ref": "#/parameters/rowFilter.allele_guideline_view.genesymbol",
+          "name": "genesymbol",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "character varying",
+          "description": "The HGNC symbol of the gene"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.allele_guideline_view.allele_name",
+          "name": "allele_name",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The name of the allele"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.allele_guideline_view.guideline_name",
+          "name": "guideline_name",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The name of the guideline this allele appears in"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.allele_guideline_view.guideline_url",
+          "name": "guideline_url",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The URL to the guideline"
+        },
+        {
+          "source_ref": "#/parameters/select",
+          "name": "select",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Filtering Columns"
+        },
+        {
+          "source_ref": "#/parameters/order",
+          "name": "order",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Ordering"
+        },
+        {
+          "source_ref": "#/parameters/range",
+          "name": "Range",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/rangeUnit",
+          "name": "Range-Unit",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination",
+          "default": "items"
+        },
+        {
+          "source_ref": "#/parameters/offset",
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/limit",
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/preferCount",
+          "name": "Prefer",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "count=none"
+          ],
+          "description": "Preference"
+        }
+      ],
+      "examples": [
+        {
+          "request": {
+            "query": {
+              "limit": "1"
+            }
+          },
+          "status": 200,
+          "bytes": 183,
+          "sha256": "fa666e5895253dd573a4da458b0a9d798018b74bb9766a4a4b42bd0742dbd0d4",
+          "evidence_path": "/tmp/clinpgx_gap_cpic_allele_guideline_view_.json"
+        }
+      ]
+    },
+    {
+      "id": "CPIC GET /recommendation_alleles_view",
+      "path": "/recommendation_alleles_view",
+      "method": "GET",
+      "status": "observed",
+      "parameters": [
+        {
+          "source_ref": "#/parameters/rowFilter.recommendation_alleles_view.genesymbol",
+          "name": "genesymbol",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "character varying"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.recommendation_alleles_view.chr",
+          "name": "chr",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "character varying"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.recommendation_alleles_view.lookupmethod",
+          "name": "lookupmethod",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.recommendation_alleles_view.alleles",
+          "name": "alleles",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text[]"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.recommendation_alleles_view.allele_count",
+          "name": "allele_count",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "bigint"
+        },
+        {
+          "source_ref": "#/parameters/select",
+          "name": "select",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Filtering Columns"
+        },
+        {
+          "source_ref": "#/parameters/order",
+          "name": "order",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Ordering"
+        },
+        {
+          "source_ref": "#/parameters/range",
+          "name": "Range",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/rangeUnit",
+          "name": "Range-Unit",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination",
+          "default": "items"
+        },
+        {
+          "source_ref": "#/parameters/offset",
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/limit",
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/preferCount",
+          "name": "Prefer",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "count=none"
+          ],
+          "description": "Preference"
+        }
+      ],
+      "examples": [
+        {
+          "request": {
+            "query": {
+              "limit": "1"
+            }
+          },
+          "status": 200,
+          "bytes": 143,
+          "sha256": "4f43aafd2ed390c9a9c660333c84f1e7bebb0ecaa8c1f3d5248d2d41bfccd1bd",
+          "evidence_path": "/tmp/clinpgx_gap_cpic_recommendation_alleles_view_.json"
+        }
+      ]
+    },
+    {
+      "id": "CPIC GET /gene_result",
+      "path": "/gene_result",
+      "method": "GET",
+      "status": "schema-only",
+      "parameters": [
+        {
+          "source_ref": "#/parameters/rowFilter.gene_result.id",
+          "name": "id",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer",
+          "description": "A synthetic numerical ID, auto-assigned, primary key"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.gene_result.genesymbol",
+          "name": "genesymbol",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "character varying",
+          "description": "The HGNC symbol of the gene in this pair, required"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.gene_result.result",
+          "name": "result",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The result for a gene, can either be a phenotype or \"allele status\" depending on the lookup method for the gene (see lookupMethod in gene table), required"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.gene_result.activityscore",
+          "name": "activityscore",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "Activity score, optional"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.gene_result.ehrpriority",
+          "name": "ehrpriority",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "EHR Priority Result, optional"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.gene_result.consultationtext",
+          "name": "consultationtext",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "Consultation (Interpretation) Text Provided with Test Result"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.gene_result.version",
+          "name": "version",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.gene_result.frequency",
+          "name": "frequency",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "jsonb",
+          "description": "JSON map of frequencies for this gene result with keys being biogeographical groups"
+        },
+        {
+          "source_ref": "#/parameters/select",
+          "name": "select",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Filtering Columns"
+        },
+        {
+          "source_ref": "#/parameters/order",
+          "name": "order",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Ordering"
+        },
+        {
+          "source_ref": "#/parameters/range",
+          "name": "Range",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/rangeUnit",
+          "name": "Range-Unit",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination",
+          "default": "items"
+        },
+        {
+          "source_ref": "#/parameters/offset",
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/limit",
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/preferCount",
+          "name": "Prefer",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "count=none"
+          ],
+          "description": "Preference"
+        }
+      ]
+    },
+    {
+      "id": "CPIC GET /gene_result_diplotype",
+      "path": "/gene_result_diplotype",
+      "method": "GET",
+      "status": "schema-only",
+      "parameters": [
+        {
+          "source_ref": "#/parameters/rowFilter.gene_result_diplotype.id",
+          "name": "id",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer",
+          "description": "A synthetic numerical ID, auto-assigned, primary key"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.gene_result_diplotype.functionphenotypeid",
+          "name": "functionphenotypeid",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer",
+          "description": "An ID referencing a gene_result_lookup record, required"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.gene_result_diplotype.diplotype",
+          "name": "diplotype",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "A diplotype for the gene in the form Allele1/Allele2, required"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.gene_result_diplotype.diplotypekey",
+          "name": "diplotypekey",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "jsonb",
+          "description": "A normalized JSON version of the diplotype for use in lookups. Should be an object with the allele names as properties and the counts as the values. Required"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.gene_result_diplotype.frequency",
+          "name": "frequency",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "jsonb"
+        },
+        {
+          "source_ref": "#/parameters/select",
+          "name": "select",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Filtering Columns"
+        },
+        {
+          "source_ref": "#/parameters/order",
+          "name": "order",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Ordering"
+        },
+        {
+          "source_ref": "#/parameters/range",
+          "name": "Range",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/rangeUnit",
+          "name": "Range-Unit",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination",
+          "default": "items"
+        },
+        {
+          "source_ref": "#/parameters/offset",
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/limit",
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/preferCount",
+          "name": "Prefer",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "count=none"
+          ],
+          "description": "Preference"
+        }
+      ]
+    },
+    {
+      "id": "CPIC GET /allele_definition",
+      "path": "/allele_definition",
+      "method": "GET",
+      "status": "observed",
+      "parameters": [
+        {
+          "source_ref": "#/parameters/rowFilter.allele_definition.id",
+          "name": "id",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer",
+          "description": "A synthetic numerical ID, auto-assigned, primary key"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.allele_definition.version",
+          "name": "version",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.allele_definition.genesymbol",
+          "name": "genesymbol",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "character varying",
+          "description": "The HGNC symbol of the gene the allele is for, required"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.allele_definition.name",
+          "name": "name",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The name of this allele, required"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.allele_definition.pharmvarid",
+          "name": "pharmvarid",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "character varying",
+          "description": "The PharmVar core allele ID for this allele"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.allele_definition.matchesreferencesequence",
+          "name": "matchesreferencesequence",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "boolean",
+          "description": "Indicates (with \"true\") the variants that define the named allele will match the reference sequence for the gene, defaults to false, should only be 1 per gene"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.allele_definition.structuralvariation",
+          "name": "structuralvariation",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "boolean",
+          "description": "Indicates whether this allele definition is a structural variant, default is false. If true, look in the pharmvarid field for the PharmVar ID that defines the structural variation."
+        },
+        {
+          "source_ref": "#/parameters/select",
+          "name": "select",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Filtering Columns"
+        },
+        {
+          "source_ref": "#/parameters/order",
+          "name": "order",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Ordering"
+        },
+        {
+          "source_ref": "#/parameters/range",
+          "name": "Range",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/rangeUnit",
+          "name": "Range-Unit",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination",
+          "default": "items"
+        },
+        {
+          "source_ref": "#/parameters/offset",
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/limit",
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/preferCount",
+          "name": "Prefer",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "count=none"
+          ],
+          "description": "Preference"
+        }
+      ],
+      "examples": [
+        {
+          "request": {
+            "query": {
+              "limit": "1"
+            }
+          },
+          "status": 200,
+          "bytes": 141,
+          "sha256": "68a8073c6d227c6cc747c684c758c5b42875562a0ae3be0e87526294e2d40e5a",
+          "evidence_path": "/tmp/clinpgx_gap_cpic_allele_definition_.json"
+        },
+        {
+          "request": {
+            "query": {
+              "limit": "2",
+              "offset": "0"
+            },
+            "headers": {
+              "Prefer": "count=exact"
+            }
+          },
+          "status": 206,
+          "content_type": "application/json; charset=utf-8",
+          "bytes": 284,
+          "sha256": "61848ae41694a115f6c39b7df2cebbbfd9a79fc3ffb1b655b15574afef865d51",
+          "headers_capture": "/tmp/clinpgx_gap_cpic_allele_definition_page.headers",
+          "headers_sha256": "3b2206a17d6dfbb8370943ad6f673091ccec8389dd135cc57347c09893325bba",
+          "content_range": "0-1/1354",
+          "preference_applied": "count=exact",
+          "record_count": 2,
+          "total_count": 1354,
+          "evidence_path": "/tmp/clinpgx_gap_cpic_allele_definition_page.json"
+        }
+      ]
+    },
+    {
+      "id": "CPIC GET /allele",
+      "path": "/allele",
+      "method": "GET",
+      "status": "schema-only",
+      "parameters": [
+        {
+          "source_ref": "#/parameters/rowFilter.allele.id",
+          "name": "id",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer",
+          "description": "A synthetic numerical ID, auto-assigned, primary key"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.allele.version",
+          "name": "version",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer",
+          "description": "The version number, iterates on modification"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.allele.genesymbol",
+          "name": "genesymbol",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "character varying",
+          "description": "The HGNC symbol of the gene the allele is for, required"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.allele.name",
+          "name": "name",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The name of this allele, required"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.allele.functionalstatus",
+          "name": "functionalstatus",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The functional phenotype of this allele"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.allele.clinicalfunctionalstatus",
+          "name": "clinicalfunctionalstatus",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The functional phenotype of this allele used for clinical systems"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.allele.clinicalfunctionalsubstrate",
+          "name": "clinicalfunctionalsubstrate",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "Allele clinical function substrate specificity, optional"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.allele.activityvalue",
+          "name": "activityvalue",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "character varying",
+          "description": "Descriptor of activity score, optional"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.allele.definitionid",
+          "name": "definitionid",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer",
+          "description": "The reference to the definition for this allele"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.allele.citations",
+          "name": "citations",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text[]",
+          "description": "An array of PubMed IDs use as citations for this functional assignment"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.allele.strength",
+          "name": "strength",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The strength of evidence"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.allele.functioncomments",
+          "name": "functioncomments",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "Comments this functional assignment of this allele"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.allele.findings",
+          "name": "findings",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.allele.frequency",
+          "name": "frequency",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "jsonb"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.allele.inferredfrequency",
+          "name": "inferredfrequency",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "boolean",
+          "description": "Indicates (with \"true\") that the frequencies for this allele have been inferred by an algorithm that aggregates the frequencies for other alleles of this gene and is not based on direct data, defaults to false, should only be 1 per gene"
+        },
+        {
+          "source_ref": "#/parameters/select",
+          "name": "select",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Filtering Columns"
+        },
+        {
+          "source_ref": "#/parameters/order",
+          "name": "order",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Ordering"
+        },
+        {
+          "source_ref": "#/parameters/range",
+          "name": "Range",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/rangeUnit",
+          "name": "Range-Unit",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination",
+          "default": "items"
+        },
+        {
+          "source_ref": "#/parameters/offset",
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/limit",
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/preferCount",
+          "name": "Prefer",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "count=none"
+          ],
+          "description": "Preference"
+        }
+      ]
+    },
+    {
+      "id": "CPIC GET /guideline_summary_view",
+      "path": "/guideline_summary_view",
+      "method": "GET",
+      "status": "schema-only",
+      "parameters": [
+        {
+          "source_ref": "#/parameters/rowFilter.guideline_summary_view.guideline_name",
+          "name": "guideline_name",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The title of the guideline"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.guideline_summary_view.guideline_url",
+          "name": "guideline_url",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The URL of the guideline on the CPIC website"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.guideline_summary_view.drugs",
+          "name": "drugs",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text[]",
+          "description": "An array of drug names associated with this guideline"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.guideline_summary_view.genes",
+          "name": "genes",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "jsonb",
+          "description": "An array of gene data associated with this guideline, each object will have a symbol and a URL for the gene on the CPIC website"
+        },
+        {
+          "source_ref": "#/parameters/select",
+          "name": "select",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Filtering Columns"
+        },
+        {
+          "source_ref": "#/parameters/order",
+          "name": "order",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Ordering"
+        },
+        {
+          "source_ref": "#/parameters/range",
+          "name": "Range",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/rangeUnit",
+          "name": "Range-Unit",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination",
+          "default": "items"
+        },
+        {
+          "source_ref": "#/parameters/offset",
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/limit",
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/preferCount",
+          "name": "Prefer",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "count=none"
+          ],
+          "description": "Preference"
+        }
+      ]
+    },
+    {
+      "id": "CPIC GET /term",
+      "path": "/term",
+      "method": "GET",
+      "status": "schema-only",
+      "parameters": [
+        {
+          "source_ref": "#/parameters/rowFilter.term.id",
+          "name": "id",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer",
+          "description": "A synthetic numerical ID, auto-assigned, primary key"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.term.category",
+          "name": "category",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "Category group this term falls into"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.term.term",
+          "name": "term",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The term name"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.term.functionaldef",
+          "name": "functionaldef",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The functional definition of the term"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.term.geneticdef",
+          "name": "geneticdef",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The genetic definition of the term"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.term.loinc",
+          "name": "loinc",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The LOINC identifier for the term"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.term.version",
+          "name": "version",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer"
+        },
+        {
+          "source_ref": "#/parameters/select",
+          "name": "select",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Filtering Columns"
+        },
+        {
+          "source_ref": "#/parameters/order",
+          "name": "order",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Ordering"
+        },
+        {
+          "source_ref": "#/parameters/range",
+          "name": "Range",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/rangeUnit",
+          "name": "Range-Unit",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination",
+          "default": "items"
+        },
+        {
+          "source_ref": "#/parameters/offset",
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/limit",
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/preferCount",
+          "name": "Prefer",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "count=none"
+          ],
+          "description": "Preference"
+        }
+      ]
+    },
+    {
+      "id": "CPIC GET /gene",
+      "path": "/gene",
+      "method": "GET",
+      "status": "schema-only",
+      "parameters": [
+        {
+          "source_ref": "#/parameters/rowFilter.gene.symbol",
+          "name": "symbol",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "character varying",
+          "description": "Approved HGNC symbol, primary key."
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.gene.chr",
+          "name": "chr",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "character varying",
+          "description": "Chromosome symbol. In the form chr##, where ## is the number or X/Y."
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.gene.genesequenceid",
+          "name": "genesequenceid",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The RefSeq ID for the sequence that represents this gene, starts with \"NG_\". No version suffix."
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.gene.proteinsequenceid",
+          "name": "proteinsequenceid",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The RefSeq ID for the sequence that represents the protein product of this gene, starts with \"NP_\". No version suffix."
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.gene.chromosequenceid",
+          "name": "chromosequenceid",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The RefSeq ID for the sequence that represents the chromosome this gene is on, starts with \"NC_\". No version suffix."
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.gene.mrnasequenceid",
+          "name": "mrnasequenceid",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The RefSeq ID for the sequence that represents the translation of this gene, starts with \"NM_\". No version suffix."
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.gene.hgncid",
+          "name": "hgncid",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The HGNC numerical ID number for this gene prefixed by \"HGNC:\""
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.gene.ncbiid",
+          "name": "ncbiid",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The NCBI Gene (Entrez) ID number for this gene"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.gene.ensemblid",
+          "name": "ensemblid",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The Ensembl ID for this gene"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.gene.clinpgxid",
+          "name": "clinpgxid",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The ID for this gene in ClinPGx"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.gene.frequencymethods",
+          "name": "frequencymethods",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "Text documentation of the methods and caveats for allele frequency data"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.gene.lookupmethod",
+          "name": "lookupmethod",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The way to lookup information about diplotypes of this gene, should use ACTIVITY_SCORE, PHENOTYPE, or ALLELE_STATUS"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.gene.version",
+          "name": "version",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.gene.notesondiplotype",
+          "name": "notesondiplotype",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "Optional notes about the diplotypes of the gene"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.gene.url",
+          "name": "url",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.gene.functionmethods",
+          "name": "functionmethods",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.gene.notesonallelenaming",
+          "name": "notesonallelenaming",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.gene.includephenotypefrequencies",
+          "name": "includephenotypefrequencies",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "boolean",
+          "description": "if allele frequencies exist for this gene, whether to calculate and display phenotype-level frequencies. a true value does not imply existence frequency data"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.gene.includediplotypefrequencies",
+          "name": "includediplotypefrequencies",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "boolean",
+          "description": "if allele frequencies exist for this gene, whether to calculate and display diplotype-level frequencies. a true value does not imply existence frequency data"
+        },
+        {
+          "source_ref": "#/parameters/select",
+          "name": "select",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Filtering Columns"
+        },
+        {
+          "source_ref": "#/parameters/order",
+          "name": "order",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Ordering"
+        },
+        {
+          "source_ref": "#/parameters/range",
+          "name": "Range",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/rangeUnit",
+          "name": "Range-Unit",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination",
+          "default": "items"
+        },
+        {
+          "source_ref": "#/parameters/offset",
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/limit",
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/preferCount",
+          "name": "Prefer",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "count=none"
+          ],
+          "description": "Preference"
+        }
+      ]
+    },
+    {
+      "id": "CPIC GET /recommendation",
+      "path": "/recommendation",
+      "method": "GET",
+      "status": "schema-only",
+      "parameters": [
+        {
+          "source_ref": "#/parameters/rowFilter.recommendation.id",
+          "name": "id",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer",
+          "description": "A synthetic numerical ID, auto-assigned, primary key"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.recommendation.guidelineid",
+          "name": "guidelineid",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer",
+          "description": "The guideline this recommendation appears in"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.recommendation.drugid",
+          "name": "drugid",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "character varying",
+          "description": "The drug this recommendation is for"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.recommendation.implications",
+          "name": "implications",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "jsonb",
+          "description": "Implications for phenotypic measures, this is a JSON mapping of gene to implication"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.recommendation.drugrecommendation",
+          "name": "drugrecommendation",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "Dosing or therapeutic recommendations, depending on particular drug"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.recommendation.classification",
+          "name": "classification",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "character varying",
+          "description": "Classification of recommendations, described in supplementary meterial"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.recommendation.phenotypes",
+          "name": "phenotypes",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "jsonb",
+          "description": "Phenotypes that this recommendation applies to, this is a JSON mapping of gene to phenotype"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.recommendation.activityscore",
+          "name": "activityscore",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "jsonb",
+          "description": "Activity score that this recommendation applies to, this is a JSON mapping of gene to score value"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.recommendation.allelestatus",
+          "name": "allelestatus",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "jsonb",
+          "description": "Whether or not an allele is present, used mainly for HLA genes, and used for recommendation lookups. This is a JSON mapping of gene to allele status (positive/negative)"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.recommendation.lookupkey",
+          "name": "lookupkey",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "jsonb",
+          "description": "A key to use for finding a specific recommendation. Made of a JSON object of gene symbol to key value. The key value can be one of phenotype, activity score, or allele status depending on the gene."
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.recommendation.population",
+          "name": "population",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The population this recommendation is applicable to"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.recommendation.comments",
+          "name": "comments",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "Optional comments about the recommendation"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.recommendation.version",
+          "name": "version",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.recommendation.dosinginformation",
+          "name": "dosinginformation",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "boolean",
+          "description": "The guideline recommends a dose adjustment based on genetic variants or phenotypes (e.g. \"poor metabolizers\") as a primary course of action. However, the guideline may also describe extenuating circumstances where this action is not appropriate."
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.recommendation.alternatedrugavailable",
+          "name": "alternatedrugavailable",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "boolean",
+          "description": "The guideline recommends that an alternate drug be selected for patients based on genetic variants or phenotypes (e.g. \"poor metabolizers\") as a primary course of action. However, the guideline may also describe extenuating circumstances where this action is not appropriate."
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.recommendation.otherprescribingguidance",
+          "name": "otherprescribingguidance",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "boolean",
+          "description": "The guideline and other prescribing guidance not described as either dose adjustment or alternate drug."
+        },
+        {
+          "source_ref": "#/parameters/select",
+          "name": "select",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Filtering Columns"
+        },
+        {
+          "source_ref": "#/parameters/order",
+          "name": "order",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Ordering"
+        },
+        {
+          "source_ref": "#/parameters/range",
+          "name": "Range",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/rangeUnit",
+          "name": "Range-Unit",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination",
+          "default": "items"
+        },
+        {
+          "source_ref": "#/parameters/offset",
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/limit",
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/preferCount",
+          "name": "Prefer",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "count=none"
+          ],
+          "description": "Preference"
+        }
+      ]
+    },
+    {
+      "id": "CPIC GET /test_alert",
+      "path": "/test_alert",
+      "method": "GET",
+      "status": "schema-only",
+      "parameters": [
+        {
+          "source_ref": "#/parameters/rowFilter.test_alert.id",
+          "name": "id",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer",
+          "description": "A synthetic numerical ID, primary key"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.test_alert.population",
+          "name": "population",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The population this test alert is applicable to: general, adult, pediatrics, unspecified"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.test_alert.cdscontext",
+          "name": "cdscontext",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "This should be either \"Pre-test\", \"Post-test\" or \"No CDS\". This field is non-null"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.test_alert.genes",
+          "name": "genes",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text[]",
+          "description": "One or more genes this test alert uses for trigger conditions"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.test_alert.phenotype",
+          "name": "phenotype",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "jsonb",
+          "description": "A JSON object of gene symbol keys to phenotype description"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.test_alert.activityscore",
+          "name": "activityscore",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "jsonb",
+          "description": "A JSON object of gene symbol keys to gene activity score"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.test_alert.allelestatus",
+          "name": "allelestatus",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "jsonb",
+          "description": "Whether or not an allele is present, used mainly for HLA genes. This is a JSON mapping of gene to allele status (positive/negative)"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.test_alert.lookupkey",
+          "name": "lookupkey",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "jsonb",
+          "description": "A key to use for finding a specific test alert. Made of a JSON object of gene symbol to key value. The key value can be one of phenotype, activity score, or allele status depending on the gene."
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.test_alert.drugid",
+          "name": "drugid",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "character varying",
+          "description": "The ID of a drug this alert text is for"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.test_alert.alerttext",
+          "name": "alerttext",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text[]",
+          "description": "An array of one or more pieces of alert text"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.test_alert.version",
+          "name": "version",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer"
+        },
+        {
+          "source_ref": "#/parameters/select",
+          "name": "select",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Filtering Columns"
+        },
+        {
+          "source_ref": "#/parameters/order",
+          "name": "order",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Ordering"
+        },
+        {
+          "source_ref": "#/parameters/range",
+          "name": "Range",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/rangeUnit",
+          "name": "Range-Unit",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination",
+          "default": "items"
+        },
+        {
+          "source_ref": "#/parameters/offset",
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/limit",
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/preferCount",
+          "name": "Prefer",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "count=none"
+          ],
+          "description": "Preference"
+        }
+      ]
+    },
+    {
+      "id": "CPIC GET /publication_supplement",
+      "path": "/publication_supplement",
+      "method": "GET",
+      "status": "schema-only",
+      "parameters": [
+        {
+          "source_ref": "#/parameters/rowFilter.publication_supplement.id",
+          "name": "id",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer",
+          "description": "A synthetic numerical ID, primary key"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.publication_supplement.publicationid",
+          "name": "publicationid",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer",
+          "description": "A foreign-key reference to the publication this is a supplement for"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.publication_supplement.description",
+          "name": "description",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "An optional free text description of the supplemental file"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.publication_supplement.url",
+          "name": "url",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text",
+          "description": "The publicly-accessible URL to the supplemental file"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.publication_supplement.version",
+          "name": "version",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "integer",
+          "description": "The version number, iterates on modification"
+        },
+        {
+          "source_ref": "#/parameters/select",
+          "name": "select",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Filtering Columns"
+        },
+        {
+          "source_ref": "#/parameters/order",
+          "name": "order",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Ordering"
+        },
+        {
+          "source_ref": "#/parameters/range",
+          "name": "Range",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/rangeUnit",
+          "name": "Range-Unit",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination",
+          "default": "items"
+        },
+        {
+          "source_ref": "#/parameters/offset",
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/limit",
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/preferCount",
+          "name": "Prefer",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "count=none"
+          ],
+          "description": "Preference"
+        }
+      ]
+    },
+    {
+      "id": "CPIC GET /change_log_view",
+      "path": "/change_log_view",
+      "method": "GET",
+      "status": "schema-only",
+      "parameters": [
+        {
+          "source_ref": "#/parameters/rowFilter.change_log_view.date",
+          "name": "date",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "date"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.change_log_view.type",
+          "name": "type",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.change_log_view.entityname",
+          "name": "entityname",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "character varying"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.change_log_view.note",
+          "name": "note",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.change_log_view.deployedrelease",
+          "name": "deployedrelease",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text"
+        },
+        {
+          "source_ref": "#/parameters/select",
+          "name": "select",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Filtering Columns"
+        },
+        {
+          "source_ref": "#/parameters/order",
+          "name": "order",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Ordering"
+        },
+        {
+          "source_ref": "#/parameters/range",
+          "name": "Range",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/rangeUnit",
+          "name": "Range-Unit",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination",
+          "default": "items"
+        },
+        {
+          "source_ref": "#/parameters/offset",
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/limit",
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/preferCount",
+          "name": "Prefer",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "count=none"
+          ],
+          "description": "Preference"
+        }
+      ]
+    },
+    {
+      "id": "CPIC GET /data_progress",
+      "path": "/data_progress",
+      "method": "GET",
+      "status": "schema-only",
+      "parameters": [
+        {
+          "source_ref": "#/parameters/rowFilter.data_progress.object_class",
+          "name": "object_class",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.data_progress.data_type",
+          "name": "data_type",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "text"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.data_progress.object_name",
+          "name": "object_name",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "character varying"
+        },
+        {
+          "source_ref": "#/parameters/rowFilter.data_progress.n",
+          "name": "n",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "format": "bigint"
+        },
+        {
+          "source_ref": "#/parameters/select",
+          "name": "select",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Filtering Columns"
+        },
+        {
+          "source_ref": "#/parameters/order",
+          "name": "order",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Ordering"
+        },
+        {
+          "source_ref": "#/parameters/range",
+          "name": "Range",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/rangeUnit",
+          "name": "Range-Unit",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination",
+          "default": "items"
+        },
+        {
+          "source_ref": "#/parameters/offset",
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/limit",
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Limiting and Pagination"
+        },
+        {
+          "source_ref": "#/parameters/preferCount",
+          "name": "Prefer",
+          "in": "header",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "count=none"
+          ],
+          "description": "Preference"
+        }
+      ]
+    },
+    {
+      "id": "CPIC GET /rpc/clinpgx_guideline_alleles",
+      "path": "/rpc/clinpgx_guideline_alleles",
+      "method": "GET",
+      "status": "schema-only",
+      "parameters": [
+        {
+          "format": "text",
+          "in": "query",
+          "name": "clinpgxdrugid",
+          "required": true,
+          "type": "string"
+        }
+      ],
+      "kind": "rpc_reference_get"
+    },
+    {
+      "id": "CPIC GET /rpc/test_alert_lookup",
+      "path": "/rpc/test_alert_lookup",
+      "method": "GET",
+      "status": "schema-only",
+      "parameters": [
+        {
+          "format": "text",
+          "in": "query",
+          "name": "lookup",
+          "required": true,
+          "type": "string"
+        }
+      ],
+      "kind": "rpc_reference_get"
+    },
+    {
+      "id": "CPIC GET /rpc/clinpgx_guideline_recommendation",
+      "path": "/rpc/clinpgx_guideline_recommendation",
+      "method": "GET",
+      "status": "schema-only",
+      "parameters": [
+        {
+          "format": "text",
+          "in": "query",
+          "name": "clinpgxdrugid",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "format": "text",
+          "in": "query",
+          "name": "lookupkeyarg",
+          "required": true,
+          "type": "string"
+        }
+      ],
+      "kind": "rpc_reference_get"
+    },
+    {
+      "id": "CPIC GET /rpc/recommendation_lookup",
+      "path": "/rpc/recommendation_lookup",
+      "method": "GET",
+      "status": "schema-only",
+      "parameters": [
+        {
+          "format": "text",
+          "in": "query",
+          "name": "diplotypelookup",
+          "required": true,
+          "type": "string"
+        }
+      ],
+      "kind": "rpc_reference_get"
+    }
+  ]
+}
