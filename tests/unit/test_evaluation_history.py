@@ -19,7 +19,12 @@ SHA = "a" * 64
 COMMIT = "c" * 40
 
 
-def _attempt(attempt_id: str, *, transport_passed: bool = True) -> AttemptEvidence:
+def _attempt(
+    attempt_id: str,
+    *,
+    transport_passed: bool = True,
+    observed_model: str | None = "claude-opus-5",
+) -> AttemptEvidence:
     scores = dict.fromkeys(ASPECTS, 95)
     return AttemptEvidence.model_validate(
         {
@@ -39,7 +44,7 @@ def _attempt(attempt_id: str, *, transport_passed: bool = True) -> AttemptEviden
             "judge_report_sha256": SHA,
             "requested_model": "opus",
             "expected_model": "claude-opus-5",
-            "observed_model": "claude-opus-5",
+            "observed_model": observed_model,
             "requested_effort": None,
             "observed_effort": None,
             "effort_unavailable_reason": "not_configured_or_exposed",
@@ -78,6 +83,15 @@ def test_append_creates_private_canonical_history_and_retains_failed_attempt(
     assert path.stat().st_mode & 0o777 == 0o600
     assert directory.stat().st_mode & 0o777 == 0o700
     assert read_attempts(directory) == (evidence,)
+
+
+def test_history_preserves_failed_attempt_with_unobserved_model(tmp_path: Path) -> None:
+    directory = tmp_path / "private-attempts"
+    evidence = _attempt("unobserved-model", transport_passed=False, observed_model=None)
+
+    append_attempt(directory, evidence)
+
+    assert read_attempts(directory)[0].observed_model is None
 
 
 def test_append_is_exclusive_and_read_order_is_attempt_id_not_mtime(tmp_path: Path) -> None:

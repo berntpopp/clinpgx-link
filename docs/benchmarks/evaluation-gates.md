@@ -80,7 +80,8 @@ All mappings reject extra keys through their typed enclosing models.
 | `candidate_sha` | Git identity |
 | `snapshot_sha256`, `config_sha256`, `prompt_sha256` | required SHA-256 identities |
 | `trace_sha256`, `source_assertions_sha256`, `judge_view_sha256`, `judge_report_sha256` | SHA-256 identity or `null`; null is nonpassing |
-| `requested_model`, `expected_model`, `observed_model` | bounded strings; only expected versus observed is compared at attempt scope |
+| `requested_model`, `expected_model` | bounded strings |
+| `observed_model` | bounded string or `null`; null records unavailable identity and is nonpassing |
 | `requested_effort`, `observed_effort` | bounded string or `null` |
 | `effort_unavailable_reason` | `not_configured`, `not_exposed_by_client`, `not_configured_or_exposed`, or `null`; required iff either effort is null |
 | `model_rerouted`, `transport_passed`, `trace_complete` | strict booleans |

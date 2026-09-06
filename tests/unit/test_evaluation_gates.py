@@ -78,6 +78,17 @@ def _attempt(**overrides: object) -> AttemptEvidence:
     return AttemptEvidence.model_validate(values)
 
 
+def test_missing_observed_model_is_recordable_and_nonpassing() -> None:
+    evidence = _attempt(observed_model=None, transport_passed=False)
+
+    result = evaluate_attempt(evidence)
+
+    assert evidence.observed_model is None
+    assert result.passed is False
+    assert "observed_model_mismatch" in result.failures
+    assert "transport_failed" in result.failures
+
+
 def _tasks(count: int, *, heldout: int = 0) -> dict[str, dict[str, str]]:
     tasks = {
         f"task-{index:02d}": {"suite": "frozen12", "prompt_sha256": SHA}

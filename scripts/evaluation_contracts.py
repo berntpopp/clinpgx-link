@@ -96,7 +96,7 @@ class AttemptEvidence(StrictModel):
     judge_report_sha256: Sha256 | None
     requested_model: BoundedString
     expected_model: BoundedString
-    observed_model: BoundedString
+    observed_model: BoundedString | None
     requested_effort: BoundedString | None
     observed_effort: BoundedString | None
     effort_unavailable_reason: EffortUnavailableReason | None
