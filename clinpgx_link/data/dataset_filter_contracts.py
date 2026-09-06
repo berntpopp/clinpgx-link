@@ -31,10 +31,10 @@ _REGISTERED_DATASET_IDS = _registered_dataset_ids()
 def is_known_dataset_filter_contract(dataset_id: object, filters: object) -> bool:
     """Accept only a registry identity and one exact code-owned filter contract."""
     return (
-        isinstance(dataset_id, str)
+        type(dataset_id) is str
         and dataset_id in _REGISTERED_DATASET_IDS
         and type(filters) is tuple
-        and all(isinstance(item, str) for item in filters)
+        and all(type(item) is str for item in filters)
         and filters in known_filter_contracts(dataset_id)
     )
 

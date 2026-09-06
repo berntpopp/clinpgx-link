@@ -235,6 +235,28 @@ def test_forged_dataset_filter_context_fails_closed_without_reflection():
     assert payload["fallback_tool"] == "get_server_capabilities"
 
 
+def test_string_subclass_recovery_context_fails_closed_before_hashing():
+    class RaisingHash(str):
+        def __hash__(self):
+            raise AssertionError("forged strings must not be hashed")
+
+    for forged in (
+        DatasetFilterError(
+            dataset_id=RaisingHash("data/genes.zip"),
+            known_filters=("gene", "id", "name"),
+        ),
+        DatasetFilterError(
+            dataset_id="data/genes.zip",
+            known_filters=(RaisingHash("gene"), "id", "name"),
+        ),
+    ):
+        payload = dataset_search_error_result(forged).structured_content
+        assert payload["error_code"] == "invalid_input"
+        assert payload["fallback_tool"] == "get_server_capabilities"
+        assert payload["fallback_args"] == {}
+        assert "recovery" not in payload
+
+
 def test_filter_error_path_skips_row_query_and_success_keeps_one_row_query(tmp_path, monkeypatch):
     repository, _ = _repository(tmp_path)
     calls = 0
