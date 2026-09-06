@@ -13,6 +13,7 @@ from clinpgx_link.config import settings
 from clinpgx_link.data.coverage import field_metadata, known_filters
 from clinpgx_link.data.dataset_filtering import validated_dataset_filters
 from clinpgx_link.data.parent_context import ParentContextLimits, RepositoryParentContextSupport
+from clinpgx_link.data.repository_gene_aliases import RepositoryGeneAliasSupport
 from clinpgx_link.data.repository_locking import serialized_connection
 from clinpgx_link.data.repository_profiles import RepositoryProfileSupport
 from clinpgx_link.data.repository_provenance import dataset_source, snapshot_source
@@ -38,7 +39,10 @@ _ENTITY_TYPES = frozenset(
 
 
 class DatasetRepository(
-    RepositoryDiagnosticsSupport, RepositoryProfileSupport, RepositoryParentContextSupport
+    RepositoryDiagnosticsSupport,
+    RepositoryProfileSupport,
+    RepositoryParentContextSupport,
+    RepositoryGeneAliasSupport,
 ):
     """Repository pinned to an immutable SQLite database file and snapshot identity."""
 
@@ -59,6 +63,7 @@ class DatasetRepository(
         self._initialize_search_diagnostics(diagnostic_limits)
         self._snapshot_id = self._metadata("snapshot_id")
         self._release_tag = self._metadata("release_tag")
+        self._load_gene_alias_membership()
         self._load_profile_validation()
         self._initialize_parent_context(parent_context_limits)
 
@@ -136,13 +141,18 @@ class DatasetRepository(
             if isinstance(headers_value, list) and all(
                 isinstance(item, str) for item in headers_value
             ):
-                value["fields"] = field_metadata(dataset_id, str(row["path"]), tuple(headers_value))
+                value["fields"] = self._gene_alias_field_metadata(
+                    dataset_id,
+                    str(row["path"]),
+                    field_metadata(dataset_id, str(row["path"]), tuple(headers_value)),
+                )
             else:
                 value["fields"] = []
                 if headers_value is not None:
                     value["sheets"] = headers_value
             value["supported_filters"] = sorted(known_filters(dataset_id, str(row["path"])))
             value.update(self._profile_member_metadata(dataset_id, str(row["path"])))
+            value.update(self._gene_alias_metadata(dataset_id, str(row["path"])))
             if dataset_id == "data/pharmcat.zip" and row["path"] == "phenotypes.json":
                 value.update(self._parent_context_member_metadata())
             described_members.append(value)
@@ -161,6 +171,7 @@ class DatasetRepository(
             "warnings": json.loads(dataset["warnings_json"]),
             "supported_filters": sorted(known_filters(dataset_id)),
             "profile_gate_status": self._profile_validation.dataset_gate_status(dataset_id),
+            **self._gene_alias_metadata(dataset_id),
             "members": described_members,
         }
         return SourceResponse(
@@ -299,6 +310,9 @@ class DatasetRepository(
                 match,
             )
         )
+        self._guard_dataset_gene_alias_membership(
+            dataset_id, member, match, canonical_filters, source_filters
+        )
         clauses = ["r.dataset_id=?"]
         parameters: list[Any] = [dataset_id]
         if member is not None:
@@ -391,10 +405,20 @@ class DatasetRepository(
         parameters: list[Any] = [entity_type]
         entity_filters = dict(selected_filters)
         identifier = entity_filters.pop("id", None)
+        self._guard_unscoped_gene_alias_membership(entity_type, entity_filters)
         if identifier is not None:
             clauses.append(
-                "EXISTS (SELECT 1 FROM membership identity WHERE identity.record_pk=r.record_pk "
-                "AND identity.value=? AND identity.kind IN ('id',?))"
+                (
+                    "EXISTS (SELECT 1 FROM membership identity "
+                    "WHERE identity.record_pk=r.record_pk AND identity.value=? "
+                    "AND identity.kind IN ('id',?) AND identity.match_mode='exact')"
+                )
+                if entity_type == "gene"
+                else (
+                    "EXISTS (SELECT 1 FROM membership identity "
+                    "WHERE identity.record_pk=r.record_pk AND identity.value=? "
+                    "AND identity.kind IN ('id',?))"
+                )
             )
             parameters.extend([identifier, entity_type])
         values, total = self._query_records(

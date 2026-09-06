@@ -6,6 +6,8 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
 
+from clinpgx_link.data.gene_alias_membership import GENE_ALIAS_DECLARATIONS
+
 
 @dataclass(frozen=True)
 class Membership:
@@ -35,8 +37,10 @@ _PROFILES: dict[tuple[str, str], dict[str, FieldProfile]] = {
         "PharmGKB Accession Id": FieldProfile("id"),
         "Name": FieldProfile("name"),
         "Symbol": FieldProfile("gene"),
-        "Alternate Names": FieldProfile("name", "semicolon"),
-        "Alternate Symbols": FieldProfile("gene", "semicolon"),
+        **{
+            source_field: FieldProfile(semantic_target, tokenizer)
+            for source_field, semantic_target, tokenizer in GENE_ALIAS_DECLARATIONS
+        },
     },
     ("data/summaryAnnotations.zip", "summary_annotations.tsv"): {
         "Summary Annotation ID": FieldProfile("annotation_id"),

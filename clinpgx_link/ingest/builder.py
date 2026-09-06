@@ -26,6 +26,7 @@ from clinpgx_link.data.coverage import (
     spreadsheet_memberships,
     tabular_memberships,
 )
+from clinpgx_link.data.gene_alias_membership import gene_alias_membership_receipt
 from clinpgx_link.data.profile_validation import validate_candidate_profiles
 from clinpgx_link.exceptions import DataValidationError, InvalidInputError
 from clinpgx_link.ingest.acquire import AcquiredMember, AcquiredSource, read_local_source
@@ -38,6 +39,7 @@ _TRANSFORM_CONTRACT = "clinpgx-link-ingest-v1"
 _TRANSFORM_FILES = (
     "data/catalog.py",
     "data/coverage.py",
+    "data/gene_alias_membership.py",
     "data/profile_validation.py",
     "data/record_profiles.py",
     "data/schema.sql",
@@ -531,6 +533,7 @@ def _create_database(
             artifact["warnings"] = warnings
             artifacts.append(artifact)
         record_profile_validation = validate_candidate_profiles(connection, snapshot_id)
+        gene_alias_membership = gene_alias_membership_receipt(snapshot_id)
         manifest = {
             "build_config": build_config,
             "schema_version": _SCHEMA_VERSION,
@@ -540,10 +543,15 @@ def _create_database(
             "artifacts": artifacts,
             "record_count": total_records,
             "record_profile_validation": record_profile_validation,
+            "gene_alias_membership": gene_alias_membership,
         }
         connection.execute(
             "INSERT INTO metadata(key,value) VALUES ('record_profile_validation_json',?)",
             (_canonical_json(record_profile_validation),),
+        )
+        connection.execute(
+            "INSERT INTO metadata(key,value) VALUES ('gene_alias_membership_json',?)",
+            (_canonical_json(gene_alias_membership),),
         )
         connection.execute(
             "INSERT INTO metadata(key,value) VALUES ('manifest_json',?)",

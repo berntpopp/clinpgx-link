@@ -49,6 +49,7 @@ PUBLIC_ERROR_SUBTYPES: frozenset[str] = frozenset(
         "lock_timeout",
         "manifest_digest",
         "manifest_invalid",
+        "membership_profile_mismatch",
         "missing_criteria",
         "numeric_detail_id_required",
         "operation_unavailable",

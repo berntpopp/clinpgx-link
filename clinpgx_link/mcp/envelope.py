@@ -230,6 +230,10 @@ def error_result(
             "Pointers require a JSON representation; retry without a pointer for non-JSON content.",
             None,
         ),
+        "membership_profile_mismatch": (
+            "Gene alias member search is unavailable for this installed snapshot. Rebuild and install a compatible immutable snapshot; raw records and exact source-field search remain available.",
+            None,
+        ),
         "numeric_detail_id_required": (
             "This detail route requires the internal numeric id returned by supported discovery.",
             None,

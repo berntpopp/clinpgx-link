@@ -144,7 +144,10 @@ def test_snapshot_identity_binds_ingest_configuration(
     assert first.manifest["build_config"] != second.manifest["build_config"]
 
 
-@pytest.mark.parametrize("relative_path", ["data/catalog.py", "ingest/acquire.py"])
+@pytest.mark.parametrize(
+    "relative_path",
+    ["data/catalog.py", "data/gene_alias_membership.py", "ingest/acquire.py"],
+)
 def test_transform_identity_binds_source_admission_modules(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, relative_path: str
 ) -> None:

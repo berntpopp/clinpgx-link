@@ -178,7 +178,7 @@ def test_repository_search_returns_standard_rows_counts_and_stable_pages(tmp_pat
         "fields": first.value[0]["fields"],
         "id": "PA124",
     }
-    assert first.value[0]["fields"]["Alternate Names"] == "CPCJ;CYPIIC17;P450C2C"
+    assert first.value[0]["fields"]["Alternate Names"] == "CPCJ, CYPIIC17, P450C2C"
     assert first.source.url.endswith("/data/genes.zip")
     assert first.source.retrieved_at == GENES_RETRIEVED_AT
     assert first.source.retrieval_time_kind == "unknown"
