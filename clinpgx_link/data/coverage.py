@@ -400,12 +400,27 @@ def known_filters(dataset_id: str, member: str | None = None) -> frozenset[str]:
     return frozenset(keys)
 
 
+def known_filter_contracts(dataset_id: str) -> frozenset[tuple[str, ...]]:
+    """Return exact canonical-filter tuples produced for known member scopes."""
+    members = {
+        profile_member
+        for profile_dataset, profile_member in _PROFILES
+        if profile_dataset == dataset_id
+    }
+    contracts = {tuple(sorted(known_filters(dataset_id)))}
+    contracts.update(tuple(sorted(known_filters(dataset_id, member))) for member in members)
+    if members:
+        contracts.add(())
+    return frozenset(contracts)
+
+
 __all__ = [
     "FieldProfile",
     "Membership",
     "contextual_json_memberships",
     "field_metadata",
     "json_memberships",
+    "known_filter_contracts",
     "known_filters",
     "primary_identifier",
     "spreadsheet_memberships",

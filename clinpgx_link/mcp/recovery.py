@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
+from clinpgx_link.data.dataset_filter_contracts import is_known_dataset_filter_contract
 from clinpgx_link.exceptions import InvalidInputError
 from clinpgx_link.identity_contracts import numeric_identity_contract
 from clinpgx_link.mcp.relationship_contracts import (
@@ -35,6 +36,7 @@ RecoveryKind = Literal[
     "variant_symbol_requires_search",
     "use_exact_gene_or_name_filter",
     "restart_dataset_search",
+    "inspect_dataset_filters",
 ]
 _KINDS = frozenset(
     {
@@ -48,6 +50,7 @@ _KINDS = frozenset(
         "variant_symbol_requires_search",
         "use_exact_gene_or_name_filter",
         "restart_dataset_search",
+        "inspect_dataset_filters",
     }
 )
 
@@ -147,6 +150,8 @@ class RecoveryPlan:
     result_type: str | None = None
     other_id: str | None = None
     other_type: str | None = None
+    dataset_id: str | None = None
+    filters: tuple[str, ...] | None = None
 
     def __post_init__(self) -> None:
         if self.kind not in _KINDS:
@@ -180,9 +185,14 @@ class RecoveryPlan:
             "variant_symbol_requires_search": (self.entity_type, self.record_id, self.source),
             "use_exact_gene_or_name_filter": (),
             "restart_dataset_search": (),
+            "inspect_dataset_filters": (self.dataset_id, self.filters),
         }
         if any(value is None for value in required[self.kind]):
             raise ValueError("recovery context is incomplete")
+        if self.kind == "inspect_dataset_filters" and not is_known_dataset_filter_contract(
+            self.dataset_id, self.filters
+        ):
+            raise ValueError("dataset recovery context is invalid")
         if self.kind == "variant_symbol_requires_search" and (
             self.entity_type != "variant"
             or self.source != "api"
@@ -211,6 +221,16 @@ def dataset_query_plan() -> RecoveryPlan:
 
 def dataset_cursor_plan() -> RecoveryPlan:
     return RecoveryPlan("restart_dataset_search")
+
+
+def dataset_filter_plan(dataset_id: object, filters: object) -> RecoveryPlan | None:
+    if not is_known_dataset_filter_contract(dataset_id, filters):
+        return None
+    return RecoveryPlan(
+        "inspect_dataset_filters",
+        dataset_id=cast(str, dataset_id),
+        filters=cast(tuple[str, ...], filters),
+    )
 
 
 def not_found_plan(entity_type: str, record_id: str, source: str, view: str) -> RecoveryPlan | None:
@@ -314,6 +334,7 @@ def _command(tool: str, arguments: dict[str, Any]) -> dict[str, Any]:
         "get_related_records",
         "get_server_capabilities",
         "search_records",
+        "get_dataset",
     }:
         raise ValueError("invalid recovery tool")
     return {"tool": tool, "arguments": arguments}
@@ -326,7 +347,7 @@ def recovery_payload(plan: RecoveryPlan) -> dict[str, Any]:
     entity = plan.entity_type
     record_id = plan.record_id
     source = plan.source
-    context = {
+    context: dict[str, Any] = {
         key: value
         for key, value in (
             ("entity_type", entity),
@@ -335,6 +356,8 @@ def recovery_payload(plan: RecoveryPlan) -> dict[str, Any]:
         )
         if value is not None
     }
+    if plan.kind == "inspect_dataset_filters":
+        context["dataset_id"] = plan.dataset_id
     choices: dict[str, list[str]] = {}
     commands: list[dict[str, Any]] = []
 
@@ -362,6 +385,13 @@ def recovery_payload(plan: RecoveryPlan) -> dict[str, Any]:
         )
         choices["offset"] = ["0"]
         commands.append(_command("get_server_capabilities", {}))
+    elif plan.kind == "inspect_dataset_filters":
+        limitation = (
+            "Canonical filters are dataset/member-specific. Inspect supported_filters and "
+            "member field declarations; source-column filters require an explicit member."
+        )
+        choices["filters"] = list(plan.filters or ())
+        commands.append(_command("get_dataset", {"dataset_id": plan.dataset_id}))
     elif plan.kind == "variant_symbol_requires_search":
         limitation = (
             "An rs identifier is a variant symbol, not a detail-route accession; "
@@ -510,6 +540,7 @@ __all__ = [
     "RecoveryPlan",
     "api_filters",
     "dataset_cursor_plan",
+    "dataset_filter_plan",
     "dataset_query_plan",
     "detail_source_supported",
     "invalid_filters_plan",

@@ -6,9 +6,14 @@ from typing import Any
 
 from fastmcp.tools.base import ToolResult
 
-from clinpgx_link.exceptions import ClinPGxError
+from clinpgx_link.exceptions import ClinPGxError, DatasetFilterError
 from clinpgx_link.mcp.envelope import error_result
-from clinpgx_link.mcp.recovery import RecoveryPlan, dataset_cursor_plan, dataset_query_plan
+from clinpgx_link.mcp.recovery import (
+    RecoveryPlan,
+    dataset_cursor_plan,
+    dataset_filter_plan,
+    dataset_query_plan,
+)
 from clinpgx_link.mcp.untrusted_content import fence_text
 from clinpgx_link.models import SourceInfo, SourceResponse
 
@@ -58,6 +63,11 @@ def presented_search_diagnostics(response: SourceResponse) -> dict[str, Any] | N
 
 
 def _recovery(error: ClinPGxError) -> RecoveryPlan | None:
+    if type(error) is DatasetFilterError:
+        return dataset_filter_plan(
+            getattr(error, "dataset_id", None),
+            getattr(error, "known_filters", None),
+        )
     if error.subtype == "wildcard_query_unsupported":
         return dataset_query_plan()
     if error.field == "cursor" or error.subtype == "cursor_with_offset":

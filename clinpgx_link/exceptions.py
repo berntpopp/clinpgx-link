@@ -38,6 +38,7 @@ PUBLIC_ERROR_SUBTYPES: frozenset[str] = frozenset(
         "content_missing",
         "cursor_expired",
         "data_invalid",
+        "unsupported_dataset_filters",
         "dataset_unavailable",
         "documented_broken_operation",
         "execution_deadline",
@@ -125,6 +126,20 @@ class InvalidInputError(ClinPGxError):
     error_code = "invalid_input"
 
 
+class DatasetFilterError(InvalidInputError):
+    """A validated installed dataset has no contract for the supplied filter."""
+
+    default_subtype = "unsupported_dataset_filters"
+
+    def __init__(self, *, dataset_id: str, known_filters: tuple[str, ...]) -> None:
+        super().__init__(
+            "A dataset filter is outside the selected dataset/member contract.",
+            field="filters",
+        )
+        self.dataset_id = dataset_id
+        self.known_filters = known_filters
+
+
 class NotFoundError(ClinPGxError):
     """A valid selector has no matching source record."""
 
@@ -206,6 +221,7 @@ __all__ = [
     "AmbiguousQueryError",
     "ClinPGxError",
     "DataValidationError",
+    "DatasetFilterError",
     "ErrorCode",
     "InvalidInputError",
     "NotFoundError",

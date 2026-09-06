@@ -11,6 +11,7 @@ from typing import Any, cast
 
 from clinpgx_link.config import settings
 from clinpgx_link.data.coverage import field_metadata, known_filters
+from clinpgx_link.data.dataset_filtering import validated_dataset_filters
 from clinpgx_link.data.parent_context import ParentContextLimits, RepositoryParentContextSupport
 from clinpgx_link.data.repository_locking import serialized_connection
 from clinpgx_link.data.repository_profiles import RepositoryProfileSupport
@@ -289,61 +290,22 @@ class DatasetRepository(
             ).fetchone()
             if member_row is None:
                 raise NotFoundError("Dataset member is not installed", field="member")
-        supported = known_filters(dataset_id, member)
-        canonical_filters = {
-            key: value for key, value in selected_filters.items() if key in CANONICAL_FILTERS
-        }
-        source_filters = {
-            key: value for key, value in selected_filters.items() if key not in CANONICAL_FILTERS
-        }
-        unsupported = set(canonical_filters) - supported
-        if unsupported:
-            raise InvalidInputError(
-                "Filter semantics are not declared for this dataset/member",
-                field=sorted(unsupported)[0],
+        canonical_filters, source_filters, source_clauses, source_parameters = (
+            validated_dataset_filters(
+                dataset_id,
+                member,
+                member_row["headers_json"] if member_row is not None else None,
+                selected_filters,
+                match,
             )
+        )
         clauses = ["r.dataset_id=?"]
         parameters: list[Any] = [dataset_id]
         if member is not None:
             clauses.append("r.member=?")
             parameters.append(member)
-        if source_filters:
-            if member is None or member_row is None:
-                raise InvalidInputError(
-                    "Source field filters require an exact member", field=sorted(source_filters)[0]
-                )
-            headers = json.loads(member_row["headers_json"]) if member_row["headers_json"] else None
-            if not isinstance(headers, list) or not all(isinstance(item, str) for item in headers):
-                raise InvalidInputError(
-                    "Source field filters require a tabular text member",
-                    field=sorted(source_filters)[0],
-                )
-            metadata = {
-                str(item["name"]): item
-                for item in field_metadata(dataset_id, member, tuple(headers))
-            }
-            for key, value in source_filters.items():
-                declared = metadata.get(key)
-                if declared is None:
-                    raise InvalidInputError("Unknown source field filter", field=key)
-                if match == "member":
-                    if "member" not in declared["match_modes"]:
-                        raise InvalidInputError(
-                            "Source field has no declared member tokenizer", field=key
-                        )
-                    clauses.append(
-                        "EXISTS (SELECT 1 FROM membership source_value "
-                        "WHERE source_value.record_pk=r.record_pk "
-                        "AND source_value.source_field=? AND source_value.value=? "
-                        "AND source_value.match_mode='member')"
-                    )
-                else:
-                    clauses.append(
-                        "EXISTS (SELECT 1 FROM json_each(r.fields_json) source_value "
-                        "WHERE source_value.key=? AND source_value.type='text' "
-                        "AND source_value.value=?)"
-                    )
-                parameters.extend([key, value])
+        clauses.extend(source_clauses)
+        parameters.extend(source_parameters)
         values, total = self._query_records(
             clauses=clauses,
             parameters=parameters,

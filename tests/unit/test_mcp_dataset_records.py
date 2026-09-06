@@ -214,7 +214,7 @@ async def test_search_rejects_typo_filter_and_cursor_offset(tmp_path):
     repository, _ = _repository(tmp_path)
     store = ContentStore(tmp_path / "content.sqlite")
     try:
-        async with Client(_record_server(repository, store)) as client:
+        async with Client(create_mcp(content_store=store, repository=repository)) as client:
             args = {
                 "dataset_id": "data/genes.zip",
                 "member": "genes.tsv",
@@ -222,7 +222,24 @@ async def test_search_rejects_typo_filter_and_cursor_offset(tmp_path):
             }
             typo = await client.call_tool("search_dataset", args, raise_on_error=False)
             assert typo.is_error
-            assert typo.structured_content["error_code"] == "invalid_input"
+            payload = typo.structured_content
+            assert payload["error_code"] == "invalid_input"
+            assert payload["subtype"] == "unsupported_dataset_filters"
+            assert payload["retryable"] is False
+            assert payload["recovery_action"] == "inspect_dataset_filters"
+            assert payload["recovery"]["valid_choices"]["filters"] == [
+                "gene",
+                "id",
+                "name",
+            ]
+            command = {
+                "tool": "get_dataset",
+                "arguments": {"dataset_id": "data/genes.zip"},
+            }
+            assert payload["fallback_tool"] == command["tool"]
+            assert payload["fallback_args"] == command["arguments"]
+            assert payload["recovery"]["next_commands"] == [command]
+            assert payload["_meta"]["next_commands"] == [command]
             first = await client.call_tool("search_dataset", {**args, "filters": {}, "limit": 1})
             cursor = first.structured_content["_meta"]["pagination"]["next_cursor"]
             with_offset = await client.call_tool(
