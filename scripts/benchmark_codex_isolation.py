@@ -440,6 +440,28 @@ def _read_proc_stat(stat_path: Path) -> str:
     return stat_path.read_text(encoding="utf-8")
 
 
+def _parse_proc_stat(raw: object) -> tuple[int, int, str, int] | None:
+    """Return PID, parent PID, state, and starttime from one proc stat record."""
+    if not isinstance(raw, str):
+        return None
+    first_space = raw.find(" ")
+    close = raw.rfind(")")
+    if first_space <= 0 or close <= first_space + 1 or raw[first_space + 1] != "(":
+        return None
+    fields = raw[close + 1 :].split()
+    if len(fields) < 20 or len(fields[0]) != 1:
+        return None
+    try:
+        pid = int(raw[:first_space])
+        parent = int(fields[1])
+        starttime = int(fields[19])
+    except (IndexError, ValueError):
+        return None
+    if pid <= 0 or parent < 0 or starttime < 0:
+        return None
+    return pid, parent, fields[0], starttime
+
+
 def process_snapshot(
     root_pid: int,
     *,
@@ -449,20 +471,21 @@ def process_snapshot(
     known_descendants: dict[int, int] | None = None,
 ) -> list[dict[str, Any]]:
     """Read only PID relationships and exact executable symlinks from procfs."""
-    rows: dict[int, tuple[int, str]] = {}
+    rows: dict[int, tuple[int, str, int]] = {}
     known = known_descendants if known_descendants is not None else {root_pid: 0}
     unreadable: dict[int, str] = {}
     for stat_path in proc_root.glob("[0-9]*/stat"):
-        pid = int(stat_path.parent.name)
+        path_pid = int(stat_path.parent.name)
         try:
             raw = stat_reader(stat_path)
-            close = raw.rfind(")")
-            pid = int(raw[: raw.find(" ")])
-            fields = raw[close + 2 :].split()
-            rows[pid] = (int(fields[1]), fields[0])
+            parsed = _parse_proc_stat(raw)
+            if parsed is None or parsed[0] != path_pid:
+                continue
+            pid, parent, state, starttime = parsed
+            rows[pid] = (parent, state, starttime)
         except PermissionError:
-            if pid in known and stat_path.parent.exists():
-                unreadable[pid] = "stat_permission_denied"
+            if path_pid in known and stat_path.parent.exists():
+                unreadable[path_pid] = "stat_permission_denied"
             continue
         except (FileNotFoundError, ProcessLookupError, ValueError):
             continue
@@ -470,7 +493,7 @@ def process_snapshot(
     changed = True
     while changed:
         changed = False
-        for pid, (parent, _state) in rows.items():
+        for pid, (parent, _state, _starttime) in rows.items():
             if parent in descendants and pid not in descendants:
                 descendants.add(pid)
                 changed = True
@@ -491,7 +514,7 @@ def process_snapshot(
         if pid not in rows:
             continue
         proc_dir = proc_root / str(pid)
-        parent, state = rows[pid]
+        parent, state, starttime = rows[pid]
         try:
             executable = executable_resolver(proc_dir)
         except PermissionError:
@@ -507,14 +530,21 @@ def process_snapshot(
             continue
         except (FileNotFoundError, ProcessLookupError):
             if proc_dir.exists() and state != "Z":
-                output.append(
-                    {
-                        "pid": pid,
-                        "ppid": parent,
-                        "executable": None,
-                        "inspection_error": "executable_unavailable",
-                    }
-                )
+                try:
+                    fresh = _parse_proc_stat(stat_reader(proc_dir / "stat"))
+                except (OSError, UnicodeError, ValueError):
+                    fresh = None
+                if fresh is None or not (
+                    fresh[0] == pid and fresh[2] == "Z" and fresh[3] == starttime
+                ):
+                    output.append(
+                        {
+                            "pid": pid,
+                            "ppid": parent,
+                            "executable": None,
+                            "inspection_error": "executable_unavailable",
+                        }
+                    )
             continue
         output.append(
             {

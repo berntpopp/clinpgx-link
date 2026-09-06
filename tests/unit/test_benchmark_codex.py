@@ -1206,10 +1206,32 @@ def test_descendant_verification_requires_exact_executable_paths() -> None:
     assert rejected["failures"] == ["unexpected_descendant"]
 
 
-def _fake_proc_stat(proc_root: Path, pid: int, ppid: int, state: str = "S") -> None:
+def _proc_stat(
+    pid: int,
+    ppid: int,
+    *,
+    state: str = "S",
+    starttime: int = 1000,
+    name: str = "worker",
+) -> str:
+    fields = [state, str(ppid), *(["0"] * 17), str(starttime), "0"]
+    return f"{pid} ({name}) {' '.join(fields)}\n"
+
+
+def _fake_proc_stat(
+    proc_root: Path,
+    pid: int,
+    ppid: int,
+    state: str = "S",
+    *,
+    starttime: int = 1000,
+    name: str = "worker",
+) -> None:
     proc_dir = proc_root / str(pid)
     proc_dir.mkdir()
-    (proc_dir / "stat").write_text(f"{pid} (worker) {state} {ppid} 0 0 0\n")
+    (proc_dir / "stat").write_text(
+        _proc_stat(pid, ppid, state=state, starttime=starttime, name=name)
+    )
 
 
 def test_process_snapshot_rejects_live_uninspectable_owned_descendant(tmp_path: Path) -> None:
@@ -1267,6 +1289,166 @@ def test_process_snapshot_ignores_confirmed_exit_race(tmp_path: Path) -> None:
             "identity_verified": True,
         }
     ]
+
+
+def test_process_snapshot_ignores_same_process_that_becomes_zombie(
+    tmp_path: Path,
+) -> None:
+    proc_root = tmp_path / "proc"
+    proc_root.mkdir()
+    _fake_proc_stat(proc_root, 100, 1, starttime=900, name="root (sandbox) worker")
+    _fake_proc_stat(proc_root, 101, 100, starttime=901, name="child (bwrap) worker")
+    stat_reads: dict[int, int] = {}
+
+    def read_stat(stat_path: Path) -> str:
+        pid = int(stat_path.parent.name)
+        stat_reads[pid] = stat_reads.get(pid, 0) + 1
+        return stat_path.read_text()
+
+    def resolve(proc_dir: Path) -> str:
+        if proc_dir.name == "101":
+            (proc_dir / "stat").write_text(
+                _proc_stat(
+                    101,
+                    1,
+                    state="Z",
+                    starttime=901,
+                    name="child (bwrap) worker",
+                )
+            )
+            raise FileNotFoundError
+        return "/usr/bin/bwrap"
+
+    snapshot = process_snapshot(
+        100,
+        proc_root=proc_root,
+        executable_resolver=resolve,
+        stat_reader=read_stat,
+    )
+    evidence = verify_descendants(snapshot, {Path("/usr/bin/bwrap")})
+
+    assert evidence["failures"] == []
+    assert [row["pid"] for row in evidence["observed"]] == [100]
+    assert stat_reads == {100: 1, 101: 2}
+
+
+def test_process_snapshot_rejects_same_process_that_remains_live(
+    tmp_path: Path,
+) -> None:
+    proc_root = tmp_path / "proc"
+    proc_root.mkdir()
+    _fake_proc_stat(proc_root, 100, 1, starttime=900)
+    _fake_proc_stat(proc_root, 101, 100, starttime=901)
+
+    snapshot = process_snapshot(
+        100,
+        proc_root=proc_root,
+        executable_resolver=lambda proc_dir: (
+            "/usr/bin/bwrap" if proc_dir.name == "100" else _raise(FileNotFoundError())
+        ),
+    )
+    evidence = verify_descendants(snapshot, {Path("/usr/bin/bwrap")})
+
+    assert evidence["failures"] == ["uninspectable_descendant"]
+    assert evidence["unexpected"][0]["inspection_error"] == "executable_unavailable"
+
+
+def test_process_snapshot_rejects_reused_pid_that_is_now_zombie(tmp_path: Path) -> None:
+    proc_root = tmp_path / "proc"
+    proc_root.mkdir()
+    _fake_proc_stat(proc_root, 100, 1, starttime=900)
+    _fake_proc_stat(proc_root, 101, 100, starttime=901)
+
+    def resolve(proc_dir: Path) -> str:
+        if proc_dir.name == "101":
+            (proc_dir / "stat").write_text(_proc_stat(101, 1, state="Z", starttime=1901))
+            raise ProcessLookupError
+        return "/usr/bin/bwrap"
+
+    snapshot = process_snapshot(100, proc_root=proc_root, executable_resolver=resolve)
+    evidence = verify_descendants(snapshot, {Path("/usr/bin/bwrap")})
+
+    assert evidence["failures"] == ["uninspectable_descendant"]
+    assert evidence["unexpected"][0]["inspection_error"] == "executable_unavailable"
+
+
+def _raise(error: BaseException) -> Any:
+    raise error
+
+
+@pytest.mark.parametrize(
+    "fresh_stat",
+    [
+        pytest.param("malformed", id="malformed"),
+        pytest.param("101 (worker) Z 1 0\n", id="truncated"),
+        pytest.param(
+            "101 (worker) " + " ".join(["Z", "1", *(["0"] * 17), "not-a-number", "0"]) + "\n",
+            id="non-numeric-starttime",
+        ),
+        pytest.param(_proc_stat(102, 1, state="Z", starttime=901), id="changed-pid"),
+        pytest.param(FileNotFoundError(), id="missing"),
+        pytest.param(PermissionError(), id="permission-denied"),
+    ],
+)
+def test_process_snapshot_rejects_unverified_fresh_identity(
+    tmp_path: Path, fresh_stat: str | BaseException
+) -> None:
+    proc_root = tmp_path / "proc"
+    proc_root.mkdir()
+    _fake_proc_stat(proc_root, 100, 1, starttime=900)
+    _fake_proc_stat(proc_root, 101, 100, starttime=901)
+    child_reads = 0
+
+    def read_stat(stat_path: Path) -> str:
+        nonlocal child_reads
+        if stat_path.parent.name != "101":
+            return stat_path.read_text()
+        child_reads += 1
+        if child_reads == 1:
+            return stat_path.read_text()
+        if isinstance(fresh_stat, BaseException):
+            raise fresh_stat
+        return fresh_stat
+
+    snapshot = process_snapshot(
+        100,
+        proc_root=proc_root,
+        executable_resolver=lambda proc_dir: (
+            "/usr/bin/bwrap" if proc_dir.name == "100" else _raise(FileNotFoundError())
+        ),
+        stat_reader=read_stat,
+    )
+    evidence = verify_descendants(snapshot, {Path("/usr/bin/bwrap")})
+
+    assert evidence["failures"] == ["uninspectable_descendant"]
+    assert evidence["unexpected"][0]["inspection_error"] == "executable_unavailable"
+    assert child_reads == 2
+
+
+def test_process_snapshot_keeps_known_descendant_after_reparenting(tmp_path: Path) -> None:
+    proc_root = tmp_path / "proc"
+    proc_root.mkdir()
+    _fake_proc_stat(proc_root, 100, 1, starttime=900)
+    _fake_proc_stat(proc_root, 101, 100, starttime=901)
+    known = {100: 1}
+
+    first = process_snapshot(
+        100,
+        proc_root=proc_root,
+        executable_resolver=lambda _proc_dir: "/usr/bin/bwrap",
+        known_descendants=known,
+    )
+    (proc_root / "101" / "stat").write_text(_proc_stat(101, 1, starttime=901))
+    second = process_snapshot(
+        100,
+        proc_root=proc_root,
+        executable_resolver=lambda _proc_dir: "/usr/bin/bwrap",
+        known_descendants=known,
+    )
+
+    assert [row["pid"] for row in first] == [100, 101]
+    assert [row["pid"] for row in second] == [100, 101]
+    assert known == {100: 1, 101: 1}
 
 
 def test_process_snapshot_retains_live_known_child_when_stat_becomes_unreadable(
