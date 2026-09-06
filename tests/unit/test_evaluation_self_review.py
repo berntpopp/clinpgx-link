@@ -169,6 +169,40 @@ def test_ignores_valid_unrelated_blocks_nested_keys_and_quoted_mentions() -> Non
 
 
 @pytest.mark.parametrize(
+    ("outer", "inner"),
+    [("````text", "```"), ("~~~~text", "~~~")],
+)
+def test_review_quoted_inside_non_json_fence_is_not_top_level(outer: str, inner: str) -> None:
+    final = (
+        f"{outer}\nQuoted example only:\n{inner}json\n{json.dumps(_review())}\n{inner}\n{outer[:4]}"
+    )
+
+    _assert_reason(final, "review_not_found")
+
+
+@pytest.mark.parametrize(
+    ("outer", "quoted_marker", "genuine_marker"),
+    [("````text", "```", "~~~"), ("~~~~text", "~~~", "```")],
+)
+def test_quoted_example_is_skipped_and_genuine_outside_review_is_extracted(
+    outer: str, quoted_marker: str, genuine_marker: str
+) -> None:
+    quoted = _review((100,) * 8)
+    genuine = _review((0,) * 8)
+    final = (
+        f"{outer}\n{quoted_marker}json\n{json.dumps(quoted)}\n{quoted_marker}\n"
+        f"{outer[:4]}\n"
+        f"{genuine_marker}JSON\n{json.dumps(genuine)}\n{genuine_marker}\n"
+        "Only this suffix is recommendations."
+    )
+
+    result = extract_self_review(_run(final))
+
+    assert result.scores.model_dump() == dict.fromkeys(ASPECTS, 0)
+    assert result.recommendations_text == "Only this suffix is recommendations."
+
+
+@pytest.mark.parametrize(
     ("final", "reason"),
     [
         (None, "final_answer_missing"),
@@ -204,6 +238,16 @@ def test_rejects_multiple_reports_even_when_equal_or_one_is_malformed() -> None:
     ],
 )
 def test_rejects_duplicate_keys_and_nonfinite_json_with_fixed_reason(raw: str) -> None:
+    _assert_reason(f"```json\n{raw}\n```", "malformed_candidate")
+
+
+def test_rejects_explicit_duplicate_aspect_key() -> None:
+    aspects = _review()["experience_review"]
+    raw_aspects = json.dumps(aspects)
+    duplicate_speed = json.dumps(aspects["speed"])  # type: ignore[index]
+    raw = f'{{"experience_review":{raw_aspects[:-1]},"speed":{duplicate_speed}}}}}'
+    assert set(json.loads(raw)["experience_review"]) == set(ASPECTS)
+
     _assert_reason(f"```json\n{raw}\n```", "malformed_candidate")
 
 

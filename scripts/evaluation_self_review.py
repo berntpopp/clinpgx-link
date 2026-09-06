@@ -136,7 +136,7 @@ class _Candidate:
     failure: SelfReviewFailureReason | None
 
 
-_OPENING_FENCE = re.compile(r"^ {0,3}(?P<marker>`{3,}|~{3,})[ \t]*json[ \t]*$", re.IGNORECASE)
+_OPENING_FENCE = re.compile(r"^ {0,3}(?P<marker>`{3,}|~{3,})(?P<info>[^\r\n]*)$")
 _JSON_WHITESPACE = " \t\r\n"
 
 
@@ -184,9 +184,15 @@ def _json_blocks(text: str) -> tuple[_JsonBlock, ...]:
             offset += len(line)
             index += 1
             continue
-        if len(blocks) == MAX_JSON_CODEBLOCKS:
-            _fail("too_many_json_codeblocks")
         marker = opening.group("marker")
+        info = opening.group("info")
+        if marker[0] == "`" and "`" in info:
+            offset += len(line)
+            index += 1
+            continue
+        is_json = info.strip(" \t").casefold() == "json"
+        if is_json and len(blocks) == MAX_JSON_CODEBLOCKS:
+            _fail("too_many_json_codeblocks")
         content_start = offset + len(line)
         scan_offset = content_start
         index += 1
@@ -194,17 +200,19 @@ def _json_blocks(text: str) -> tuple[_JsonBlock, ...]:
             scan_offset += len(lines[index])
             index += 1
         if index == len(lines):
-            blocks.append(_JsonBlock(content_start, len(text), len(text), False))
+            if is_json:
+                blocks.append(_JsonBlock(content_start, len(text), len(text), False))
             break
         closing_line = lines[index]
-        blocks.append(
-            _JsonBlock(
-                content_start=content_start,
-                content_end=scan_offset,
-                suffix_start=scan_offset + len(closing_line),
-                closed=True,
+        if is_json:
+            blocks.append(
+                _JsonBlock(
+                    content_start=content_start,
+                    content_end=scan_offset,
+                    suffix_start=scan_offset + len(closing_line),
+                    closed=True,
+                )
             )
-        )
         offset = scan_offset + len(closing_line)
         index += 1
     return tuple(blocks)
