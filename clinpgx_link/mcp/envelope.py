@@ -89,6 +89,8 @@ def success_result(
     ):
         raise ClinPGxError("Invalid snapshot provenance.")
     commands: list[dict[str, Any]] = []
+    if next_commands:
+        commands.extend(next_commands)
     if content_ref is not None:
         commands.append(
             {
@@ -99,8 +101,6 @@ def success_result(
                 },
             }
         )
-    if next_commands:
-        commands.extend(next_commands)
     return wire_result(
         {
             "success": True,
