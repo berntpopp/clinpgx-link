@@ -24,7 +24,7 @@ if not __package__:  # Support ``python scripts/benchmark_codex.py``.
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from scripts.benchmark_codex_isolation import (
-    MODEL,
+    DEFAULT_MODEL,
     MODEL_PROVIDER,
     REASONING_EFFORT,
     RunInputError,
@@ -34,6 +34,7 @@ from scripts.benchmark_codex_isolation import (
     open_prompt,
     positive_float,
     positive_int,
+    resolve_model_and_consumer,
     resolve_toolchain,
     validate_home_environment,
     validate_loopback_url,
@@ -110,7 +111,14 @@ def _write_summary(path: Path, summary: dict[str, Any]) -> None:
         output.write(_canonical(summary))
 
 
-def _preflight(session: AppServerSession, home: Path) -> tuple[dict[str, Any], str]:
+def _preflight(
+    session: AppServerSession,
+    home: Path,
+    *,
+    model: str = DEFAULT_MODEL,
+    model_provider: str = MODEL_PROVIDER,
+    reasoning_effort: str = REASONING_EFFORT,
+) -> tuple[dict[str, Any], str]:
     initialize = session.request(
         "initialize",
         1,
@@ -136,14 +144,14 @@ def _preflight(session: AppServerSession, home: Path) -> tuple[dict[str, Any], s
         "thread/start",
         6,
         {
-            "model": MODEL,
-            "modelProvider": MODEL_PROVIDER,
+            "model": model,
+            "modelProvider": model_provider,
             "cwd": str(SANDBOX_CWD),
             "approvalPolicy": "never",
             "sandbox": "read-only",
             "ephemeral": True,
             "serviceName": "clinpgx-benchmark-codex",
-            "config": {"model_reasoning_effort": REASONING_EFFORT},
+            "config": {"model_reasoning_effort": reasoning_effort},
         },
     )
     thread_value = thread.get("thread")
@@ -166,6 +174,9 @@ def _preflight(session: AppServerSession, home: Path) -> tuple[dict[str, Any], s
             "mcp": mcp,
         },
         expected_codex_home=home / ".codex",
+        expected_model=model,
+        expected_model_provider=model_provider,
+        expected_reasoning_effort=reasoning_effort,
     )
     if evidence["failures"]:
         raise SessionError(str(evidence["failures"][0]))
@@ -174,6 +185,7 @@ def _preflight(session: AppServerSession, home: Path) -> tuple[dict[str, Any], s
 
 def run(args: argparse.Namespace) -> bool:
     project_root = Path(__file__).resolve().parents[1]
+    model, consumer = resolve_model_and_consumer(getattr(args, "model", None))
     mcp_url = validate_loopback_url(args.mcp_url)
     if sys.platform != "linux" or not Path("/proc/self/stat").is_file():
         raise RunInputError("the Terra runner requires Linux procfs and bubblewrap")
@@ -227,6 +239,7 @@ def run(args: argparse.Namespace) -> bool:
                 auth=auth,
                 cwd=SANDBOX_CWD,
                 mcp_url=mcp_url,
+                model=model,
             )
             try:
                 process = subprocess.Popen(  # noqa: S603 - resolved executable, fixed argv
@@ -261,14 +274,14 @@ def run(args: argparse.Namespace) -> bool:
                 process_violation=process_violation,
                 process_failure_state=process_failure_state,
             )
-            preflight, thread_id = _preflight(session, home)
+            preflight, thread_id = _preflight(session, home, model=model)
             if process_violation.is_set():
                 raise SessionError(process_failure_state.get("reason", "unexpected_descendant"))
             schemas = {name: value["schema"] for name, value in preflight["tool_schemas"].items()}
             trace = ProtocolTrace(
                 thread_id=thread_id,
                 advertised_tools=schemas,
-                requested_model=MODEL,
+                requested_model=model,
                 requested_provider=MODEL_PROVIDER,
                 requested_effort=REASONING_EFFORT,
                 observed_identity=preflight["observed_client_identity"],
@@ -281,7 +294,7 @@ def run(args: argparse.Namespace) -> bool:
                 {
                     "threadId": thread_id,
                     "input": [{"type": "text", "text": prompt}],
-                    "model": MODEL,
+                    "model": model,
                     "effort": REASONING_EFFORT,
                     "approvalPolicy": "never",
                     "sandboxPolicy": {"type": "readOnly"},
@@ -342,7 +355,8 @@ def run(args: argparse.Namespace) -> bool:
         "client_run_duration_ms": int((time.monotonic() - started) * 1000),
         "revision": revision,
         "requested": {
-            "model": MODEL,
+            "model": model,
+            "consumer": consumer,
             "model_provider": MODEL_PROVIDER,
             "reasoning_effort": REASONING_EFFORT,
             "mcp_url": mcp_url,
@@ -388,6 +402,12 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--mcp-url", required=True)
     parser.add_argument("--prompt-file", required=True, type=Path)
     parser.add_argument("--output-dir", required=True, type=Path)
+    parser.add_argument(
+        "--model",
+        default=DEFAULT_MODEL,
+        choices=["gpt-5.6-terra", "gpt-5.6-sol", "terra", "sol"],
+        help="Target model (supported: gpt-5.6-terra, gpt-5.6-sol, terra, sol)",
+    )
     parser.add_argument("--deadline-seconds", type=positive_float, default=600.0)
     parser.add_argument("--max-tool-calls", type=positive_int, default=40)
     parser.add_argument("--max-trace-bytes", type=positive_int, default=32 * 1024 * 1024)

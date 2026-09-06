@@ -29,7 +29,8 @@ def _scores(value: int | None = 95) -> dict[str, int | None]:
 
 def _attempt(**overrides: object) -> AttemptEvidence:
     consumer = overrides.get("consumer", "opus")
-    is_terra = consumer == "terra"
+    is_codex = consumer in {"terra", "sol"}
+    codex_model = "gpt-5.6-sol" if consumer == "sol" else "gpt-5.6-terra"
     task_id = str(overrides.get("task_id", "task-01"))
     values: dict[str, object] = {
         "attempt_id": f"dev.{task_id}.{consumer}",
@@ -46,12 +47,12 @@ def _attempt(**overrides: object) -> AttemptEvidence:
         "source_assertions_sha256": SHA,
         "judge_view_sha256": SHA,
         "judge_report_sha256": SHA,
-        "requested_model": "gpt-5.6-terra" if is_terra else "opus",
-        "expected_model": "gpt-5.6-terra" if is_terra else "claude-opus-5",
-        "observed_model": "gpt-5.6-terra" if is_terra else "claude-opus-5",
-        "requested_effort": "high" if is_terra else None,
-        "observed_effort": "high" if is_terra else None,
-        "effort_unavailable_reason": None if is_terra else "not_configured_or_exposed",
+        "requested_model": codex_model if is_codex else "opus",
+        "expected_model": codex_model if is_codex else "claude-opus-5",
+        "observed_model": codex_model if is_codex else "claude-opus-5",
+        "requested_effort": "high" if is_codex else None,
+        "observed_effort": "high" if is_codex else None,
+        "effort_unavailable_reason": None if is_codex else "not_configured_or_exposed",
         "model_rerouted": False,
         "transport_passed": True,
         "trace_complete": True,
@@ -112,11 +113,20 @@ def _batch(
     **overrides: object,
 ) -> BatchDeclaration:
     model_by_consumer = {
-        consumer: "claude-opus-5" if consumer == "opus" else "gpt-5.6-terra"
+        consumer: (
+            "claude-opus-5"
+            if consumer == "opus"
+            else ("gpt-5.6-sol" if consumer == "sol" else "gpt-5.6-terra")
+        )
         for consumer in consumers
     }
     requested_model_by_consumer = {
-        consumer: "opus" if consumer == "opus" else "gpt-5.6-terra" for consumer in consumers
+        consumer: (
+            "opus"
+            if consumer == "opus"
+            else ("gpt-5.6-sol" if consumer == "sol" else "gpt-5.6-terra")
+        )
+        for consumer in consumers
     }
     effort_by_consumer = {
         consumer: None if consumer == "opus" else "high" for consumer in consumers
@@ -596,3 +606,45 @@ def test_campaign_fails_for_one_failed_validation_attempt_or_unaccounted_attempt
     missing_result = evaluate_campaign(declaration, attempts[:-1])
     assert not missing_result.passed
     assert "campaign_missing_attempt" in missing_result.failures
+
+
+def test_batch_accepts_opus_and_sol_consumer_pair() -> None:
+    declaration = _batch(consumers=("opus", "sol"))
+    attempts = _batch_attempts(declaration)
+    result = evaluate_batch(declaration, attempts)
+    assert result.passed
+    assert "sol" in result.per_consumer
+    assert result.per_consumer["sol"].judge_minima.speed == 93
+
+
+def test_batch_accepts_opus_terra_and_sol_consumer_triple() -> None:
+    declaration = _batch(consumers=("opus", "terra", "sol"))
+    attempts = _batch_attempts(declaration)
+    result = evaluate_batch(declaration, attempts)
+    assert result.passed
+    assert "sol" in result.per_consumer
+    assert "terra" in result.per_consumer
+    assert "opus" in result.per_consumer
+
+
+def test_batch_rejects_sol_effort_not_high() -> None:
+    declaration = _batch(consumers=("opus", "sol"))
+    attempts = _batch_attempts(declaration)
+    sol_index = next(index for index, attempt in enumerate(attempts) if attempt.consumer == "sol")
+    attempts[sol_index] = attempts[sol_index].model_copy(
+        update={"requested_effort": "low", "observed_effort": "low"}
+    )
+    result = evaluate_batch(declaration, attempts)
+    assert not result.passed
+    assert "sol_effort_not_high" in result.failures
+
+
+def test_batch_rejects_declared_sol_effort_not_high() -> None:
+    declaration = _batch(
+        consumers=("opus", "sol"),
+        effort_by_consumer={"opus": None, "sol": "low"},
+    )
+    attempts = _batch_attempts(declaration)
+    result = evaluate_batch(declaration, attempts)
+    assert not result.passed
+    assert "sol_effort_declaration_mismatch" in result.failures

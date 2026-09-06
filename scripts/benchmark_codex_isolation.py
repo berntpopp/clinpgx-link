@@ -20,9 +20,37 @@ from jsonschema.exceptions import SchemaError
 
 from scripts.benchmark_codex_protocol import canonical_sha256
 
-MODEL = "gpt-5.6-terra"
+SUPPORTED_MODELS: tuple[str, ...] = ("gpt-5.6-terra", "gpt-5.6-sol")
+DEFAULT_MODEL = "gpt-5.6-terra"
+MODEL = DEFAULT_MODEL
 MODEL_PROVIDER = "openai"
 REASONING_EFFORT = "high"
+SUPPORTED_CONSUMERS_BY_MODEL: dict[str, str] = {
+    "gpt-5.6-terra": "terra",
+    "gpt-5.6-sol": "sol",
+    "terra": "terra",
+    "sol": "sol",
+}
+CANONICAL_MODEL_BY_NAME: dict[str, str] = {
+    "gpt-5.6-terra": "gpt-5.6-terra",
+    "terra": "gpt-5.6-terra",
+    "gpt-5.6-sol": "gpt-5.6-sol",
+    "sol": "gpt-5.6-sol",
+}
+
+
+def resolve_model_and_consumer(requested: str | None) -> tuple[str, str]:
+    if requested is None:
+        return DEFAULT_MODEL, "terra"
+    canonical = CANONICAL_MODEL_BY_NAME.get(requested)
+    if canonical is None:
+        raise RunInputError(
+            f"unsupported model: {requested!r}; supported models are {list(SUPPORTED_MODELS)}"
+        )
+    consumer = SUPPORTED_CONSUMERS_BY_MODEL[canonical]
+    return canonical, consumer
+
+
 EXPECTED_SYSTEM_SKILLS = frozenset(
     {
         "imagegen",
@@ -136,6 +164,9 @@ def build_sandbox_command(
     auth: Path,
     cwd: Path,
     mcp_url: str,
+    model: str = DEFAULT_MODEL,
+    model_provider: str = MODEL_PROVIDER,
+    reasoning_effort: str = REASONING_EFFORT,
 ) -> list[str]:
     """Build an invocation-local, read-only app-server namespace."""
     trust = json.dumps(str(cwd))
@@ -192,11 +223,11 @@ def build_sandbox_command(
         "-c",
         f'projects.{trust}.trust_level="trusted"',
         "-c",
-        f'model="{MODEL}"',
+        f'model="{model}"',
         "-c",
-        f'model_provider="{MODEL_PROVIDER}"',
+        f'model_provider="{model_provider}"',
         "-c",
-        f'model_reasoning_effort="{REASONING_EFFORT}"',
+        f'model_reasoning_effort="{reasoning_effort}"',
         "-c",
         mcp,
         "-c",
@@ -229,7 +260,14 @@ def _layer_type(layer: object) -> object:
     return name.get("type") if isinstance(name, dict) else None
 
 
-def validate_preflight(values: dict[str, Any], *, expected_codex_home: Path) -> dict[str, Any]:
+def validate_preflight(
+    values: dict[str, Any],
+    *,
+    expected_codex_home: Path,
+    expected_model: str = DEFAULT_MODEL,
+    expected_model_provider: str = MODEL_PROVIDER,
+    expected_reasoning_effort: str = REASONING_EFFORT,
+) -> dict[str, Any]:
     """Reduce preflight responses to bounded allow-listed evidence."""
     failures: list[str] = []
 
@@ -314,11 +352,11 @@ def validate_preflight(values: dict[str, Any], *, expected_codex_home: Path) -> 
 
     thread = values.get("thread")
     thread = thread if isinstance(thread, dict) else {}
-    if thread.get("model") != MODEL:
+    if thread.get("model") != expected_model:
         fail("model_identity_mismatch")
-    if thread.get("modelProvider") != MODEL_PROVIDER:
+    if thread.get("modelProvider") != expected_model_provider:
         fail("model_provider_mismatch")
-    if thread.get("reasoningEffort") != REASONING_EFFORT:
+    if thread.get("reasoningEffort") != expected_reasoning_effort:
         fail("reasoning_effort_mismatch")
     if thread.get("instructionSources") != []:
         fail("instruction_sources_present")

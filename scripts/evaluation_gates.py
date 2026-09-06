@@ -35,9 +35,13 @@ def _score_values(scores: AspectScores) -> dict[str, int | None]:
     return {aspect: getattr(scores, aspect) for aspect in ASPECTS}
 
 
-def _statistics(attempts: Sequence[AttemptEvidence]) -> dict[Consumer, ConsumerStatistics]:
+def _statistics(
+    attempts: Sequence[AttemptEvidence],
+    extra_consumers: Iterable[Consumer] = (),
+) -> dict[Consumer, ConsumerStatistics]:
     result: dict[Consumer, ConsumerStatistics] = {}
-    for consumer in _CONSUMERS:
+    consumers = set(_CONSUMERS) | set(extra_consumers) | {attempt.consumer for attempt in attempts}
+    for consumer in sorted(consumers):
         selected = [attempt for attempt in attempts if attempt.consumer == consumer]
         series_values: dict[str, dict[str, list[int]]] = {
             "self": {aspect: [] for aspect in ASPECTS},
@@ -129,11 +133,11 @@ def _attempt_failures(evidence: AttemptEvidence) -> set[str]:
     ):
         failures.add("known_effort_mismatch")
     if (
-        evidence.consumer == "terra"
+        evidence.consumer in {"terra", "sol"}
         and evidence.suite in {"frozen12", "heldout"}
         and (evidence.requested_effort != "high" or evidence.observed_effort != "high")
     ):
-        failures.add("terra_effort_not_high")
+        failures.add(f"{evidence.consumer}_effort_not_high")
     if evidence.model_rerouted:
         failures.add("model_rerouted")
     if not evidence.transport_passed:
@@ -211,12 +215,15 @@ def _acceptance_declaration_failures(declaration: BatchDeclaration) -> set[str]:
     if _is_nonacceptance_taskset(declaration):
         return set()
     failures: set[str] = set()
-    if set(declaration.required_consumers) != {"opus", "terra"}:
+    consumer_set = set(declaration.required_consumers)
+    if consumer_set not in ({"opus", "terra"}, {"opus", "sol"}, {"opus", "terra", "sol"}):
         failures.add("acceptance_consumer_set_mismatch")
     if declaration.parallelism != 4:
         failures.add("acceptance_parallelism_mismatch")
-    if declaration.effort_by_consumer.get("terra") != "high":
+    if "terra" in consumer_set and declaration.effort_by_consumer.get("terra") != "high":
         failures.add("terra_effort_declaration_mismatch")
+    if "sol" in consumer_set and declaration.effort_by_consumer.get("sol") != "high":
+        failures.add("sol_effort_declaration_mismatch")
     return failures
 
 
@@ -289,7 +296,7 @@ def _batch_failures(declaration: BatchDeclaration, attempts: Sequence[AttemptEvi
     if any(task.suite == "frozen18" for task in declaration.expected_tasks.values()):
         failures.add("frozen18_not_ux_acceptance")
     if not _is_nonacceptance_taskset(declaration):
-        statistics = _statistics(attempts)
+        statistics = _statistics(attempts, declaration.required_consumers)
         if any(
             getattr(coverage, aspect) == 0
             for consumer in declaration.required_consumers

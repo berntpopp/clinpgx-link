@@ -28,7 +28,7 @@ StrictScore = Annotated[int, Field(strict=True, ge=0, le=100)]
 FiniteNonNegativeFloat = Annotated[float, Field(strict=True, ge=0, allow_inf_nan=False)]
 FinitePositiveFloat = Annotated[float, Field(strict=True, gt=0, allow_inf_nan=False)]
 Suite = Literal["exploratory", "frozen12", "heldout", "frozen18"]
-Consumer = Literal["opus", "terra"]
+Consumer = Literal["opus", "terra", "sol"]
 Phase = Literal["exploratory", "development", "validation"]
 EffortUnavailableReason = Literal[
     "not_configured", "not_exposed_by_client", "not_configured_or_exposed"
@@ -140,7 +140,7 @@ class BatchDeclaration(StrictModel):
     campaign_id: Identifier
     batch_id: Identifier
     phase: Phase
-    required_consumers: Annotated[tuple[Consumer, ...], Field(min_length=1, max_length=2)]
+    required_consumers: Annotated[tuple[Consumer, ...], Field(min_length=1, max_length=3)]
     expected_tasks: Annotated[dict[Identifier, ExpectedTask], Field(min_length=1)]
     candidate_sha: GitSha
     snapshot_sha256: Sha256

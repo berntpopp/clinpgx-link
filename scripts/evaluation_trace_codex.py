@@ -128,10 +128,11 @@ def normalize_codex_run(directory: Path, expected: RunExpectation) -> Normalized
     tool_schemas = tool_schemas_value if isinstance(tool_schemas_value, dict) else {}
     schemas: dict[str, dict[str, Any]] = {}
     failures: list[str] = []
+    consumer_name = expected.consumer
     limitations = [
-        "terra_preflight_is_runner_observed",
-        "terra_identity_is_provider_claim_not_backend_attestation",
-        "terra_wrapper_and_summary_timings_have_distinct_origins",
+        f"{consumer_name}_preflight_is_runner_observed",
+        f"{consumer_name}_identity_is_provider_claim_not_backend_attestation",
+        f"{consumer_name}_wrapper_and_summary_timings_have_distinct_origins",
     ]
     if preflight.get("failures") != []:
         add_failure(failures, "preflight_reported_failures")
@@ -483,7 +484,7 @@ def normalize_codex_run(directory: Path, expected: RunExpectation) -> Normalized
     )
     try:
         return NormalizedRun(
-            consumer="terra",
+            consumer=expected.consumer,
             candidate_sha=expected.candidate_sha,
             prompt_sha256=expected.prompt_sha256,
             summary_sha256=expected.summary_sha256,

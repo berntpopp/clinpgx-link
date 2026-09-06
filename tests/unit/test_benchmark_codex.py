@@ -2122,3 +2122,62 @@ def test_entrypoint_is_directly_executable_without_import_path_configuration() -
 
     assert result.returncode == 0, result.stderr
     assert "--mcp-url" in result.stdout
+    assert "--model" in result.stdout
+
+
+def test_resolve_model_and_consumer() -> None:
+    from scripts.benchmark_codex_isolation import resolve_model_and_consumer
+
+    assert resolve_model_and_consumer(None) == ("gpt-5.6-terra", "terra")
+    assert resolve_model_and_consumer("gpt-5.6-terra") == ("gpt-5.6-terra", "terra")
+    assert resolve_model_and_consumer("terra") == ("gpt-5.6-terra", "terra")
+    assert resolve_model_and_consumer("gpt-5.6-sol") == ("gpt-5.6-sol", "sol")
+    assert resolve_model_and_consumer("sol") == ("gpt-5.6-sol", "sol")
+    with pytest.raises(RunInputError, match="unsupported model"):
+        resolve_model_and_consumer("gpt-4")
+
+
+def test_build_sandbox_command_accepts_selectable_model(tmp_path: Path) -> None:
+    cmd = build_sandbox_command(
+        bwrap=Path("/usr/bin/bwrap"),
+        codex=Path("/opt/codex/bin/codex"),
+        home=tmp_path / "home",
+        auth=tmp_path / "home/.codex/auth.json",
+        cwd=tmp_path / "cwd",
+        mcp_url="http://127.0.0.1:8000/mcp",
+        model="gpt-5.6-sol",
+    )
+    assert 'model="gpt-5.6-sol"' in cmd
+
+
+def test_preflight_validates_selected_model_without_fallback() -> None:
+    fixture = _preflight_fixture()
+    evidence = validate_preflight(
+        fixture, expected_codex_home=Path("/home/test/.codex"), expected_model="gpt-5.6-sol"
+    )
+    assert "model_identity_mismatch" in evidence["failures"]
+
+    fixture["thread"]["model"] = "gpt-5.6-sol"
+    evidence_sol = validate_preflight(
+        fixture, expected_codex_home=Path("/home/test/.codex"), expected_model="gpt-5.6-sol"
+    )
+    assert "model_identity_mismatch" not in evidence_sol["failures"]
+
+
+def test_cli_parser_supports_model_selection() -> None:
+    from scripts.benchmark_codex import _parser
+
+    parser = _parser()
+    args = parser.parse_args(
+        [
+            "--mcp-url",
+            "http://127.0.0.1:8000/mcp",
+            "--prompt-file",
+            "prompt.md",
+            "--output-dir",
+            "output",
+            "--model",
+            "gpt-5.6-sol",
+        ]
+    )
+    assert args.model == "gpt-5.6-sol"
