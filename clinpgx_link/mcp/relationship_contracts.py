@@ -131,8 +131,8 @@ def relationship_recovery_choices() -> dict[str, list[str]]:
 def guideline_website_recommendation(
     entity_type: str, record_id: str, source: str
 ) -> list[dict[str, Any]] | None:
-    """Recommend website representation for API guideline annotations to discover publisher URLs."""
-    if source == "api" and entity_type in {"guideline_annotation", "guidelineAnnotation"}:
+    """Recommend website representation for guideline annotations to discover publisher URLs."""
+    if entity_type in {"guideline_annotation", "guidelineAnnotation"}:
         return [
             {
                 "tool": "get_record",
@@ -144,6 +144,27 @@ def guideline_website_recommendation(
                 },
             }
         ]
+    return None
+
+
+def relationship_next_commands(value: Any, result_type: str) -> list[dict[str, Any]] | None:
+    """Recommend direct website publisher URL commands for guideline annotation relationships."""
+    if result_type in {"guideline_annotation", "guidelineAnnotation"} and isinstance(value, list):
+        cmds: list[dict[str, Any]] = []
+        for item in value[:2]:
+            if isinstance(item, dict) and "id" in item:
+                cmds.append(
+                    {
+                        "tool": "get_record",
+                        "arguments": {
+                            "entity_type": "guideline_annotation",
+                            "record_id": item["id"],
+                            "source": "website",
+                            "pointer": "/data/cpicGuideline/link/resourceId",
+                        },
+                    }
+                )
+        return cmds or None
     return None
 
 
@@ -196,6 +217,7 @@ __all__ = [
     "guideline_website_recommendation",
     "pair_arguments",
     "relationship_capabilities_payload",
+    "relationship_next_commands",
     "relationship_recovery_choices",
     "resolve_api_relationship_route",
 ]

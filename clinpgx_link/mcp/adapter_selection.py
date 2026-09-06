@@ -274,19 +274,30 @@ def render_adapter_selections(
     """Render ordered scalar entries while preserving original and derived identities."""
     ensure_json_selection(response)
     adapter_ref = _retain_json(store, response.value, response.source, "adapter-value")
-    resolved = resolve_scalars(response.value, pointers)
+    base_prefix = str(response.details.get("source_pointer", "")).strip()
+
+    lookup_pointers: list[str] = []
+    for p in pointers:
+        lp = p
+        if base_prefix and lp.startswith(base_prefix):
+            lp = lp[len(base_prefix) :]
+            if lp and not lp.startswith("/"):
+                lp = "/" + lp
+        lookup_pointers.append(lp or "")
+
+    resolved = resolve_scalars(response.value, tuple(lookup_pointers))
     original_ref = str(response.details["content_ref"])
     entries: list[dict[str, Any]] = []
-    for item in resolved:
+    for req_pointer, lookup_pointer, item in zip(pointers, lookup_pointers, resolved, strict=True):
         base: dict[str, Any] = {
-            "pointer": fence_text(item.pointer, source=response.source, record_id=original_ref),
+            "pointer": fence_text(req_pointer, source=response.source, record_id=original_ref),
             "status": item.status,
-            "original_locator": _locator(response, item.pointer),
+            "original_locator": _locator(response, lookup_pointer),
         }
         if item.status == "value":
             base["value"] = _wire_value(item.value, response.source, original_ref)
         elif item.status == "deferred":
-            value = select_value(response.value, item.pointer)
+            value = select_value(response.value, lookup_pointer)
             raw = finite_json_bytes(value)
             scalar_ref = store.put(
                 raw, _derived_source(response.source, "adapter-selection", raw), "application/json"

@@ -1078,5 +1078,28 @@ async def test_get_record_website_with_data_prefixed_pointer(tmp_path):
             data_val = res.structured_content["result"]["data"]
             text = data_val["text"] if isinstance(data_val, dict) else data_val
             assert "https://cpicpgx.org/guidelines/guideline-for-clopidogrel-and-cyp2c19/" in text
+
+            res_pointers = await client.call_tool(
+                "get_record",
+                {
+                    "entity_type": "guideline_annotation",
+                    "record_id": "PA166104948",
+                    "source": "website",
+                    "pointers": [
+                        "/data/cpicGuideline/link/resourceId",
+                        "/data/id",
+                    ],
+                },
+            )
+            assert res_pointers.structured_content["success"] is True
+            selections = res_pointers.structured_content["result"]["selections"]
+            assert len(selections) == 2
+            assert selections[0]["status"] == "value"
+            assert (
+                selections[0]["value"]["text"]
+                == "https://cpicpgx.org/guidelines/guideline-for-clopidogrel-and-cyp2c19/"
+            )
+            assert selections[1]["status"] == "value"
+            assert selections[1]["value"]["text"] == "PA166104948"
     finally:
         store.close()

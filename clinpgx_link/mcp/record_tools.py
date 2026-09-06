@@ -44,6 +44,7 @@ from clinpgx_link.mcp.record_types import (
 )
 from clinpgx_link.mcp.relationship_contracts import (
     guideline_website_recommendation,
+    relationship_next_commands,
     resolve_api_relationship_route,
 )
 from clinpgx_link.mcp.search_contracts import FILTER_DESCRIPTION, resolve_search_route
@@ -339,6 +340,25 @@ def register_record_tools(
                         entity_type, record_id, source, view
                     )
                 response = await api.get(entity_type, record_id, view)
+            elif source == "website":
+                operation = recovery_help.WEBSITE_GET.get(entity_type)
+                if operation is None:
+                    recovery = recovery_help.unsupported_detail_plan(
+                        entity_type, record_id, source, view
+                    )
+                    raise InvalidInputError(
+                        "No verified website detail route exists for this entity.",
+                        field="entity_type",
+                    )
+                if website is None:
+                    raise UpstreamUnavailableError("Website service is not configured.")
+                response = await website.call(
+                    operation,
+                    {"id": record_id},
+                    {"view": view} if entity_type == "guideline" else {},
+                )
+            if source in {"api", "website"}:
+                assert response is not None
                 next_cmds = guideline_website_recommendation(entity_type, record_id, source)
                 if selected_pointers is not None:
                     return await run_sync(
@@ -362,41 +382,6 @@ def register_record_tools(
                     response_mode=response_mode,
                     profile=None if pointer else adapter_profile("", family=entity_type),
                     next_commands=next_cmds,
-                )
-            if source == "website":
-                operation = recovery_help.WEBSITE_GET.get(entity_type)
-                if operation is None:
-                    recovery = recovery_help.unsupported_detail_plan(
-                        entity_type, record_id, source, view
-                    )
-                    raise InvalidInputError(
-                        "No verified website detail route exists for this entity.",
-                        field="entity_type",
-                    )
-                if website is None:
-                    raise UpstreamUnavailableError("Website service is not configured.")
-                response = await website.call(
-                    operation,
-                    {"id": record_id},
-                    {"view": view} if entity_type == "guideline" else {},
-                )
-                if selected_pointers is not None:
-                    return await run_sync(
-                        adapter_selection_result, response, selected_pointers, store
-                    )
-                return await run_sync(
-                    presenter.present,
-                    _select(response, pointer),
-                    selectors={
-                        "tool": "get_record",
-                        "entity_type": entity_type,
-                        "record_id": record_id,
-                        "source": source,
-                        "view": view,
-                        "pointer": pointer,
-                    },
-                    response_mode=response_mode,
-                    profile=None if pointer else adapter_profile("", family=entity_type),
                 )
             local_snapshot = await run_sync(snapshot_id, repository)
             if entity_type not in recovery_help.LOCAL_ENTITIES:
@@ -565,6 +550,7 @@ def register_record_tools(
                         if route.mode == "connected_object"
                         else adapter_profile("", family=result_type)
                     ),
+                    next_commands=relationship_next_commands(response.value, result_type),
                 )
             local_snapshot = await run_sync(snapshot_id, repository)
             if cursor is not None:
