@@ -119,8 +119,8 @@ def serve(
         asyncio.run(UnifiedServerManager(configured).serve())
     except KeyboardInterrupt:
         raise typer.Exit(code=0) from None
-    except Exception as exc:
-        console.print(f"[red]Server startup failed: {exc}[/red]")
+    except Exception:
+        console.print("[red]Server startup failed.[/red]")
         raise typer.Exit(code=1) from None
 
 

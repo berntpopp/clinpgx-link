@@ -278,14 +278,16 @@ def _health(
 
 def _resolve_cache_root(configured: Path) -> Path:
     try:
-        configured.mkdir(parents=True, exist_ok=True)
+        configured.mkdir(mode=0o700, parents=True, exist_ok=True)
+        configured.chmod(0o700)
         probe = configured / ".probe_write"
         probe.touch()
         probe.unlink()
         return configured
     except OSError:
         fallback = Path(tempfile.gettempdir()) / "clinpgx-cache"
-        fallback.mkdir(parents=True, exist_ok=True)
+        fallback.mkdir(mode=0o700, parents=True, exist_ok=True)
+        fallback.chmod(0o700)
         return fallback
 
 
