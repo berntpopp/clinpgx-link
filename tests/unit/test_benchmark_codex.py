@@ -103,6 +103,54 @@ def _error_result(code: str = "invalid_input") -> dict[str, Any]:
     return _wire_result({"success": False, "error_code": code, "message": "Safe public error."})
 
 
+def _actual_shape_error_result(code: str = "invalid_input") -> dict[str, Any]:
+    envelope = {
+        "success": False,
+        "error_code": code,
+        "message": "The request could not be completed.",
+        "retryable": False,
+        "recovery_action": "retry_with_valid_input",
+        "fallback_tool": "get_record",
+        "fallback_args": {"id": "PA1"},
+        "recommended_citation": "ClinPGx Link research-data retrieval service.",
+        "unsafe_for_clinical_use": True,
+        "_meta": {
+            "request_id": "request-1",
+            "elapsed_ms": 12.072,
+            "timing_scope": "tool_boundary",
+            "unsafe_for_clinical_use": True,
+            "next_commands": [{"tool": "get_record", "arguments": {"id": "PA1"}}],
+        },
+        "field": "pointer",
+        "subtype": "base64_pointer_unsupported",
+    }
+    return {"_meta": {"request_id": "request-1"}, **_wire_result(envelope)}
+
+
+def _actual_shape_mcp_item(
+    method: str, *, status: str, result: dict[str, Any] | None
+) -> dict[str, Any]:
+    event = _item(
+        method,
+        item_id="typed-error",
+        tool="get_record",
+        arguments={"id": "invalid"},
+        status=status,
+        result=result,
+    )
+    event["params"]["item"].update(
+        {
+            "appContext": None,
+            "durationMs": 14 if method == "item/completed" else None,
+            "error": None,
+            "pluginId": None,
+            "readOnlyHint": True,
+            "result": result,
+        }
+    )
+    return event
+
+
 def _agent_item(method: str, *, text: str | None = None) -> dict[str, Any]:
     item: dict[str, Any] = {
         "id": "answer",
@@ -698,6 +746,150 @@ def test_each_public_mcp_error_code_is_a_valid_observation(code: str) -> None:
 
     assert result["accepted"] is True
     assert result["errors"] == [{"call_id": "error", "code": code}]
+
+
+@pytest.mark.parametrize(
+    "code",
+    [
+        "invalid_input",
+        "not_found",
+        "ambiguous_query",
+        "upstream_unavailable",
+        "rate_limited",
+        "internal",
+    ],
+)
+def test_failed_status_typed_mcp_error_can_recover_and_complete(code: str) -> None:
+    trace = _trace()
+    trace.observe(
+        _message("turn/started", {"turn": {"id": "turn-1", "status": "inProgress"}}),
+        1,
+    )
+    trace.observe(
+        _actual_shape_mcp_item(
+            "item/started",
+            status="inProgress",
+            result=None,
+        ),
+        2,
+    )
+    trace.observe(
+        _actual_shape_mcp_item(
+            "item/completed",
+            status="failed",
+            result=_actual_shape_error_result(code),
+        ),
+        3,
+    )
+    trace.observe(
+        _item(
+            "item/started",
+            item_id="recovery",
+            tool="get_record",
+            arguments={"id": "PA1"},
+            status="inProgress",
+        ),
+        4,
+    )
+    trace.observe(
+        _item(
+            "item/completed",
+            item_id="recovery",
+            tool="get_record",
+            arguments={"id": "PA1"},
+            status="completed",
+            result=_success_result(),
+        ),
+        5,
+    )
+    trace.observe(_agent_item("item/started"), 6)
+    trace.observe(_agent_item("item/completed", text="Recovered."), 7)
+    trace.observe(
+        _message("turn/completed", {"turn": {"id": "turn-1", "status": "completed"}}),
+        8,
+    )
+
+    result = assess_acceptance(trace, termination="completed", trace_complete=True)
+
+    assert result["accepted"] is True
+    assert result["errors"] == [{"call_id": "typed-error", "code": code}]
+    assert [call["outcome"] for call in result["calls"]] == ["mcp_error", "success"]
+    assert result["calls"][0]["boundary_elapsed_ms"] == {"value": 12.072, "reason": None}
+
+
+@pytest.mark.parametrize(
+    ("status", "transport_error", "result", "failure"),
+    [
+        ("failed", None, _success_result(), "inconsistent_mcp_status"),
+        ("failed", None, None, "missing_structured_mcp_result"),
+        (
+            "failed",
+            None,
+            {"content": [], "structuredContent": {"success": False}},
+            "mcp_mirror_mismatch",
+        ),
+        (
+            "failed",
+            None,
+            {
+                "content": [{"type": "text", "text": '{"success":true}'}],
+                "structuredContent": {"success": False, "error_code": "invalid_input"},
+            },
+            "mcp_mirror_mismatch",
+        ),
+        ("failed", None, _actual_shape_error_result("unknown"), "invalid_mcp_error_code"),
+        (
+            "failed",
+            {"message": "connection closed"},
+            _actual_shape_error_result(),
+            "failed_mcp_transport",
+        ),
+        ("unknown", None, _actual_shape_error_result(), "invalid_mcp_status"),
+        (
+            "failed",
+            None,
+            {
+                "content": [{"type": "text", "text": '{"success":0}'}],
+                "structuredContent": {"success": False},
+            },
+            "mcp_mirror_mismatch",
+        ),
+    ],
+)
+def test_failed_status_requires_consistent_typed_error_envelope(
+    status: str,
+    transport_error: dict[str, str] | None,
+    result: dict[str, Any] | None,
+    failure: str,
+) -> None:
+    trace = _trace()
+    trace.observe(
+        _message("turn/started", {"turn": {"id": "turn-1", "status": "inProgress"}}),
+        1,
+    )
+    trace.observe(
+        _item(
+            "item/started",
+            item_id="error",
+            tool="get_record",
+            arguments={"id": "invalid"},
+            status="inProgress",
+        ),
+        2,
+    )
+    completed = _item(
+        "item/completed",
+        item_id="error",
+        tool="get_record",
+        arguments={"id": "invalid"},
+        status=status,
+        result=result,
+    )
+    completed["params"]["item"]["error"] = transport_error
+    trace.observe(completed, 3)
+
+    assert failure in trace.failures
+    assert trace.calls[0]["outcome"] != "mcp_error"
 
 
 @pytest.mark.parametrize(

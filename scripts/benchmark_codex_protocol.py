@@ -262,9 +262,14 @@ class ProtocolTrace:
         duration = item.get("durationMs")
         if isinstance(duration, (int, float)) and not isinstance(duration, bool) and duration >= 0:
             matched_call["server_duration_ms"] = duration
-        if item.get("status") != "completed" or item.get("error") is not None:
+        status = item.get("status")
+        if item.get("error") is not None:
             matched_call["outcome"] = "transport_failure"
             self._add_failure("failed_mcp_transport")
+            return
+        if status not in {"completed", "failed"}:
+            matched_call["outcome"] = "transport_failure"
+            self._add_failure("invalid_mcp_status")
             return
         result = item.get("result")
         structured = self._mirrored_envelope(result)
@@ -272,6 +277,10 @@ class ProtocolTrace:
             return
         success = structured.get("success")
         if success is True:
+            if status != "completed":
+                matched_call["outcome"] = "transport_failure"
+                self._add_failure("inconsistent_mcp_status")
+                return
             matched_call["outcome"] = "success"
         elif success is False:
             code = structured.get("error_code")
