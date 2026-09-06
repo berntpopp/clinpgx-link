@@ -92,11 +92,15 @@ class RepositoryParentContextSupport:
             return "parent_context_not_supported"
         fields = row.get("fields")
         required = profile.get("required_fields")
+        optional = profile.get("optional_fields")
         if (
             profile.get("status") != "active"
             or not isinstance(fields, dict)
             or not isinstance(required, list)
-            or any(not isinstance(name, str) or name not in fields for name in required)
+            or not isinstance(optional, list)
+            or any(not isinstance(name, str) for name in [*required, *optional])
+            or any(name not in fields for name in required)
+            or set(fields) - {*required, *optional}
         ):
             return "parent_context_profile_unavailable"
         if (
@@ -202,16 +206,18 @@ class RepositoryParentContextSupport:
             looked_up[key] if isinstance(key, tuple) else {"status": "unavailable", "reason": key}
             for key in keys
         ]
-        dataset = self._dataset(str(rows[0]["dataset_id"]))
+        owning_dataset = PARENT_CONTEXT_DATASET if unique else str(rows[0]["dataset_id"])
+        owning_member = PARENT_CONTEXT_MEMBER if unique else str(rows[0]["member"])
+        dataset = self._dataset(owning_dataset)
         member = self._connection.execute(
             "SELECT media_type,byte_count,sha256 FROM source_member WHERE dataset_id=? AND path=?",
-            (rows[0]["dataset_id"], rows[0]["member"]),
+            (owning_dataset, owning_member),
         ).fetchone()
         details: dict[str, Any] = {"snapshot_id": self._snapshot_id}
         if member is not None:
             details["asset"] = {
-                "dataset_id": rows[0]["dataset_id"],
-                "member": rows[0]["member"],
+                "dataset_id": owning_dataset,
+                "member": owning_member,
                 "sha256": member["sha256"],
                 "total_bytes": member["byte_count"],
                 "media_type": member["media_type"],

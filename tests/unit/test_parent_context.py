@@ -30,6 +30,24 @@ def _candidate(tmp_path: Path, document: object) -> tuple[DatasetRepository, byt
     return DatasetRepository(built.database), archive, body
 
 
+def _heterogeneous_candidate(tmp_path: Path, document: object) -> tuple[DatasetRepository, bytes]:
+    from clinpgx_link.ingest.builder import build_snapshot
+
+    inputs = tmp_path / "inputs"
+    inputs.mkdir(parents=True)
+    phenotypes = json.dumps(document, ensure_ascii=False, separators=(",", ":")).encode()
+    path = inputs / "pharmcat.zip"
+    _archive(
+        path,
+        {
+            "aaa-unsupported.json": b'[{"note":"unsupported member precedes profile"}]',
+            "phenotypes.json": phenotypes,
+        },
+    )
+    built = build_snapshot([_source(path)], tmp_path / "candidate", RELEASE_TAG)
+    return DatasetRepository(built.database), phenotypes
+
+
 def _document() -> list[dict[str, object]]:
     return [
         {
@@ -558,6 +576,109 @@ async def test_unsupported_and_drifted_children_are_unavailable_not_absent(tmp_p
 
 
 @pytest.mark.asyncio
+async def test_active_child_with_undeclared_field_cannot_authorize_parent_context(
+    tmp_path: Path,
+) -> None:
+    """An active receipt cannot authorize a child outside the exact declared field set."""
+    undeclared = "undeclaredSourceField"
+    document = _document()
+    children = document[0]["diplotypes"]
+    assert isinstance(children, list) and isinstance(children[0], dict)
+    children[0][undeclared] = "source value"
+    repository, _, _ = _candidate(tmp_path, document)
+    store = ContentStore(tmp_path / "content.sqlite")
+    child = next(
+        row
+        for row in repository.search("data/pharmcat.zip", member="phenotypes.json", limit=100).value
+        if row.get("json_pointer") == "/0/diplotypes/0"
+    )
+    assert (
+        repository.record_profile("data/pharmcat.zip", "phenotypes.json", "/0/diplotypes/0")[
+            "status"
+        ]
+        == "active"
+    )
+    try:
+        async with Client(create_mcp(content_store=store, repository=repository)) as client:
+            call = await client.call_tool(
+                "get_dataset_record",
+                {"record_id": child["record_id"], "parent_fields": ["gene"]},
+            )
+            context = call.structured_content["result"]["parent_context"]
+            recovered = await client.call_tool(context["fallback_tool"], context["fallback_args"])
+        assert context["status"] == "unavailable"
+        assert context["reason"] == "parent_context_profile_unavailable"
+        assert "entries" not in context
+        assert undeclared not in json.dumps(context)
+        assert recovered.structured_content["success"] is True
+    finally:
+        repository.close()
+        store.close()
+
+
+@pytest.mark.asyncio
+async def test_declared_optional_child_field_preserves_parent_authorization(tmp_path: Path) -> None:
+    """Exact supplemental shape authorization includes declared optional fields."""
+    document = _document()
+    children = document[0]["diplotypes"]
+    assert isinstance(children, list) and isinstance(children[0], dict)
+    children[0]["activityScore"] = 1.5
+    repository, _, _ = _candidate(tmp_path, document)
+    store = ContentStore(tmp_path / "content.sqlite")
+    child = next(
+        row
+        for row in repository.search("data/pharmcat.zip", member="phenotypes.json", limit=100).value
+        if row.get("json_pointer") == "/0/diplotypes/0"
+    )
+    try:
+        async with Client(create_mcp(content_store=store, repository=repository)) as client:
+            call = await client.call_tool(
+                "get_dataset_record",
+                {"record_id": child["record_id"], "parent_fields": ["gene"]},
+            )
+        assert call.structured_content["result"]["parent_context"]["status"] == "available"
+    finally:
+        repository.close()
+        store.close()
+
+
+@pytest.mark.asyncio
+async def test_heterogeneous_page_parent_response_uses_supported_owning_member(
+    tmp_path: Path,
+) -> None:
+    """An earlier unsupported member cannot lend its asset identity to a supported parent."""
+    repository, phenotypes = _heterogeneous_candidate(tmp_path, _document())
+    store = ContentStore(tmp_path / "content.sqlite")
+    rows = repository.search("data/pharmcat.zip", limit=100).value
+    assert rows[0]["member"] == "aaa-unsupported.json"
+
+    parent_response = repository.parent_contexts(rows, ("gene",))
+    try:
+        assert any(item["status"] == "available" for item in parent_response.value)
+        assert parent_response.details["asset"]["member"] == "phenotypes.json"
+        assert parent_response.details["asset"]["sha256"] == hashlib.sha256(phenotypes).hexdigest()
+
+        async with Client(create_mcp(content_store=store, repository=repository)) as client:
+            call = await client.call_tool(
+                "search_dataset",
+                {"dataset_id": "data/pharmcat.zip", "parent_fields": ["gene"], "limit": 100},
+            )
+        supported = next(
+            row
+            for row in call.structured_content["results"]
+            if row["member"]["text"] == "phenotypes.json"
+            and row.get("parent_context", {}).get("status") == "available"
+        )
+        reference = AssetReference.decode(supported["parent_context"]["parent"]["content_ref"])
+        assert reference.member == "phenotypes.json"
+        assert reference.sha256 == hashlib.sha256(phenotypes).hexdigest()
+        assert json.loads(call.content[0].text) == call.structured_content
+    finally:
+        repository.close()
+        store.close()
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("fault", "reason"),
     [
@@ -679,6 +800,54 @@ def test_parent_lookup_deduplicates_and_restores_progress_handlers(tmp_path: Pat
             outer_bounded.parent_contexts(children, ("gene",))
     assert outer_bounded.search("data/pharmcat.zip", member="phenotypes.json", limit=1).value
     outer_bounded.close()
+
+
+@pytest.mark.asyncio
+async def test_tiny_parent_budget_publishes_mirrored_executable_fallback(tmp_path: Path) -> None:
+    """MCP must render and execute recovery when the supplemental VM budget expires."""
+    from clinpgx_link.data.parent_context import ParentContextLimits
+    from clinpgx_link.data.search_diagnostics import DiagnosticLimits
+
+    repository, _, member = _candidate(tmp_path, _document())
+    child = next(
+        row
+        for row in repository.search("data/pharmcat.zip", member="phenotypes.json", limit=100).value
+        if row.get("json_pointer") == "/0/diplotypes/0"
+    )
+    database = repository.database
+    repository.close()
+    repository = DatasetRepository(
+        database,
+        diagnostic_limits=DiagnosticLimits(quantum=1),
+        parent_context_limits=ParentContextLimits(step_budget=1),
+    )
+    store = ContentStore(tmp_path / "content.sqlite")
+    try:
+        async with Client(create_mcp(content_store=store, repository=repository)) as client:
+            call = await client.call_tool(
+                "get_dataset_record",
+                {"record_id": child["record_id"], "parent_fields": ["gene"]},
+            )
+            context = call.structured_content["result"]["parent_context"]
+            recovered = await client.call_tool(context["fallback_tool"], context["fallback_args"])
+            unrelated = await client.call_tool(
+                "get_dataset_record", {"record_id": child["record_id"]}
+            )
+        assert json.loads(call.content[0].text) == call.structured_content
+        assert context["status"] == "unavailable"
+        assert context["reason"] == "parent_lookup_budget_exhausted"
+        assert "entries" not in context
+        assert context["fallback_args"]["pointer"] == "/0"
+        assert recovered.structured_content["success"] is True
+        assert (
+            recovered.structured_content["result"]["source_sha256"]
+            == hashlib.sha256(member).hexdigest()
+        )
+        assert unrelated.structured_content["success"] is True
+        assert "parent_context" not in unrelated.structured_content["result"]
+    finally:
+        repository.close()
+        store.close()
 
 
 @pytest.mark.asyncio
