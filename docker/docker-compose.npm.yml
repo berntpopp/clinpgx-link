@@ -1,0 +1,64 @@
+# Nginx Proxy Manager deployment overlay for clinpgx-link.
+#
+#   docker compose -f docker/docker-compose.npm.yml --env-file .env.docker up -d --build
+name: clinpgx-link-npm
+
+services:
+  clinpgx_link:
+    image: ${CLINPGX_LINK_IMAGE:?Set CLINPGX_LINK_IMAGE to ghcr.io/berntpopp/clinpgx-link@sha256:<digest>}
+    pull_policy: missing
+    container_name: clinpgx-link-npm
+    expose:
+      - "8000"
+    environment:
+      - CLINPGX_MCP_HOST=0.0.0.0
+      - CLINPGX_MCP_PORT=8000
+      - CLINPGX_MCP_PATH=/mcp
+      - 'CLINPGX_ALLOWED_HOSTS=["localhost","127.0.0.1","::1","clinpgx-link.genefoundry.org","clinpgx-link-npm"]'
+      - 'CLINPGX_ALLOWED_ORIGINS=["https://clinpgx-link.genefoundry.org"]'
+      - CLINPGX_LOG_LEVEL=${LOG_LEVEL_API:-INFO}
+      - CLINPGX_LOG_FORMAT=json
+      - CLINPGX_RUNTIME_MODE=production
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-H", "Host: localhost", "http://127.0.0.1:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    user: "999:999"
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m,mode=1777
+    networks:
+      - clinpgx_link_internal_net
+      - npm_proxy_network
+    deploy:
+      resources:
+        limits:
+          memory: ${CLINPGX_API_MEMORY_LIMIT:-512m}
+          cpus: ${CLINPGX_API_CPU_LIMIT:-0.5}
+          pids: 256
+        reservations:
+          memory: 128m
+          cpus: 0.25
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+        labels: "service=clinpgx-link,environment=production,proxy=npm"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 256
+    init: true
+
+networks:
+  clinpgx_link_internal_net:
+    driver: bridge
+    name: clinpgx_link_internal_net
+  npm_proxy_network:
+    external: true
+    name: ${NPM_SHARED_NETWORK_NAME:-npm_default}

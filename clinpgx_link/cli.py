@@ -99,7 +99,7 @@ def serve(
     log_level: str | None = typer.Option(None, "--log-level", help="Configured log level."),
 ) -> None:
     """Serve health and stateless JSON MCP on one HTTP port."""
-    if transport != "http":
+    if transport not in {"http", "unified"}:
         console.print("[red]HTTP transport only.[/red]")
         raise typer.Exit(code=2)
     try:

@@ -1,0 +1,30 @@
+name: clinpgx-link
+
+services:
+  clinpgx-link:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: clinpgx-link:latest
+    ports:
+      - target: 8000
+        published: "${CLINPGX_LINK_HOST_PORT:-8014}"
+        host_ip: 127.0.0.1
+        protocol: tcp
+    environment:
+      CLINPGX_MCP_HOST: 0.0.0.0
+      CLINPGX_MCP_PORT: "8000"
+      CLINPGX_ALLOWED_HOSTS: '["localhost","127.0.0.1","::1"]'
+      CLINPGX_ALLOWED_ORIGINS: '[]'
+      CLINPGX_LOG_LEVEL: INFO
+      CLINPGX_LOG_FORMAT: json
+      CLINPGX_RUNTIME_MODE: development
+      CLINPGX_GIT_SHA: ${CLINPGX_GIT_SHA:-unknown}
+      CLINPGX_BUILT_AT: ${CLINPGX_BUILT_AT:-}
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-H", "Host: localhost", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped

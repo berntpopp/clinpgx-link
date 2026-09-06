@@ -1,0 +1,59 @@
+# Keep the build context small and the image free of secrets.
+# Build context is the repo root (compose `context: ..`).
+
+# VCS
+.git
+.github
+.gitignore
+.gitattributes
+
+# Virtualenvs
+.venv
+venv
+env
+ENV
+
+# Python caches / build artifacts
+__pycache__
+*.py[cod]
+*.egg-info
+.eggs
+wheels
+dist
+build
+
+# Secrets / local env — never bake into an image layer (keep examples)
+.env
+.env.*
+!.env.example
+!.env.docker.example
+docker/.env
+
+# Tests, docs, coverage
+tests
+docs
+scripts
+htmlcov
+.coverage
+.coverage.*
+coverage.xml
+
+# Tool caches
+.mypy_cache
+.ruff_cache
+.pytest_cache
+.nox
+.tox
+.cache
+
+# CI / editor metadata
+.pre-commit-config.yaml
+
+# Local data and database artifacts are not part of the application image.
+data
+*.db
+*.sqlite
+*.sqlite3
+*.parquet
+*.feather
+*.log

@@ -1,0 +1,51 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  release-validation:
+    name: Release validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Checkout pinned fleet contract
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: berntpopp/genefoundry-router
+          ref: 6568a0ad7d68925440aba550a2a678282ea5bb6b
+          path: .fleet-contracts/router
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          enable-cache: true
+          version: "0.11.28"
+
+      - name: Install dependencies
+        run: uv sync --group dev --frozen
+
+      - name: Run local CI checks
+        run: make ci-local
+
+      - name: Validate production Compose config
+        env:
+          CLINPGX_LINK_IMAGE: ghcr.io/berntpopp/clinpgx-link@sha256:0000000000000000000000000000000000000000000000000000000000000000
+        run: docker compose -f docker/docker-compose.yml -f docker/docker-compose.prod.yml config
+
+      - name: Build release Docker image
+        run: docker build -f docker/Dockerfile -t clinpgx-link:release .
