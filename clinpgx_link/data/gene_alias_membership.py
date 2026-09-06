@@ -88,9 +88,11 @@ def load_gene_alias_membership(
     """Strictly load a bounded receipt without reflecting malformed candidate input."""
     if raw is None:
         return LoadedGeneAliasMembership("unknown")
-    if type(raw) is not str or len(raw.encode("utf-8")) > _MAX_RECEIPT_BYTES:
+    if type(raw) is not str:
         return LoadedGeneAliasMembership("mismatched")
     try:
+        if len(raw.encode("utf-8")) > _MAX_RECEIPT_BYTES:
+            return LoadedGeneAliasMembership("mismatched")
         value = json.loads(raw, object_pairs_hook=_reject_duplicate_keys)
     except (json.JSONDecodeError, TypeError, UnicodeError, ValueError):
         return LoadedGeneAliasMembership("mismatched")

@@ -315,6 +315,15 @@ def test_receipt_parser_is_bounded(tmp_path: Path) -> None:
         repository.close()
 
 
+def test_receipt_parser_rejects_unpaired_surrogate_as_mismatched() -> None:
+    """Catch malformed Unicode escaping the closed receipt parser before JSON decoding."""
+    from clinpgx_link.data.gene_alias_membership import load_gene_alias_membership
+
+    loaded = load_gene_alias_membership("\ud800", "sha256:" + "0" * 64)
+
+    assert loaded.status == "mismatched"
+
+
 def test_repository_loads_gene_alias_receipt_once_at_initialization(tmp_path: Path) -> None:
     """Catch per-request metadata reloads that could mix compatibility within one handle."""
     built = _build(tmp_path)
