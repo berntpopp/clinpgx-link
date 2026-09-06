@@ -282,7 +282,7 @@ async def test_source_warnings_survive_minimal_mode(content_store):
 async def test_invalid_pointer_offers_working_original_byte_recovery(content_store):
     from clinpgx_link.mcp.facade import create_mcp
 
-    raw = b'{"evidence":"original"}'
+    raw = b'{"evidence":"' + (b"original-" * 32) + b'"}'
     source = SourceInfo(
         "ClinPGx",
         "https://api.clinpgx.org/v1/data/gene/PA124",
@@ -294,7 +294,13 @@ async def test_invalid_pointer_offers_working_original_byte_recovery(content_sto
     async with Client(create_mcp(content_store=content_store)) as client:
         call = await client.call_tool(
             "get_source_content",
-            {"content_ref": ref, "pointer": "/evidence", "representation": "base64"},
+            {
+                "content_ref": ref,
+                "pointer": "/evidence",
+                "representation": "base64",
+                "start": 17,
+                "length": 9,
+            },
             raise_on_error=False,
         )
         command = call.structured_content["_meta"]["next_commands"][0]
@@ -310,10 +316,20 @@ async def test_invalid_pointer_offers_working_original_byte_recovery(content_sto
             "content_ref": ref,
             "pointer": "",
             "representation": "base64",
+            "start": 0,
+            "length": 256,
         },
     }
+    assert call.structured_content["fallback_args"] == command["arguments"]
     assert json.loads(recovered.content[0].text) == recovered.structured_content
-    assert base64.b64decode(recovered.structured_content["result"]["base64"]) == raw
+    recovered_result = recovered.structured_content["result"]
+    assert base64.b64decode(recovered_result["base64"]) == raw[:256]
+    assert recovered_result["content_ref"] == ref
+    assert recovered_result["returned"] == 256
+    assert recovered_result["total"] == len(raw)
+    assert recovered_result["has_more"] is True
+    assert recovered_result["next_start"] == 256
+    assert recovered_result["sha256"] == hashlib.sha256(raw).hexdigest()
 
 
 @pytest.mark.asyncio
@@ -323,8 +339,16 @@ async def test_content_schema_states_representation_selection_contract(content_s
     tools = {tool.name: tool for tool in await create_mcp(content_store=content_store).list_tools()}
     properties = tools["get_source_content"].parameters["properties"]
 
+    content_ref_description = properties["content_ref"]["description"].lower()
     pointer_description = properties["pointer"]["description"].lower()
     representation_description = properties["representation"]["description"].lower()
+    assert "pass it unchanged" in content_ref_description
+    assert "content:" in content_ref_description
+    assert "retained source or derived content" in content_ref_description
+    assert "asset:" in content_ref_description
+    assert "snapshot-retained archive/member bytes" in content_ref_description
+    assert "json within that referenced content" in content_ref_description
+    assert "not another representation" in content_ref_description
     assert "base64 requires an empty pointer" in pointer_description
     assert "text reads strings" in representation_description
     assert "short scalar" in representation_description

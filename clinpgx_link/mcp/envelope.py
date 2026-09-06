@@ -261,11 +261,13 @@ def error_result(
                 and re.search(r"~(?![01])", recovery_pointer) is None
             )
         )
-        arguments = {
+        arguments: dict[str, Any] = {
             "content_ref": content_ref,
             "pointer": recovery_pointer if structure_pointer else "",
             "representation": "structure" if structure_pointer else "base64",
         }
+        if public_subtype == "base64_pointer_unsupported":
+            arguments.update(start=0, length=256)
         result["recovery_action"] = "read_original_bytes"
         result["fallback_tool"] = "get_source_content"
         result["fallback_args"] = arguments

@@ -197,7 +197,7 @@ def create_mcp(
         content_ref: Annotated[
             str,
             Field(
-                description="Immutable reference returned by a source tool.",
+                description="Opaque reference returned by a source tool; pass it unchanged. content: identifies retained source or derived content, while asset: identifies snapshot-retained archive/member bytes. A pointer addresses JSON within that referenced content, not another representation.",
                 examples=["content:" + "a" * 64],
             ),
         ],

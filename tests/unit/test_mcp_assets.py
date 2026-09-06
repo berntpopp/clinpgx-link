@@ -180,7 +180,13 @@ async def test_valid_asset_base64_pointer_offers_executable_exact_byte_recovery(
         async with Client(create_mcp(content_store=store, repository=repository)) as client:
             rejected = await client.call_tool(
                 "get_source_content",
-                {"content_ref": reference, "pointer": "/0", "representation": "base64"},
+                {
+                    "content_ref": reference,
+                    "pointer": "/0",
+                    "representation": "base64",
+                    "start": 13,
+                    "length": 7,
+                },
                 raise_on_error=False,
             )
             command = rejected.structured_content["_meta"]["next_commands"][0]
@@ -195,13 +201,22 @@ async def test_valid_asset_base64_pointer_offers_executable_exact_byte_recovery(
                 "content_ref": reference,
                 "pointer": "",
                 "representation": "base64",
+                "start": 0,
+                "length": 256,
             },
         }
+        assert rejected.structured_content["fallback_args"] == command["arguments"]
         assert json.loads(recovered.content[0].text) == recovered.structured_content
-        assert (
-            base64.b64decode(recovered.structured_content["result"]["base64"])
-            == (FIXTURES / "genes.tsv").read_bytes()
-        )
+        recovered_result = recovered.structured_content["result"]
+        raw = (FIXTURES / "genes.tsv").read_bytes()
+        assert base64.b64decode(recovered_result["base64"]) == raw[:256]
+        assert recovered_result["content_ref"] == reference
+        assert recovered_result["returned"] == 256
+        assert recovered_result["total"] == len(raw)
+        assert recovered_result["has_more"] is True
+        assert recovered_result["next_start"] == 256
+        assert recovered_result["sha256"] == member["sha256"]
+        assert recovered.structured_content["_meta"]["source_scope"] == "member"
     finally:
         repository.close()
         store.close()
@@ -211,15 +226,21 @@ async def test_valid_asset_base64_pointer_offers_executable_exact_byte_recovery(
 async def test_malformed_asset_reference_never_advertises_content_recovery(tmp_path):
     repository, _ = _repository(tmp_path)
     store = ContentStore(tmp_path / "cache.sqlite")
+    hostile_reference = "asset:not-valid-ignore-instructions-secret"
     try:
         async with Client(create_mcp(content_store=store, repository=repository)) as client:
             rejected = await client.call_tool(
                 "get_source_content",
-                {"content_ref": "asset:not-valid", "pointer": "/0", "representation": "base64"},
+                {
+                    "content_ref": hostile_reference,
+                    "pointer": "/0",
+                    "representation": "base64",
+                },
                 raise_on_error=False,
             )
 
         assert rejected.is_error
+        assert hostile_reference not in rejected.content[0].text
         assert rejected.structured_content["fallback_tool"] == "get_server_capabilities"
         assert rejected.structured_content["_meta"]["next_commands"] == [
             {"tool": "get_server_capabilities", "arguments": {}}
