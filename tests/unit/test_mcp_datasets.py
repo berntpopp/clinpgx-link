@@ -590,3 +590,28 @@ async def test_list_datasets_minimal_mode_omits_unparsed_member_limitations(tmp_
     finally:
         repository.close()
         store.close()
+
+
+@pytest.mark.asyncio
+async def test_get_dataset_with_member_filter(tmp_path):
+    repository, _built = _repository(tmp_path)
+    store = ContentStore(tmp_path / "content.sqlite")
+    try:
+        async with Client(_dataset_server(repository, store)) as client:
+            res = await client.call_tool(
+                "get_dataset", {"dataset_id": "data/genes.zip", "member": "genes.tsv"}
+            )
+            members = res.structured_content["result"]["members"]
+            assert len(members) == 1
+            assert members[0]["path"]["text"] == "genes.tsv"
+            assert "member_sha256" in members[0]
+
+            with pytest.raises(Exception) as exc_info:
+                await client.call_tool(
+                    "get_dataset",
+                    {"dataset_id": "data/genes.zip", "member": "missing.tsv"},
+                )
+            assert "not_found" in str(exc_info.value)
+    finally:
+        repository.close()
+        store.close()

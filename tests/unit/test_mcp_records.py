@@ -1031,7 +1031,52 @@ async def test_get_record_guideline_annotation_api_recommends_website_source(tmp
                 cmd.get("tool") == "get_record"
                 and cmd.get("arguments", {}).get("source") == "website"
                 and cmd.get("arguments", {}).get("record_id") == "PA166104948"
+                and cmd.get("arguments", {}).get("pointer") == "/data/cpicGuideline/link/resourceId"
                 for cmd in meta.get("next_commands", [])
             )
+    finally:
+        store.close()
+
+
+@pytest.mark.asyncio
+async def test_get_record_website_with_data_prefixed_pointer(tmp_path):
+    def handle(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/v1/site/guidelineAnnotation/PA166104948"
+        return httpx.Response(
+            200,
+            json={
+                "status": "success",
+                "data": {
+                    "id": "PA166104948",
+                    "cpicGuideline": {
+                        "link": {
+                            "resourceId": "https://cpicpgx.org/guidelines/guideline-for-clopidogrel-and-cyp2c19/"
+                        }
+                    },
+                },
+            },
+        )
+
+    store = ContentStore(tmp_path / "content.sqlite")
+    upstream = ClinPGxClient(
+        Settings(_env_file=None, cache_root=tmp_path),
+        httpx.AsyncClient(transport=httpx.MockTransport(handle)),
+        store,
+    )
+    try:
+        async with Client(_server(store, website=WebsiteClient(upstream))) as client:
+            res = await client.call_tool(
+                "get_record",
+                {
+                    "entity_type": "guideline_annotation",
+                    "record_id": "PA166104948",
+                    "source": "website",
+                    "pointer": "/data/cpicGuideline/link/resourceId",
+                },
+            )
+            assert res.structured_content["success"] is True
+            data_val = res.structured_content["result"]["data"]
+            text = data_val["text"] if isinstance(data_val, dict) else data_val
+            assert "https://cpicpgx.org/guidelines/guideline-for-clopidogrel-and-cyp2c19/" in text
     finally:
         store.close()

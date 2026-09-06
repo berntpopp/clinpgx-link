@@ -17,6 +17,7 @@ from clinpgx_link.data.repository import DatasetRepository
 from clinpgx_link.exceptions import (
     ClinPGxError,
     InvalidInputError,
+    NotFoundError,
     ResponseTooLargeError,
     UpstreamUnavailableError,
 )
@@ -288,6 +289,10 @@ def register_dataset_tools(
                 examples=["data/genes.zip"],
             ),
         ],
+        member: Annotated[
+            str | None,
+            Field(description="Exact installed member path to scope inspection.", max_length=4096),
+        ] = None,
         limit: Annotated[int, Field(description="Maximum members to return.", ge=1, le=100)] = 20,
         offset: Annotated[int, Field(description="Zero-based member offset.", ge=0)] = 0,
         cursor: Annotated[
@@ -311,7 +316,11 @@ def register_dataset_tools(
             if cursor is not None and offset:
                 raise InvalidInputError("Cursor and offset cannot be combined.", field="offset")
             snapshot_id = str((await run_sync(repository.status))["snapshot_id"])
-            selectors = {"tool": "get_dataset", "dataset_id": dataset_id}
+            selectors = {
+                "tool": "get_dataset",
+                "dataset_id": dataset_id,
+                "member": member,
+            }
             if cursor is not None:
                 position = cursors.decode(cursor, selectors)
                 if position.identity != snapshot_id:
@@ -325,11 +334,19 @@ def register_dataset_tools(
                 raise UpstreamUnavailableError(
                     "The local snapshot identity changed.", subtype="snapshot_mismatch"
                 )
-            total = len(response.value.get("members", []))
+            all_members = response.value.get("members", [])
+            members = (
+                [m for m in all_members if m.get("path") == member or m.get("name") == member]
+                if member is not None
+                else all_members
+            )
+            if member is not None and not members:
+                raise NotFoundError("The requested dataset member was not found.", field="member")
+            total = len(members)
             if offset > total:
                 raise InvalidInputError("Offset exceeds dataset members.", field="offset")
             page_description = dict(response.value)
-            page_description["members"] = response.value.get("members", [])[offset : offset + limit]
+            page_description["members"] = members[offset : offset + limit]
             projected, detail_omitted = project_dataset_description(page_description, response_mode)
             value = await run_sync(
                 _decorate_dataset,

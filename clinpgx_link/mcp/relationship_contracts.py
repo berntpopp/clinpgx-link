@@ -140,6 +140,7 @@ def guideline_website_recommendation(
                     "entity_type": "guideline_annotation",
                     "record_id": record_id,
                     "source": "website",
+                    "pointer": "/data/cpicGuideline/link/resourceId",
                 },
             }
         ]

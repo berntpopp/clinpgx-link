@@ -147,11 +147,17 @@ _ANNOTATIONS = {
 
 
 def _select(response: SourceResponse, pointer: str) -> SourceResponse:
+    base = response.details.get("source_pointer")
+    target = (
+        pointer.removeprefix(base)
+        if isinstance(base, str) and base and pointer.startswith(base + "/")
+        else ("" if isinstance(base, str) and base and pointer == base else pointer)
+    )
     selected = SourceResponse(
-        select_value(response.value, pointer), response.source, dict(response.details)
+        select_value(response.value, target), response.source, dict(response.details)
     )
     selected.details["source_pointer"] = source_pointer(
-        selected.details.get("source_pointer"), pointer
+        selected.details.get("source_pointer"), target
     )
     return selected
 
