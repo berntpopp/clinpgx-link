@@ -365,7 +365,7 @@ def _span(text: str, start: int, end: int) -> ExactTextSpan:
 def _validated_review(candidate: _Candidate) -> SelfReview:
     if candidate.failure is not None:
         _fail(candidate.failure)
-    if not isinstance(candidate.parsed, dict) or set(candidate.parsed) != {"experience_review"}:
+    if not isinstance(candidate.parsed, dict) or "experience_review" not in candidate.parsed:
         _fail("invalid_review")
     try:
         return SelfReview.model_validate(candidate.parsed["experience_review"], strict=True)

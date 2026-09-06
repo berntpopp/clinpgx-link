@@ -148,6 +148,28 @@ def test_fenced_review_without_suffix_records_recommendations_as_absent() -> Non
     assert result.recommendations_missing_reason == "not_present"
 
 
+def test_extracts_review_with_sibling_keys_in_top_level_object() -> None:
+    data = {
+        "experience_review": _review()["experience_review"],
+        "three_most_useful_concrete_mcp_improvements": [
+            "Improve metadata discoverability",
+            "Clarify digest semantics",
+            "Streamline route exploration",
+        ],
+    }
+    raw = json.dumps(data, ensure_ascii=False)
+    final = f"```json\n{raw}\n```"
+
+    result = extract_self_review(_run(final))
+    assert result.scores.model_dump() == dict(
+        zip(ASPECTS, (0, 10, 20, 30, 40, 50, 90, 100), strict=True)
+    )
+    assert result.review_span.sha256 == hashlib.sha256(raw.encode()).hexdigest()
+    assert result.recommendations_text is None
+    assert result.recommendations_span is None
+    assert result.recommendations_missing_reason == "not_present"
+
+
 def test_ignores_valid_unrelated_blocks_nested_keys_and_quoted_mentions() -> None:
     unrelated = {
         "note": "experience_review is only text",
