@@ -142,6 +142,7 @@ def guideline_website_recommendation(
                     "source": "website",
                     "pointer": "/data/cpicGuideline/link/resourceId",
                 },
+                "description": "Fetch CPIC guideline publisher URL directly via website representation",
             }
         ]
     return None
@@ -153,6 +154,17 @@ def relationship_next_commands(value: Any, result_type: str) -> list[dict[str, A
         cmds: list[dict[str, Any]] = []
         for item in value[:2]:
             if isinstance(item, dict) and "id" in item:
+                name = str(item.get("name", ""))
+                org = ""
+                for candidate in ("CPIC", "DPWG", "RNPGx", "AHA"):
+                    if candidate in name:
+                        org = candidate
+                        break
+                desc = (
+                    f"Fetch {org} publisher URL via website representation"
+                    if org
+                    else "Fetch publisher URL via website representation"
+                )
                 cmds.append(
                     {
                         "tool": "get_record",
@@ -160,8 +172,13 @@ def relationship_next_commands(value: Any, result_type: str) -> list[dict[str, A
                             "entity_type": "guideline_annotation",
                             "record_id": item["id"],
                             "source": "website",
-                            "pointer": "/data/cpicGuideline/link/resourceId",
+                            "pointer": (
+                                "/data/cpicGuideline/link/resourceId"
+                                if org == "CPIC"
+                                else "/data/guideline"
+                            ),
                         },
+                        "description": desc,
                     }
                 )
         return cmds or None

@@ -152,7 +152,8 @@ def _catalog_value(
     value: dict[str, Any], source: SourceInfo, *, response_mode: ResponseMode = "compact"
 ) -> dict[str, Any]:
     result = dict(value)
-    result["provenance"] = row_provenance(source)
+    if response_mode != "minimal":
+        result["provenance"] = row_provenance(source)
     limitations = value.get("limitations", [])
     warnings = value.get("warnings", [])
     if response_mode == "minimal":
