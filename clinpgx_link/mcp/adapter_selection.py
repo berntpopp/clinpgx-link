@@ -321,7 +321,10 @@ def render_adapter_selections(
 
 
 def adapter_selection_result(
-    response: SourceResponse, pointers: tuple[str, ...], store: ContentStore
+    response: SourceResponse,
+    pointers: tuple[str, ...],
+    store: ContentStore,
+    next_commands: list[dict[str, Any]] | None = None,
 ) -> ToolResult:
     """Apply the shared live-selection row and envelope budgets at the MCP boundary."""
     selected = render_adapter_selections(response, pointers, store)
@@ -331,6 +334,7 @@ def adapter_selection_result(
         selected,
         source=response.source,
         content_ref=response.details["content_ref"],
+        next_commands=next_commands,
     )
 
 

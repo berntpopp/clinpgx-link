@@ -180,6 +180,7 @@ class SourcePresenter:
         state_ref: str | None = None,
         response_mode: ResponseMode = "compact",
         profile: str | None = None,
+        next_commands: list[dict[str, Any]] | None = None,
     ) -> ToolResult:
         if type(limit) is not int or not 1 <= limit <= 100 or type(offset) is not int or offset < 0:
             raise InvalidInputError("Invalid source page bounds.")
@@ -192,6 +193,7 @@ class SourcePresenter:
                 ),
                 source=response.source,
                 content_ref=response.details["content_ref"],
+                next_commands=next_commands,
             )
         total = len(response.value)
         if offset > total:
@@ -237,6 +239,7 @@ class SourcePresenter:
                         "has_more": next_cursor is not None,
                         "next_cursor": next_cursor,
                     },
+                    next_commands=next_commands,
                 )
             except ResponseTooLargeError:
                 if len(rows) > 1:

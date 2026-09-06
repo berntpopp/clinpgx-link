@@ -75,6 +75,7 @@ def success_result(
     content_ref: str | None = None,
     snapshot_id: str | None = None,
     search_diagnostics: dict[str, Any] | None = None,
+    next_commands: list[dict[str, Any]] | None = None,
 ) -> ToolResult:
     """Build provenance without confusing source time with the time of a cache hit."""
     request_id = REQUEST_ID.get() or str(uuid.uuid4())
@@ -87,6 +88,19 @@ def success_result(
         or (page_snapshot is not None and page_snapshot != snapshot_id)
     ):
         raise ClinPGxError("Invalid snapshot provenance.")
+    commands: list[dict[str, Any]] = []
+    if content_ref is not None:
+        commands.append(
+            {
+                "tool": "get_source_content",
+                "arguments": {
+                    "content_ref": content_ref,
+                    "representation": "structure",
+                },
+            }
+        )
+    if next_commands:
+        commands.extend(next_commands)
     return wire_result(
         {
             "success": True,
@@ -116,19 +130,7 @@ def success_result(
                     for warning in source.warnings
                 ],
                 "unsafe_for_clinical_use": True,
-                "next_commands": (
-                    [
-                        {
-                            "tool": "get_source_content",
-                            "arguments": {
-                                "content_ref": content_ref,
-                                "representation": "structure",
-                            },
-                        }
-                    ]
-                    if content_ref is not None
-                    else []
-                ),
+                "next_commands": commands,
                 **({"content_ref": content_ref} if content_ref is not None else {}),
                 **({"pagination": pagination} if pagination is not None else {}),
                 **({"snapshot_id": snapshot_id} if snapshot_id is not None else {}),

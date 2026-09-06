@@ -42,7 +42,10 @@ from clinpgx_link.mcp.record_types import (
     SearchEntity,
     View,
 )
-from clinpgx_link.mcp.relationship_contracts import resolve_api_relationship_route
+from clinpgx_link.mcp.relationship_contracts import (
+    guideline_website_recommendation,
+    resolve_api_relationship_route,
+)
 from clinpgx_link.mcp.search_contracts import FILTER_DESCRIPTION, resolve_search_route
 from clinpgx_link.mcp.selection import validate_pointers
 from clinpgx_link.mcp.shaping import SourcePresenter, source_pointer
@@ -297,7 +300,7 @@ def register_record_tools(
         pointers: PointersArg = None,
         response_mode: ModeArg = "compact",
     ) -> ToolResult:
-        """Get one exact entity without changing the requested source."""
+        """Get one exact entity without changing source; use source='website' for guideline URLs."""
         began = time.monotonic()
         response: SourceResponse | None = None
         recovery: recovery_help.RecoveryPlan | None = None
@@ -330,9 +333,14 @@ def register_record_tools(
                         entity_type, record_id, source, view
                     )
                 response = await api.get(entity_type, record_id, view)
+                next_cmds = guideline_website_recommendation(entity_type, record_id, source)
                 if selected_pointers is not None:
                     return await run_sync(
-                        adapter_selection_result, response, selected_pointers, store
+                        adapter_selection_result,
+                        response,
+                        selected_pointers,
+                        store,
+                        next_commands=next_cmds,
                     )
                 return await run_sync(
                     presenter.present,
@@ -347,6 +355,7 @@ def register_record_tools(
                     },
                     response_mode=response_mode,
                     profile=None if pointer else adapter_profile("", family=entity_type),
+                    next_commands=next_cmds,
                 )
             if source == "website":
                 operation = recovery_help.WEBSITE_GET.get(entity_type)
@@ -496,7 +505,7 @@ def register_record_tools(
         cursor: CursorArg = None,
         response_mode: ModeArg = "compact",
     ) -> ToolResult:
-        """Use known IDs for live connected/pair reports or loss-preserving installed joins."""
+        """Use known IDs for live reports or joins. Guideline URLs live under source='website'."""
         began = time.monotonic()
         response: SourceResponse | None = None
         recovery: recovery_help.RecoveryPlan | None = None

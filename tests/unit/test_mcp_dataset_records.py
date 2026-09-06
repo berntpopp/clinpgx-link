@@ -166,6 +166,8 @@ async def test_search_returns_complete_standard_rows_and_two_pages(tmp_path):
             assert asset.dataset_id == "data/genes.zip"
             assert asset.member == "genes.tsv"
             assert asset.sha256 != row["provenance"]["archive_sha256"]
+            assert row["member_sha256"] == asset.sha256
+            assert row["member_sha256"] != row["member"]["raw_sha256"]
             second = await client.call_tool(
                 "search_dataset",
                 {

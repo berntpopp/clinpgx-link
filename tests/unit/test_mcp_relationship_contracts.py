@@ -58,6 +58,8 @@ async def test_capability_relationship_examples_execute_exact_closed_routes(tmp_
             assert contract["pair"]["object_type_selectors"] == (
                 "Documentation-only; not sent as upstream pair filters or restrictions."
             )
+            assert "guideline_url_workflow" in contract
+            assert "source='website'" in contract["guideline_url_workflow"]
             assert contract["pair"]["example_purpose"] == (
                 "Gene/chemical to guideline_annotation syntax; not evidence of a current match."
             )

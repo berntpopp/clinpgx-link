@@ -128,11 +128,34 @@ def relationship_recovery_choices() -> dict[str, list[str]]:
     }
 
 
+def guideline_website_recommendation(
+    entity_type: str, record_id: str, source: str
+) -> list[dict[str, Any]] | None:
+    """Recommend website representation for API guideline annotations to discover publisher URLs."""
+    if source == "api" and entity_type in {"guideline_annotation", "guidelineAnnotation"}:
+        return [
+            {
+                "tool": "get_record",
+                "arguments": {
+                    "entity_type": "guideline_annotation",
+                    "record_id": record_id,
+                    "source": "website",
+                },
+            }
+        ]
+    return None
+
+
 def relationship_capabilities_payload() -> dict[str, Any]:
     """Publish bounded relationship grammar and syntax-only examples."""
     return {
         "identifier_workflow": (
             "Resolve gene and chemical names with search_records, then reuse returned IDs."
+        ),
+        "guideline_url_workflow": (
+            "Guideline annotations from pair reports have publisher URLs and web representations "
+            "on the website route via get_record(entity_type='guideline_annotation', record_id=id, "
+            "source='website') at /data/cpicGuideline/link/resourceId."
         ),
         "connected_object": {
             "operation": CONNECTED_OBJECT_OPERATION,
@@ -169,6 +192,7 @@ __all__ = [
     "RELATIONSHIP_OBJECT_TYPES",
     "RelationshipRoute",
     "connected_object_arguments",
+    "guideline_website_recommendation",
     "pair_arguments",
     "relationship_capabilities_payload",
     "relationship_recovery_choices",

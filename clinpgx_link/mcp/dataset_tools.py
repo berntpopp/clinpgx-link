@@ -127,6 +127,7 @@ def _decorate_dataset(
         item["content_ref"] = AssetReference(
             snapshot_id, dataset_id, path, str(member["sha256"])
         ).encode()
+        item["member_sha256"] = str(member["sha256"])
         decorated_members.append(item)
     value["members"] = decorated_members
     metadata_source = complete_description if complete_description is not None else description
@@ -137,15 +138,29 @@ def _decorate_dataset(
     return value
 
 
-def _catalog_value(value: dict[str, Any], source: SourceInfo) -> dict[str, Any]:
+def _catalog_value(
+    value: dict[str, Any], source: SourceInfo, *, response_mode: ResponseMode = "compact"
+) -> dict[str, Any]:
     result = dict(value)
     result["provenance"] = row_provenance(source)
-    result["limitations"] = [
-        _fence(item, source, str(value["dataset_id"])) for item in value.get("limitations", [])
-    ]
-    result["warnings"] = [
-        _fence(item, source, str(value["dataset_id"])) for item in value.get("warnings", [])
-    ]
+    limitations = value.get("limitations", [])
+    warnings = value.get("warnings", [])
+    if response_mode == "minimal":
+        archive_limitations = [
+            item for item in limitations if not item.startswith("unparsed_member:")
+        ]
+        result["limitations"] = [
+            _fence(item, source, str(value["dataset_id"])) for item in archive_limitations
+        ]
+        result["warnings"] = [_fence(item, source, str(value["dataset_id"])) for item in warnings]
+        unparsed_count = len(limitations) - len(archive_limitations)
+        if unparsed_count > 0:
+            result["unparsed_member_count"] = unparsed_count
+    else:
+        result["limitations"] = [
+            _fence(item, source, str(value["dataset_id"])) for item in limitations
+        ]
+        result["warnings"] = [_fence(item, source, str(value["dataset_id"])) for item in warnings]
     return result
 
 
@@ -173,6 +188,7 @@ def register_dataset_tools(
             ResponseMode, Field(description="Response detail mode.")
         ] = "compact",
     ) -> ToolResult:
+        """List datasets available in the installed snapshot catalog. Use response_mode='minimal' for concise overview."""
         began = time.monotonic()
         try:
             if repository is None:
@@ -224,7 +240,7 @@ def register_dataset_tools(
                     raise UpstreamUnavailableError(
                         "Installed dataset provenance is incomplete.", subtype="snapshot_invalid"
                     )
-                values.append(_catalog_value(item, row_source))
+                values.append(_catalog_value(item, row_source, response_mode=response_mode))
             total = len(values)
             if offset > total:
                 raise InvalidInputError("Offset exceeds dataset catalog.", field="offset")
@@ -281,6 +297,7 @@ def register_dataset_tools(
             ResponseMode, Field(description="Response detail mode.")
         ] = "compact",
     ) -> ToolResult:
+        """Inspect one installed dataset snapshot record. Member items include member_sha256."""
         began = time.monotonic()
         try:
             if repository is None:

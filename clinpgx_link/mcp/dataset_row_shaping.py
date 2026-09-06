@@ -257,6 +257,9 @@ def shape_dataset_row(
     result["provenance"] = row_provenance(source)
     record_id = str(row["record_id"])
     result["member"] = fence_text(str(row["member"]), source=source, record_id=record_id)
+    asset = owning_response.details.get("asset")
+    if isinstance(asset, dict) and "sha256" in asset:
+        result["member_sha256"] = str(asset["sha256"])
     for pointer_key in ("json_pointer", "parent_pointer"):
         if pointer_key in result and result[pointer_key] is not None:
             result[pointer_key] = fence_text(

@@ -996,3 +996,42 @@ async def test_recovery_hides_malicious_identifiers_exception_payloads_and_filte
     finally:
         repository.close()
         store.close()
+
+
+@pytest.mark.asyncio
+async def test_get_record_guideline_annotation_api_recommends_website_source(tmp_path):
+    def handle(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/v1/data/guidelineAnnotation/PA166104948"
+        return httpx.Response(
+            200,
+            json={
+                "status": "success",
+                "data": {"id": "PA166104948", "name": "Annotation of CPIC Guideline"},
+            },
+        )
+
+    store = ContentStore(tmp_path / "content.sqlite")
+    upstream = ClinPGxClient(
+        Settings(_env_file=None, cache_root=tmp_path),
+        httpx.AsyncClient(transport=httpx.MockTransport(handle)),
+        store,
+    )
+    try:
+        async with Client(_server(store, api=ApiService(upstream))) as client:
+            res = await client.call_tool(
+                "get_record",
+                {
+                    "entity_type": "guideline_annotation",
+                    "record_id": "PA166104948",
+                    "source": "api",
+                },
+            )
+            meta = res.structured_content["_meta"]
+            assert any(
+                cmd.get("tool") == "get_record"
+                and cmd.get("arguments", {}).get("source") == "website"
+                and cmd.get("arguments", {}).get("record_id") == "PA166104948"
+                for cmd in meta.get("next_commands", [])
+            )
+    finally:
+        store.close()

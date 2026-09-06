@@ -528,3 +528,65 @@ async def test_response_modes_are_closed_and_do_not_change_selectors(tmp_path):
     finally:
         repository.close()
         store.close()
+
+
+@pytest.mark.asyncio
+async def test_get_dataset_members_include_member_sha256(tmp_path):
+    repository, _built = _repository(tmp_path)
+    store = ContentStore(tmp_path / "content.sqlite")
+    try:
+        async with Client(_dataset_server(repository, store)) as client:
+            result = await client.call_tool(
+                "get_dataset", {"dataset_id": "data/genes.zip", "limit": 1}
+            )
+            member = result.structured_content["result"]["members"][0]
+            assert "member_sha256" in member
+            assert member["member_sha256"] == member["sha256"]
+            assert member["member_sha256"] != member["path"]["raw_sha256"]
+    finally:
+        repository.close()
+        store.close()
+
+
+@pytest.mark.asyncio
+async def test_list_datasets_minimal_mode_omits_unparsed_member_limitations(tmp_path, monkeypatch):
+    repository, _built = _repository(tmp_path)
+    store = ContentStore(tmp_path / "content.sqlite")
+    raw_list = repository.list_datasets
+
+    def _mock_list():
+        resp = raw_list()
+        for item in resp.value:
+            if item["dataset_id"] == "data/genes.zip":
+                item["limitations"] = [
+                    "unparsed_member:foo.txt: unsupported",
+                    "unparsed_member:bar.txt: unsupported",
+                    "archive_scope_limitation",
+                ]
+        return resp
+
+    monkeypatch.setattr(repository, "list_datasets", _mock_list)
+    try:
+        async with Client(_dataset_server(repository, store)) as client:
+            res_minimal = await client.call_tool(
+                "list_datasets", {"response_mode": "minimal", "limit": 10}
+            )
+            payload_min = res_minimal.structured_content
+            genes_min = next(
+                item for item in payload_min["results"] if item["dataset_id"] == "data/genes.zip"
+            )
+            assert len(genes_min["limitations"]) == 1
+            assert genes_min["limitations"][0]["text"] == "archive_scope_limitation"
+            assert genes_min.get("unparsed_member_count") == 2
+
+            res_compact = await client.call_tool(
+                "list_datasets", {"response_mode": "compact", "limit": 10}
+            )
+            payload_comp = res_compact.structured_content
+            genes_comp = next(
+                item for item in payload_comp["results"] if item["dataset_id"] == "data/genes.zip"
+            )
+            assert len(genes_comp["limitations"]) == 3
+    finally:
+        repository.close()
+        store.close()
