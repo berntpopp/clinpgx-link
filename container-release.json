@@ -19,7 +19,40 @@
   },
   "data": {
     "mode": "none",
-    "image_allowlist": []
+    "image_allowlist": [
+      "home/app/web/clinpgx_link/data/catalog.py",
+      "home/app/web/clinpgx_link/data/coverage.json",
+      "home/app/web/clinpgx_link/data/coverage.py",
+      "home/app/web/clinpgx_link/data/dataset_filter_contracts.py",
+      "home/app/web/clinpgx_link/data/dataset_filtering.py",
+      "home/app/web/clinpgx_link/data/gene_alias_membership.py",
+      "home/app/web/clinpgx_link/data/parent_context.py",
+      "home/app/web/clinpgx_link/data/profile_validation.py",
+      "home/app/web/clinpgx_link/data/record_profiles.py",
+      "home/app/web/clinpgx_link/data/repository.py",
+      "home/app/web/clinpgx_link/data/repository_gene_aliases.py",
+      "home/app/web/clinpgx_link/data/repository_locking.py",
+      "home/app/web/clinpgx_link/data/repository_profiles.py",
+      "home/app/web/clinpgx_link/data/repository_provenance.py",
+      "home/app/web/clinpgx_link/data/schema.sql",
+      "home/app/web/clinpgx_link/data/search_diagnostics.py",
+      "opt/venv/lib/python3.14/site-packages/clinpgx_link/data/catalog.py",
+      "opt/venv/lib/python3.14/site-packages/clinpgx_link/data/coverage.json",
+      "opt/venv/lib/python3.14/site-packages/clinpgx_link/data/coverage.py",
+      "opt/venv/lib/python3.14/site-packages/clinpgx_link/data/dataset_filter_contracts.py",
+      "opt/venv/lib/python3.14/site-packages/clinpgx_link/data/dataset_filtering.py",
+      "opt/venv/lib/python3.14/site-packages/clinpgx_link/data/gene_alias_membership.py",
+      "opt/venv/lib/python3.14/site-packages/clinpgx_link/data/parent_context.py",
+      "opt/venv/lib/python3.14/site-packages/clinpgx_link/data/profile_validation.py",
+      "opt/venv/lib/python3.14/site-packages/clinpgx_link/data/record_profiles.py",
+      "opt/venv/lib/python3.14/site-packages/clinpgx_link/data/repository.py",
+      "opt/venv/lib/python3.14/site-packages/clinpgx_link/data/repository_gene_aliases.py",
+      "opt/venv/lib/python3.14/site-packages/clinpgx_link/data/repository_locking.py",
+      "opt/venv/lib/python3.14/site-packages/clinpgx_link/data/repository_profiles.py",
+      "opt/venv/lib/python3.14/site-packages/clinpgx_link/data/repository_provenance.py",
+      "opt/venv/lib/python3.14/site-packages/clinpgx_link/data/schema.sql",
+      "opt/venv/lib/python3.14/site-packages/clinpgx_link/data/search_diagnostics.py"
+    ]
   },
   "definitions": {
     "contract": "data-independent"

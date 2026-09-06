@@ -12,7 +12,6 @@ services:
       GF_HEALTHCHECK_HOST: localhost
       CLINPGX_LOG_LEVEL: INFO
       CLINPGX_LOG_FORMAT: json
-      CLINPGX_RUNTIME_MODE: production
       CLINPGX_ALLOWED_HOSTS: '["localhost","127.0.0.1","::1","clinpgx-link.genefoundry.org"]'
       CLINPGX_ALLOWED_ORIGINS: '["https://clinpgx-link.genefoundry.org"]'
 
