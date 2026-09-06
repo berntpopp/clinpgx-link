@@ -128,6 +128,12 @@ def _attempt_failures(evidence: AttemptEvidence) -> set[str]:
         and evidence.requested_effort != evidence.observed_effort
     ):
         failures.add("known_effort_mismatch")
+    if (
+        evidence.consumer == "terra"
+        and evidence.suite in {"frozen12", "heldout"}
+        and (evidence.requested_effort != "high" or evidence.observed_effort != "high")
+    ):
+        failures.add("terra_effort_not_high")
     if evidence.model_rerouted:
         failures.add("model_rerouted")
     if not evidence.transport_passed:
@@ -200,8 +206,22 @@ def _is_nonacceptance_taskset(declaration: BatchDeclaration) -> bool:
     )
 
 
-def _batch_failures(declaration: BatchDeclaration, attempts: Sequence[AttemptEvidence]) -> set[str]:
+def _acceptance_declaration_failures(declaration: BatchDeclaration) -> set[str]:
+    """Return full UX execution-shape failures from one authoritative check."""
+    if _is_nonacceptance_taskset(declaration):
+        return set()
     failures: set[str] = set()
+    if set(declaration.required_consumers) != {"opus", "terra"}:
+        failures.add("acceptance_consumer_set_mismatch")
+    if declaration.parallelism != 4:
+        failures.add("acceptance_parallelism_mismatch")
+    if declaration.effort_by_consumer.get("terra") != "high":
+        failures.add("terra_effort_declaration_mismatch")
+    return failures
+
+
+def _batch_failures(declaration: BatchDeclaration, attempts: Sequence[AttemptEvidence]) -> set[str]:
+    failures = _acceptance_declaration_failures(declaration)
     attempt_ids = [attempt.attempt_id for attempt in attempts]
     if len(set(attempt_ids)) != len(attempt_ids):
         failures.add("duplicate_attempt_id")

@@ -208,12 +208,6 @@ class CampaignDeclaration(StrictModel):
             expected.suite != "heldout" for expected in extra_tasks.values()
         ):
             raise ValueError("validation must add at least five held-out tasks")
-        acceptance_consumers = {"opus", "terra"}
-        if any(
-            set(batch.required_consumers) != acceptance_consumers or batch.parallelism != 4
-            for batch in batches
-        ):
-            raise ValueError("acceptance batches require both consumers at parallelism four")
         shared_fields = (
             "candidate_sha",
             "snapshot_sha256",

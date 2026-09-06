@@ -131,13 +131,19 @@ def _batch(
     return BatchDeclaration.model_validate(values)
 
 
-def _campaign() -> CampaignDeclaration:
+def _campaign(*, terra_effort: str = "high") -> CampaignDeclaration:
     validation_tasks = _tasks(12, heldout=5)
+    effort_by_consumer = {"opus": None, "terra": terra_effort}
     return CampaignDeclaration(
         campaign_id="campaign-1",
-        development=_batch(),
+        development=_batch(effort_by_consumer=effort_by_consumer),
         validation=tuple(
-            _batch(batch_id=f"validation-{index}", phase="validation", tasks=validation_tasks)
+            _batch(
+                batch_id=f"validation-{index}",
+                phase="validation",
+                tasks=validation_tasks,
+                effort_by_consumer=effort_by_consumer,
+            )
             for index in range(1, 4)
         ),
     )
@@ -487,14 +493,15 @@ def test_exploratory_batch_and_frozen18_taskset_never_pass_ux_acceptance() -> No
     exploratory_attempts[0] = exploratory_attempts[0].model_copy(
         update={"instructed_call_limit": 2, "hard_call_limit": 3, "deadline_seconds": 5.0}
     )
-    assert (
-        "exploratory_not_ux_acceptance"
-        in evaluate_batch(exploratory, exploratory_attempts).failures
-    )
+    exploratory_result = evaluate_batch(exploratory, exploratory_attempts)
+    assert "exploratory_not_ux_acceptance" in exploratory_result.failures
+    assert "acceptance_consumer_set_mismatch" not in exploratory_result.failures
+    assert "acceptance_parallelism_mismatch" not in exploratory_result.failures
 
     original = _batch(
         tasks={"original": {"suite": "frozen18", "prompt_sha256": SHA}},
         consumers=("opus",),
+        parallelism=1,
     )
     original_attempts = _batch_attempts(original)
     original_attempts[0] = original_attempts[0].model_copy(
@@ -513,6 +520,45 @@ def test_exploratory_batch_and_frozen18_taskset_never_pass_ux_acceptance() -> No
     original_result = evaluate_batch(original, original_attempts)
     assert "frozen18_not_ux_acceptance" in original_result.failures
     assert "missing_aspect_coverage" not in original_result.failures
+    assert "acceptance_consumer_set_mismatch" not in original_result.failures
+    assert "acceptance_parallelism_mismatch" not in original_result.failures
+
+
+@pytest.mark.parametrize("phase", ["development", "validation"])
+@pytest.mark.parametrize(
+    ("consumers", "parallelism", "failure"),
+    [
+        (("opus",), 4, "acceptance_consumer_set_mismatch"),
+        (("opus", "terra"), 1, "acceptance_parallelism_mismatch"),
+    ],
+)
+def test_standalone_acceptance_batch_rejects_underspecified_execution_shape(
+    phase: str,
+    consumers: tuple[str, ...],
+    parallelism: int,
+    failure: str,
+) -> None:
+    """A standalone development or validation gate must enforce the acceptance shape."""
+    declaration = _batch(
+        phase=phase,
+        tasks=_tasks(12, heldout=5) if phase == "validation" else _tasks(12),
+        consumers=consumers,
+        parallelism=parallelism,
+    )
+    result = evaluate_batch(declaration, _batch_attempts(declaration))
+    assert not result.passed
+    assert failure in result.failures
+
+
+def test_full_campaign_rejects_declared_and_observed_terra_low_effort() -> None:
+    """A complete campaign must not pass when every Terra attempt consistently uses low."""
+    declaration = _campaign(terra_effort="low")
+    attempts = _campaign_attempts(declaration)
+    result = evaluate_campaign(declaration, attempts)
+    assert len(attempts) == 126
+    assert not result.passed
+    assert "terra_effort_declaration_mismatch" in result.failures
+    assert "terra_effort_not_high" in result.failures
 
 
 def test_complete_positive_campaign_requires_every_fresh_validation_batch() -> None:

@@ -116,6 +116,11 @@ snapshot, consumer/config/requested-model/effective-model/effort, judge, and rub
 pins are identical in all four batches. Every acceptance batch declares both
 consumers and parallelism 4.
 
+Consumer count, parallelism, and Terra-high are acceptance conditions rather than
+input-shape conditions: a structurally valid nonpassing declaration remains
+recordable and produces stable gate failures. The same batch check is used for a
+standalone development/validation result and for every batch within a campaign.
+
 The historical Claude representation is valid without relabeling:
 
 ```python
@@ -127,9 +132,10 @@ assert evidence.observed_effort is None
 assert evidence.effort_unavailable_reason == "not_configured_or_exposed"
 ```
 
-Terra declarations instead pin requested/effective model `gpt-5.6-terra` and
-requested/observed effort `high`. Known differing efforts fail. Unknown effort is
-retained as a limitation and never fabricated.
+Terra UX declarations instead pin requested/effective model `gpt-5.6-terra` and
+requested/observed effort `high`. A lower or unavailable Terra effort is
+nonpassing. Known differing efforts fail. Unknown Opus effort is retained as a
+limitation and never fabricated.
 
 ## Output contract and gates
 
@@ -162,6 +168,7 @@ attempt accounted for exactly once.
 Stable failure codes are:
 
 ```text
+acceptance_consumer_set_mismatch, acceptance_parallelism_mismatch,
 admission_capacity_error, attempt_failed, batch_identity_mismatch,
 campaign_extra_attempt, campaign_identity_mismatch, campaign_missing_attempt,
 candidate_identity_mismatch, config_identity_mismatch, consumer_identity_mismatch,
@@ -177,7 +184,8 @@ prompt_identity_mismatch, requested_model_identity_mismatch,
 rubric_digest_missing, rubric_identity_mismatch, score_not_above_90,
 snapshot_identity_mismatch, source_assertions_digest_missing,
 source_assertions_failed, source_assertions_unavailable, suite_identity_mismatch,
-suite_limit_mismatch, task_identity_mismatch, trace_digest_missing,
+suite_limit_mismatch, task_identity_mismatch, terra_effort_declaration_mismatch,
+terra_effort_not_high, trace_digest_missing,
 trace_incomplete, trace_limit_exceeded, transport_failed, validation_batch_failed
 ```
 
