@@ -26,6 +26,10 @@ def _reject_json_constant(_constant: str) -> None:
     raise ValueError
 
 
+def _canonical_finite_json(value: object) -> str:
+    return json.dumps(value, allow_nan=False, sort_keys=True, separators=(",", ":"))
+
+
 def canonical_sha256(value: object) -> str:
     raw = json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
     return hashlib.sha256(raw).hexdigest()
@@ -311,10 +315,11 @@ class ProtocolTrace:
             return None
         try:
             mirrored = json.loads(text, parse_constant=_reject_json_constant)
+            mirror_matches = _canonical_finite_json(mirrored) == _canonical_finite_json(structured)
         except (ValueError, TypeError, RecursionError):
             self._add_failure("mcp_mirror_mismatch")
             return None
-        if mirrored != structured:
+        if not mirror_matches:
             self._add_failure("mcp_mirror_mismatch")
             return None
         return structured

@@ -360,6 +360,110 @@ def test_mcp_result_rejects_missing_text_mirror() -> None:
     assert "mcp_mirror_mismatch" in trace.failures
 
 
+@pytest.mark.parametrize(
+    ("structured", "text"),
+    [
+        (
+            {"success": True, "data": {"values": [1, {"flag": False}]}},
+            '{"success":true,"data":{"values":[true,{"flag":false}]}}',
+        ),
+        (
+            {"success": True, "data": {"nested": {"count": 1, "flag": False}}},
+            '{"data":{"nested":{"flag":0,"count":1}},"success":true}',
+        ),
+    ],
+)
+def test_mcp_mirror_distinguishes_nested_booleans_from_numbers(
+    structured: dict[str, Any], text: str
+) -> None:
+    trace = _trace()
+    trace.observe(
+        _message(
+            "turn/started",
+            {"turn": {"id": "turn-1", "status": "inProgress"}},
+        ),
+        1,
+    )
+    trace.observe(
+        _item(
+            "item/started",
+            item_id="a",
+            tool="get_record",
+            arguments={"id": "PA1"},
+            status="inProgress",
+        ),
+        2,
+    )
+    trace.observe(
+        _item(
+            "item/completed",
+            item_id="a",
+            tool="get_record",
+            arguments={"id": "PA1"},
+            status="completed",
+            result={
+                "content": [{"type": "text", "text": text}],
+                "structuredContent": structured,
+            },
+        ),
+        3,
+    )
+
+    assert "mcp_mirror_mismatch" in trace.failures
+
+
+def test_mcp_mirror_accepts_equal_finite_json_independent_of_key_order() -> None:
+    trace = _trace()
+    trace.observe(
+        _message(
+            "turn/started",
+            {"turn": {"id": "turn-1", "status": "inProgress"}},
+        ),
+        1,
+    )
+    trace.observe(
+        _item(
+            "item/started",
+            item_id="a",
+            tool="get_record",
+            arguments={"id": "PA1"},
+            status="inProgress",
+        ),
+        2,
+    )
+    trace.observe(
+        _item(
+            "item/completed",
+            item_id="a",
+            tool="get_record",
+            arguments={"id": "PA1"},
+            status="completed",
+            result={
+                "content": [
+                    {
+                        "type": "text",
+                        "text": (
+                            '{"data":{"nested":{"enabled":true,"count":1},'
+                            '"values":[1,false]},"success":true}'
+                        ),
+                    }
+                ],
+                "structuredContent": {
+                    "success": True,
+                    "data": {
+                        "values": [1, False],
+                        "nested": {"count": 1, "enabled": True},
+                    },
+                },
+            },
+        ),
+        3,
+    )
+
+    assert "mcp_mirror_mismatch" not in trace.failures
+    assert trace.calls[0]["outcome"] == "success"
+
+
 def _complete_trace(trace: ProtocolTrace) -> None:
     trace.observe(
         _message("turn/started", {"turn": {"id": "turn-1", "status": "inProgress"}}),
