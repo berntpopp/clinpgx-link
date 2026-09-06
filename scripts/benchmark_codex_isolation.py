@@ -480,6 +480,8 @@ def process_snapshot(
             raw = stat_reader(stat_path)
             parsed = _parse_proc_stat(raw)
             if parsed is None or parsed[0] != path_pid:
+                if path_pid in known and stat_path.parent.exists():
+                    unreadable[path_pid] = "stat_unavailable"
                 continue
             pid, parent, state, starttime = parsed
             rows[pid] = (parent, state, starttime)
@@ -487,7 +489,11 @@ def process_snapshot(
             if path_pid in known and stat_path.parent.exists():
                 unreadable[path_pid] = "stat_permission_denied"
             continue
-        except (FileNotFoundError, ProcessLookupError, ValueError):
+        except (FileNotFoundError, ProcessLookupError):
+            continue
+        except (OSError, UnicodeError, ValueError):
+            if path_pid in known and stat_path.parent.exists():
+                unreadable[path_pid] = "stat_unavailable"
             continue
     descendants = {root_pid, *(pid for pid in known if pid in rows)}
     changed = True

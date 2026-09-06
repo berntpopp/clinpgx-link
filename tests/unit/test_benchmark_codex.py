@@ -1480,6 +1480,133 @@ def test_process_snapshot_retains_live_known_child_when_stat_becomes_unreadable(
     assert evidence["unexpected"][0]["inspection_error"] == "stat_permission_denied"
 
 
+@pytest.mark.parametrize(
+    "malformed_stat",
+    [
+        pytest.param("malformed", id="malformed"),
+        pytest.param("101 (worker) S 100 0\n", id="truncated"),
+        pytest.param(
+            "101 (worker) " + " ".join(["S", "100", *(["0"] * 17), "not-a-number", "0"]) + "\n",
+            id="non-numeric-starttime",
+        ),
+        pytest.param(_proc_stat(102, 100, state="S", starttime=901), id="mismatched-pid"),
+    ],
+)
+def test_process_snapshot_rejects_malformed_initial_stat_of_known_child(
+    tmp_path: Path, malformed_stat: str
+) -> None:
+    proc_root = tmp_path / "proc"
+    proc_root.mkdir()
+    _fake_proc_stat(proc_root, 100, 1, starttime=900)
+    _fake_proc_stat(proc_root, 101, 100, starttime=901)
+    _fake_proc_stat(proc_root, 999, 1, starttime=902)
+    known = {100: 1, 101: 100}
+
+    def read_stat(stat_path: Path) -> str:
+        if stat_path.parent.name in {"101", "999"}:
+            return malformed_stat
+        return stat_path.read_text()
+
+    snapshot = process_snapshot(
+        100,
+        proc_root=proc_root,
+        executable_resolver=lambda _proc_dir: "/usr/bin/bwrap",
+        stat_reader=read_stat,
+        known_descendants=known,
+    )
+    evidence = verify_descendants(snapshot, {Path("/usr/bin/bwrap")})
+
+    assert evidence["failures"] == ["uninspectable_descendant"]
+    assert [row["pid"] for row in evidence["unexpected"]] == [101]
+    assert evidence["unexpected"][0]["inspection_error"] == "stat_unavailable"
+
+
+def test_process_snapshot_rejects_malformed_initial_stat_of_root_pid(
+    tmp_path: Path,
+) -> None:
+    proc_root = tmp_path / "proc"
+    proc_root.mkdir()
+    _fake_proc_stat(proc_root, 100, 1, starttime=900)
+
+    snapshot = process_snapshot(
+        100,
+        proc_root=proc_root,
+        executable_resolver=lambda _proc_dir: "/usr/bin/bwrap",
+        stat_reader=lambda _path: "corrupt stat record",
+    )
+    evidence = verify_descendants(snapshot, {Path("/usr/bin/bwrap")})
+
+    assert evidence["failures"] == ["uninspectable_descendant"]
+    assert [row["pid"] for row in evidence["unexpected"]] == [100]
+    assert evidence["unexpected"][0]["inspection_error"] == "stat_unavailable"
+
+
+def test_process_snapshot_ignores_malformed_stat_when_directory_disappears(
+    tmp_path: Path,
+) -> None:
+    proc_root = tmp_path / "proc"
+    proc_root.mkdir()
+    _fake_proc_stat(proc_root, 100, 1, starttime=900)
+    _fake_proc_stat(proc_root, 101, 100, starttime=901)
+    known = {100: 1, 101: 100}
+
+    def read_stat(stat_path: Path) -> str:
+        if stat_path.parent.name == "101":
+            (stat_path.parent / "stat").unlink()
+            stat_path.parent.rmdir()
+            return "malformed"
+        return stat_path.read_text()
+
+    snapshot = process_snapshot(
+        100,
+        proc_root=proc_root,
+        executable_resolver=lambda _proc_dir: "/usr/bin/bwrap",
+        stat_reader=read_stat,
+        known_descendants=known,
+    )
+    evidence = verify_descendants(snapshot, {Path("/usr/bin/bwrap")})
+
+    assert evidence["failures"] == []
+    assert [row["pid"] for row in evidence["observed"]] == [100]
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        pytest.param(
+            UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid start byte"), id="unicode-error"
+        ),
+        pytest.param(OSError("I/O failure"), id="io-error"),
+    ],
+)
+def test_process_snapshot_rejects_stat_read_os_or_unicode_error_for_known_child(
+    tmp_path: Path, error: BaseException
+) -> None:
+    proc_root = tmp_path / "proc"
+    proc_root.mkdir()
+    _fake_proc_stat(proc_root, 100, 1, starttime=900)
+    _fake_proc_stat(proc_root, 101, 100, starttime=901)
+    known = {100: 1, 101: 100}
+
+    def read_stat(stat_path: Path) -> str:
+        if stat_path.parent.name == "101":
+            raise error
+        return stat_path.read_text()
+
+    snapshot = process_snapshot(
+        100,
+        proc_root=proc_root,
+        executable_resolver=lambda _proc_dir: "/usr/bin/bwrap",
+        stat_reader=read_stat,
+        known_descendants=known,
+    )
+    evidence = verify_descendants(snapshot, {Path("/usr/bin/bwrap")})
+
+    assert evidence["failures"] == ["uninspectable_descendant"]
+    assert [row["pid"] for row in evidence["unexpected"]] == [101]
+    assert evidence["unexpected"][0]["inspection_error"] == "stat_unavailable"
+
+
 def test_private_artifacts_prompt_and_sandbox_command(tmp_path: Path) -> None:
     prompt = tmp_path / "prompt.md"
     prompt.write_text("immutable prompt\n")
