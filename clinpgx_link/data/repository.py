@@ -11,6 +11,7 @@ from typing import Any, cast
 
 from clinpgx_link.config import settings
 from clinpgx_link.data.coverage import field_metadata, known_filters
+from clinpgx_link.data.parent_context import ParentContextLimits, RepositoryParentContextSupport
 from clinpgx_link.data.repository_locking import serialized_connection
 from clinpgx_link.data.repository_profiles import RepositoryProfileSupport
 from clinpgx_link.data.repository_provenance import dataset_source, snapshot_source
@@ -35,11 +36,17 @@ _ENTITY_TYPES = frozenset(
 )
 
 
-class DatasetRepository(RepositoryDiagnosticsSupport, RepositoryProfileSupport):
+class DatasetRepository(
+    RepositoryDiagnosticsSupport, RepositoryProfileSupport, RepositoryParentContextSupport
+):
     """Repository pinned to an immutable SQLite database file and snapshot identity."""
 
     def __init__(
-        self, database: Path, *, diagnostic_limits: DiagnosticLimits | None = None
+        self,
+        database: Path,
+        *,
+        diagnostic_limits: DiagnosticLimits | None = None,
+        parent_context_limits: ParentContextLimits | None = None,
     ) -> None:
         if not database.is_absolute() or database.is_symlink() or not database.is_file():
             raise InvalidInputError("Snapshot database must be an absolute regular file")
@@ -52,6 +59,7 @@ class DatasetRepository(RepositoryDiagnosticsSupport, RepositoryProfileSupport):
         self._snapshot_id = self._metadata("snapshot_id")
         self._release_tag = self._metadata("release_tag")
         self._load_profile_validation()
+        self._initialize_parent_context(parent_context_limits)
 
     @serialized_connection
     def close(self) -> None:
@@ -134,6 +142,8 @@ class DatasetRepository(RepositoryDiagnosticsSupport, RepositoryProfileSupport):
                     value["sheets"] = headers_value
             value["supported_filters"] = sorted(known_filters(dataset_id, str(row["path"])))
             value.update(self._profile_member_metadata(dataset_id, str(row["path"])))
+            if dataset_id == "data/pharmcat.zip" and row["path"] == "phenotypes.json":
+                value.update(self._parent_context_member_metadata())
             described_members.append(value)
         result = {
             "dataset_id": dataset["dataset_id"],

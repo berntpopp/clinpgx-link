@@ -23,8 +23,8 @@ including representation and pointer, but not response mode or requested page si
 | get_website_data | operation | path_parameters={}, query_parameters={}, pointer="" |
 | list_datasets | none | query, include_legacy=true |
 | get_dataset | dataset_id | none; members paged |
-| search_dataset | dataset_id | member, query, filters={}, match=exact/member |
-| get_dataset_record | record_id | pointer="" |
+| search_dataset | dataset_id | member, query, filters={}, match=exact/member, include_fields, parent_fields |
+| get_dataset_record | record_id | pointer="", pointers, include_fields, parent_fields |
 | get_source_content | content_ref | pointer="", representation=structure/text/base64, start=0, length=4096 (1–8192); not row-paged |
 
 `get_dataset` applies presentation modes before fencing optional member metadata.
@@ -164,6 +164,17 @@ Required real-MCP acceptance examples: canonical gene+chemical filters find a me
 inside multigene/multidrug annotation cells; annotation ID→evidence and →allele return
 all fixture child rows once; reverse relationship rows retain endpoints; Swissmedic
 labels and non-CPIC/DPWG guidelines remain discoverable with source=download.
+
+`search_dataset` and `get_dataset_record` accept an optional ordered `parent_fields`
+selection only for active `pharmcat.diplotype.v1` children in
+`data/pharmcat.zip/phenotypes.json`. The closed field names are `gene` and `version`.
+Selected values come from the exact stored `/N` root parent of a
+`/N/diplotypes/M` child and are returned in a separate `parent_context`; contextual
+search membership or caller filters never supply those values. Missing, ambiguous,
+malformed, oversized, drifted, unsupported or budget-exhausted parent lookup remains
+explicitly unavailable with retained original-member recovery. Parent selection is
+independent of child `include_fields`, is cursor-bound when supplied, and cannot be
+combined with direct normalized-record pointer selection.
 
 ## Snapshot/activation and release boundaries
 
