@@ -218,6 +218,129 @@ def test_search_dataset_accepts_exact_advertised_text_fields_with_explicit_membe
     assert summary.value[0]["id"] == "655384607"
 
 
+def test_entity_search_skips_filter_discovery_for_no_filters_and_id_only(tmp_path: Path) -> None:
+    """Universal-only searches must not discover kinds across every entity record."""
+    repository, _ = _repository(tmp_path)
+    statements: list[str] = []
+    try:
+        repository._connection.set_trace_callback(statements.append)
+        repository.search_entities("gene", limit=1)
+        repository.search_entities("gene", filters={"id": "PA124"}, limit=1)
+    finally:
+        repository._connection.set_trace_callback(None)
+        repository.close()
+
+    assert not any("SELECT DISTINCT candidate.kind" in statement for statement in statements)
+
+
+def test_entity_identity_anchors_count_and_page_queries_on_identity_membership(
+    tmp_path: Path,
+) -> None:
+    """Identity lookups must not start count or page retrieval from the broad entity lens."""
+    repository, _ = _repository(tmp_path)
+    statements: list[str] = []
+    try:
+        repository._connection.set_trace_callback(statements.append)
+        repository.search_entities("gene", filters={"id": "PA124"}, limit=1)
+    finally:
+        repository._connection.set_trace_callback(None)
+        repository.close()
+
+    record_queries = [
+        " ".join(statement.split())
+        for statement in statements
+        if statement.startswith(("SELECT count(*) FROM record", "SELECT r.* FROM record"))
+    ]
+    identity_anchor = (
+        "r.record_pk IN (SELECT identity.record_pk FROM membership identity "
+        "WHERE identity.value='PA124' AND identity.kind IN ('id','gene') "
+        "AND identity.match_mode='exact')"
+    )
+    assert len(record_queries) == 2
+    assert all(identity_anchor in statement for statement in record_queries)
+    assert all(
+        "r.record_pk IN (SELECT entity.record_pk FROM membership entity WHERE entity.kind='gene')"
+        not in statement
+        for statement in record_queries
+    )
+
+
+def test_entity_identity_preserves_missing_known_and_source_rows(tmp_path: Path) -> None:
+    """Selective identity anchoring must retain absence and exact source-row identity."""
+    repository, built = _repository(tmp_path)
+    try:
+        missing = repository.search_entities("gene", filters={"id": "PA-missing"})
+        known = repository.search_entities("gene", filters={"id": "PA124"})
+
+        assert missing.value == []
+        assert missing.details["total_count"] == 0
+        assert [row["id"] for row in known.value] == ["PA124"]
+        assert known.value[0] == repository.get_record(known.value[0]["record_id"]).value
+        assert known.details["snapshot_id"] == built.snapshot_id
+        assert known.source.sha256 == built.snapshot_id.removeprefix("sha256:")
+    finally:
+        repository.close()
+
+
+def test_entity_identity_preserves_multiplicity_order_and_pages(tmp_path: Path) -> None:
+    """Repeated evidence identity must retain its full count and stable page ordering."""
+    repository, _ = _repository(tmp_path)
+    try:
+        all_rgs4 = repository.search_entities("gene", filters={"id": "RGS4"})
+        first = repository.search_entities("gene", filters={"id": "RGS4"}, limit=1)
+        second = repository.search_entities("gene", filters={"id": "RGS4"}, limit=1, offset=1)
+
+        assert all_rgs4.details["total_count"] == 2
+        assert [row["id"] for row in all_rgs4.value] == ["655384602", "655384607"]
+        assert first.details["total_count"] == second.details["total_count"] == 2
+        assert first.details["has_more"] is True
+        assert second.details["has_more"] is False
+        assert first.value + second.value == all_rgs4.value
+    finally:
+        repository.close()
+
+
+def test_entity_identity_preserves_gene_exactness_and_filter_conjunction(tmp_path: Path) -> None:
+    """Gene identity stays exact while canonical filters retain member conjunction."""
+    repository, _ = _repository(tmp_path)
+    try:
+        conjunction = repository.search_entities(
+            "gene", filters={"id": "RGS4", "chemical": "olanzapine"}
+        )
+
+        assert [row["id"] for row in conjunction.value] == ["655384607"]
+        assert repository.search_entities("gene", filters={"id": "CYP2C"}).value == []
+        alias = repository.search_entities("gene", filters={"gene": "CYP2C"})
+        assert [row["id"] for row in alias.value] == ["PA124"]
+    finally:
+        repository.close()
+
+
+def test_non_gene_identity_preserves_member_identity_matching(tmp_path: Path) -> None:
+    """The gene-only exact guard must not narrow other entity identity semantics."""
+    repository, _ = _repository(tmp_path)
+    try:
+        chemical = repository.search_entities("chemical", filters={"id": "olanzapine"})
+
+        assert chemical.details["total_count"] == 1
+        assert [row["id"] for row in chemical.value] == ["655384607"]
+    finally:
+        repository.close()
+
+
+def test_entity_search_still_rejects_filters_not_installed_for_entity(tmp_path: Path) -> None:
+    """Skipping universal discovery must not fabricate support for other canonical filters."""
+    from clinpgx_link.exceptions import InvalidInputError
+
+    repository, _ = _repository(tmp_path)
+    try:
+        with pytest.raises(InvalidInputError, match="not installed") as unsupported:
+            repository.search_entities("literature", filters={"source": "DPWG"})
+        assert unsupported.value.field == "source"
+    finally:
+        repository.close()
+
+
 @pytest.mark.parametrize(
     "kwargs",
     [

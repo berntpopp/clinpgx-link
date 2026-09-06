@@ -384,43 +384,45 @@ class DatasetRepository(
             raise InvalidInputError("Unknown local entity type", field="entity_type")
         selected_filters = filters or {}
         validate_canonical_filters(selected_filters)
-        supported_rows = self._connection.execute(
-            "SELECT DISTINCT candidate.kind FROM membership entity "
-            "JOIN membership candidate ON candidate.record_pk=entity.record_pk "
-            "WHERE entity.kind=?",
-            (entity_type,),
-        ).fetchall()
-        supported_filters = {
-            str(row[0]) for row in supported_rows if str(row[0]) in CANONICAL_FILTERS
-        } | {"id"}
-        unsupported = set(selected_filters) - supported_filters
+        unsupported = set(selected_filters) - {"id"}
+        if unsupported:
+            supported_rows = self._connection.execute(
+                "SELECT DISTINCT candidate.kind FROM membership entity "
+                "JOIN membership candidate ON candidate.record_pk=entity.record_pk "
+                "WHERE entity.kind=?",
+                (entity_type,),
+            ).fetchall()
+            supported_filters = {
+                str(row[0]) for row in supported_rows if str(row[0]) in CANONICAL_FILTERS
+            } | {"id"}
+            unsupported = set(selected_filters) - supported_filters
         if unsupported:
             raise InvalidInputError(
                 "Filter semantics are not installed for this entity type",
                 field=sorted(unsupported)[0],
             )
-        clauses = [
-            "r.record_pk IN (SELECT entity.record_pk FROM membership entity WHERE entity.kind=?)"
-        ]
-        parameters: list[Any] = [entity_type]
         entity_filters = dict(selected_filters)
         identifier = entity_filters.pop("id", None)
         self._guard_unscoped_gene_alias_membership(entity_type, entity_filters)
         if identifier is not None:
-            clauses.append(
-                (
-                    "EXISTS (SELECT 1 FROM membership identity "
-                    "WHERE identity.record_pk=r.record_pk AND identity.value=? "
-                    "AND identity.kind IN ('id',?) AND identity.match_mode='exact')"
-                )
-                if entity_type == "gene"
-                else (
-                    "EXISTS (SELECT 1 FROM membership identity "
-                    "WHERE identity.record_pk=r.record_pk AND identity.value=? "
-                    "AND identity.kind IN ('id',?))"
-                )
+            identity_clause = (
+                "r.record_pk IN (SELECT identity.record_pk FROM membership identity "
+                "WHERE identity.value=? AND identity.kind IN ('id',?)"
             )
-            parameters.extend([identifier, entity_type])
+            if entity_type == "gene":
+                identity_clause += " AND identity.match_mode='exact'"
+            clauses = [
+                identity_clause + ")",
+                "EXISTS (SELECT 1 FROM membership entity "
+                "WHERE entity.record_pk=r.record_pk AND entity.kind=?)",
+            ]
+            parameters: list[Any] = [identifier, entity_type, entity_type]
+        else:
+            clauses = [
+                "r.record_pk IN (SELECT entity.record_pk FROM membership entity "
+                "WHERE entity.kind=?)"
+            ]
+            parameters = [entity_type]
         values, total = self._query_records(
             clauses=clauses,
             parameters=parameters,
