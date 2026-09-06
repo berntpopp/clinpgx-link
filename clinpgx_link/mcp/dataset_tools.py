@@ -139,6 +139,15 @@ def _decorate_dataset(
     return value
 
 
+def _is_member_limitation(item: str) -> bool:
+    return (
+        item.startswith("unparsed_member:")
+        or "No normalized parser is declared" in item
+        or "retained without tabular parsing" in item
+        or "retained without extraction" in item
+    )
+
+
 def _catalog_value(
     value: dict[str, Any], source: SourceInfo, *, response_mode: ResponseMode = "compact"
 ) -> dict[str, Any]:
@@ -147,9 +156,7 @@ def _catalog_value(
     limitations = value.get("limitations", [])
     warnings = value.get("warnings", [])
     if response_mode == "minimal":
-        archive_limitations = [
-            item for item in limitations if not item.startswith("unparsed_member:")
-        ]
+        archive_limitations = [item for item in limitations if not _is_member_limitation(item)]
         result["limitations"] = [
             _fence(item, source, str(value["dataset_id"])) for item in archive_limitations
         ]

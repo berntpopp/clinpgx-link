@@ -561,6 +561,7 @@ async def test_list_datasets_minimal_mode_omits_unparsed_member_limitations(tmp_
                 item["limitations"] = [
                     "unparsed_member:foo.txt: unsupported",
                     "unparsed_member:bar.txt: unsupported",
+                    "CREATED_2026-09-05.txt: No normalized parser is declared for this member format",
                     "archive_scope_limitation",
                 ]
         return resp
@@ -577,7 +578,7 @@ async def test_list_datasets_minimal_mode_omits_unparsed_member_limitations(tmp_
             )
             assert len(genes_min["limitations"]) == 1
             assert genes_min["limitations"][0]["text"] == "archive_scope_limitation"
-            assert genes_min.get("unparsed_member_count") == 2
+            assert genes_min.get("unparsed_member_count") == 3
 
             res_compact = await client.call_tool(
                 "list_datasets", {"response_mode": "compact", "limit": 10}
@@ -586,7 +587,7 @@ async def test_list_datasets_minimal_mode_omits_unparsed_member_limitations(tmp_
             genes_comp = next(
                 item for item in payload_comp["results"] if item["dataset_id"] == "data/genes.zip"
             )
-            assert len(genes_comp["limitations"]) == 3
+            assert len(genes_comp["limitations"]) == 4
     finally:
         repository.close()
         store.close()
