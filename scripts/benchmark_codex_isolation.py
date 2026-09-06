@@ -578,8 +578,9 @@ def process_snapshot(
                     fresh = _parse_proc_stat(stat_reader(proc_dir / "stat"))
                 except (OSError, UnicodeError, ValueError):
                     fresh = None
-                if fresh is None or not (
-                    fresh[0] == pid and fresh[2] == "Z" and fresh[3] == starttime
+                if proc_dir.exists() and (
+                    fresh is None
+                    or not (fresh[0] == pid and fresh[2] == "Z" and fresh[3] == starttime)
                 ):
                     output.append(
                         {

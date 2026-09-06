@@ -1291,6 +1291,46 @@ def test_process_snapshot_ignores_confirmed_exit_race(tmp_path: Path) -> None:
     ]
 
 
+def test_process_snapshot_ignores_exit_race_when_directory_disappears_during_stat_read(
+    tmp_path: Path,
+) -> None:
+    proc_root = tmp_path / "proc"
+    proc_root.mkdir()
+    _fake_proc_stat(proc_root, 100, 1)
+    _fake_proc_stat(proc_root, 101, 100)
+
+    def resolve(proc_dir: Path) -> str:
+        if proc_dir.name == "101":
+            raise FileNotFoundError
+        return "/usr/bin/bwrap"
+
+    def read_stat(stat_path: Path) -> str:
+        if stat_path.parent.name == "101":
+            (stat_path.parent / "stat").unlink()
+            stat_path.parent.rmdir()
+            raise FileNotFoundError
+        return stat_path.read_text()
+
+    snapshot = process_snapshot(
+        100,
+        proc_root=proc_root,
+        executable_resolver=resolve,
+        stat_reader=read_stat,
+    )
+    evidence = verify_descendants(snapshot, {Path("/usr/bin/bwrap")})
+
+    assert evidence["failures"] == []
+    assert evidence["observed"] == [
+        {
+            "pid": 100,
+            "ppid": 1,
+            "executable": "/usr/bin/bwrap",
+            "inspection_error": None,
+            "identity_verified": True,
+        }
+    ]
+
+
 def test_process_snapshot_ignores_same_process_that_becomes_zombie(
     tmp_path: Path,
 ) -> None:
