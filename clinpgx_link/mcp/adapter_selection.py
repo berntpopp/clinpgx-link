@@ -178,6 +178,18 @@ def adapter_profile_status(value: Any, profile_name: str | None) -> str | None:
     numeric_contract = numeric_identity_contract(profile_name)
     if numeric_contract is not None:
         return "active" if numeric_contract.source_value_is_valid(value) else "unprofiled"
+    if profile_name in {"guideline", "guideline_annotation"}:
+        sub = (
+            value.get("guideline")
+            if isinstance(value.get("guideline"), dict)
+            else (
+                value.get("cpicGuideline") if isinstance(value.get("cpicGuideline"), dict) else None
+            )
+        )
+        target = sub if sub is not None else value
+        if all(name in target and isinstance(target[name], str) for name in profile.required):
+            return "active"
+        return "unprofiled"
     if any(name not in value for name in profile.required):
         return "unprofiled"
     if profile_name == "connected_object":
@@ -203,6 +215,24 @@ def project_adapter_value(value: Any, profile_name: str | None, mode: ResponseMo
     profile = _PROFILES.get(profile_name or "")
     if profile is None:
         return _UNPROFILED
+    if profile_name in {"guideline", "guideline_annotation"}:
+        sub = (
+            value.get("guideline")
+            if isinstance(value.get("guideline"), dict)
+            else (
+                value.get("cpicGuideline") if isinstance(value.get("cpicGuideline"), dict) else None
+            )
+        )
+        if sub is not None:
+            names = getattr(profile, mode)
+            projected = {name: sub[name] for name in names if name in sub}
+            cpic = value.get("cpicGuideline")
+            if isinstance(cpic, dict):
+                link = cpic.get("link")
+                if isinstance(link, dict) and "resourceId" in link:
+                    projected["publisher_url"] = link["resourceId"]
+                    projected["cpicGuideline"] = {"link": {"resourceId": link["resourceId"]}}
+            return projected
     names = getattr(profile, mode)
     return {name: value[name] for name in names if name in value}
 

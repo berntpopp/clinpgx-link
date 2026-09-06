@@ -1103,3 +1103,64 @@ async def test_get_record_website_with_data_prefixed_pointer(tmp_path):
             assert selections[1]["value"]["text"] == "PA166104948"
     finally:
         store.close()
+
+
+@pytest.mark.asyncio
+async def test_get_record_website_guideline_annotation_profiled_in_compact_mode(tmp_path):
+    def handle(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/v1/site/guidelineAnnotation/PA166104948"
+        return httpx.Response(
+            200,
+            json={
+                "status": "success",
+                "data": {
+                    "clinicalAnnotationCount": 0,
+                    "cpicGuideline": {
+                        "id": "PA166104948",
+                        "name": "Annotation of CPIC Guideline for clopidogrel and CYP2C19",
+                        "link": {
+                            "resourceId": "https://cpicpgx.org/guidelines/guideline-for-clopidogrel-and-cyp2c19/"
+                        },
+                    },
+                    "guideline": {
+                        "id": "PA166104948",
+                        "name": "Annotation of CPIC Guideline for clopidogrel and CYP2C19",
+                        "source": "CPIC",
+                        "relatedGenes": [{"id": "PA124", "symbol": "CYP2C19"}],
+                        "relatedChemicals": [{"id": "PA449053", "name": "clopidogrel"}],
+                    },
+                },
+            },
+        )
+
+    store = ContentStore(tmp_path / "content.sqlite")
+    upstream = ClinPGxClient(
+        Settings(_env_file=None, cache_root=tmp_path),
+        httpx.AsyncClient(transport=httpx.MockTransport(handle)),
+        store,
+    )
+    try:
+        async with Client(_server(store, website=WebsiteClient(upstream))) as client:
+            res = await client.call_tool(
+                "get_record",
+                {
+                    "entity_type": "guideline_annotation",
+                    "record_id": "PA166104948",
+                    "source": "website",
+                    "response_mode": "compact",
+                },
+            )
+            assert res.structured_content["success"] is True
+            result = res.structured_content["result"]
+            assert result.get("record_profile_status") != "unprofiled"
+            assert result.get("source_profile") == "guideline_annotation"
+            assert result.get("deferred_content") is not True
+            data_val = json.loads(result["data"]["text"])
+            assert data_val["id"] == "PA166104948"
+            assert data_val["source"] == "CPIC"
+            assert (
+                data_val["publisher_url"]
+                == "https://cpicpgx.org/guidelines/guideline-for-clopidogrel-and-cyp2c19/"
+            )
+    finally:
+        store.close()

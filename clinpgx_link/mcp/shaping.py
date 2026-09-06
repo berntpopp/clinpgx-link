@@ -130,6 +130,10 @@ class SourcePresenter:
         }
         if isinstance(value, dict):
             record_id = value.get("id", value.get("record_id"))
+            if not record_id and isinstance(value.get("guideline"), dict):
+                record_id = value["guideline"].get("id")
+            elif not record_id and isinstance(value.get("cpicGuideline"), dict):
+                record_id = value["cpicGuideline"].get("id")
             if isinstance(record_id, str) and re.fullmatch(r"[A-Za-z0-9:._-]{1,128}", record_id):
                 row["id"] = record_id
         if profile_status == "active":
