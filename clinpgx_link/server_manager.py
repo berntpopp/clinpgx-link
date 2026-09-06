@@ -5,9 +5,11 @@ from __future__ import annotations
 import asyncio
 import ipaddress
 import re
+import tempfile
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any
 
 import structlog
@@ -274,12 +276,26 @@ def _health(
     return payload, status_code
 
 
+def _resolve_cache_root(configured: Path) -> Path:
+    try:
+        configured.mkdir(parents=True, exist_ok=True)
+        probe = configured / ".probe_write"
+        probe.touch()
+        probe.unlink()
+        return configured
+    except OSError:
+        fallback = Path(tempfile.gettempdir()) / "clinpgx-cache"
+        fallback.mkdir(parents=True, exist_ok=True)
+        return fallback
+
+
 def create_app(runtime_settings: Settings | None = None) -> FastAPI:
     """Create the HTTP-only application with health routes before the MCP mount."""
     selected = runtime_settings or default_settings
     configure_logging(selected.log_level, selected.log_format)
+    cache_root = _resolve_cache_root(selected.cache_root)
     store = ContentStore(
-        selected.cache_root / "content.sqlite",
+        cache_root / "content.sqlite",
         max_bytes=selected.cache_max_bytes,
         max_entries=selected.cache_max_entries,
         ttl_seconds=selected.cache_ttl_seconds,
