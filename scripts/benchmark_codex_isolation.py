@@ -10,8 +10,9 @@ import re
 import shutil
 import stat
 import threading
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, BinaryIO
+from typing import Any
 from urllib.parse import urlsplit
 
 from jsonschema import Draft202012Validator
@@ -94,7 +95,7 @@ def validate_home_environment(
     return account_home
 
 
-def open_prompt(path: Path, *, max_bytes: int) -> tuple[BinaryIO, dict[str, Any]]:
+def open_prompt(path: Path, *, max_bytes: int) -> tuple[bytes, dict[str, Any]]:
     flags = os.O_RDONLY | os.O_NONBLOCK
     if hasattr(os, "O_NOFOLLOW"):
         flags |= os.O_NOFOLLOW
@@ -102,21 +103,18 @@ def open_prompt(path: Path, *, max_bytes: int) -> tuple[BinaryIO, dict[str, Any]
         descriptor = os.open(path, flags)
     except OSError as exc:
         raise RunInputError("prompt must be an accessible non-symlink file") from exc
-    handle = os.fdopen(descriptor, "rb", buffering=0)
-    details = os.fstat(descriptor)
-    if not stat.S_ISREG(details.st_mode):
-        handle.close()
-        raise RunInputError("prompt must be a regular file")
-    digest = hashlib.sha256()
-    size = 0
-    while chunk := handle.read(64 * 1024):
-        size += len(chunk)
-        if size > max_bytes:
-            handle.close()
-            raise RunInputError("prompt size exceeds the configured ceiling")
-        digest.update(chunk)
-    os.lseek(descriptor, 0, os.SEEK_SET)
-    return handle, {"bytes": size, "sha256": digest.hexdigest()}
+    with os.fdopen(descriptor, "rb", buffering=0) as handle:
+        details = os.fstat(descriptor)
+        if not stat.S_ISREG(details.st_mode):
+            raise RunInputError("prompt must be a regular file")
+        digest = hashlib.sha256()
+        payload = bytearray()
+        while chunk := handle.read(64 * 1024):
+            if len(payload) + len(chunk) > max_bytes:
+                raise RunInputError("prompt size exceeds the configured ceiling")
+            payload.extend(chunk)
+            digest.update(chunk)
+    return bytes(payload), {"bytes": len(payload), "sha256": digest.hexdigest()}
 
 
 def create_private_run_directory(path: Path) -> Path:
@@ -384,15 +382,21 @@ def verify_descendants(
             "pid": row.get("pid"),
             "ppid": row.get("ppid"),
             "executable": row.get("executable"),
+            "inspection_error": row.get("inspection_error"),
             "identity_verified": row.get("executable") in allowed,
         }
         for row in processes
     ]
     unexpected = [row for row in observed if not row["identity_verified"]]
+    failures: list[str] = []
+    if any(row["inspection_error"] is not None for row in unexpected):
+        failures.append("uninspectable_descendant")
+    if any(row["inspection_error"] is None for row in unexpected):
+        failures.append("unexpected_descendant")
     return {
         "observed": observed,
         "unexpected": unexpected,
-        "failures": ["unexpected_descendant"] if unexpected else [],
+        "failures": failures,
     }
 
 
@@ -428,35 +432,98 @@ def resolve_toolchain() -> tuple[Path, Path, set[Path]]:
     return bwrap, codex, {bwrap, codex, code_mode.resolve(strict=True)}
 
 
-def process_snapshot(root_pid: int) -> list[dict[str, Any]]:
+def _resolve_proc_executable(proc_dir: Path) -> str:
+    return str((proc_dir / "exe").resolve(strict=True))
+
+
+def _read_proc_stat(stat_path: Path) -> str:
+    return stat_path.read_text(encoding="utf-8")
+
+
+def process_snapshot(
+    root_pid: int,
+    *,
+    proc_root: Path = Path("/proc"),
+    executable_resolver: Callable[[Path], str] = _resolve_proc_executable,
+    stat_reader: Callable[[Path], str] = _read_proc_stat,
+    known_descendants: dict[int, int] | None = None,
+) -> list[dict[str, Any]]:
     """Read only PID relationships and exact executable symlinks from procfs."""
-    rows: dict[int, int] = {}
-    for stat_path in Path("/proc").glob("[0-9]*/stat"):
+    rows: dict[int, tuple[int, str]] = {}
+    known = known_descendants if known_descendants is not None else {root_pid: 0}
+    unreadable: dict[int, str] = {}
+    for stat_path in proc_root.glob("[0-9]*/stat"):
+        pid = int(stat_path.parent.name)
         try:
-            raw = stat_path.read_text(encoding="utf-8")
+            raw = stat_reader(stat_path)
             close = raw.rfind(")")
             pid = int(raw[: raw.find(" ")])
             fields = raw[close + 2 :].split()
-            rows[pid] = int(fields[1])
-        except (FileNotFoundError, PermissionError, ProcessLookupError, ValueError):
+            rows[pid] = (int(fields[1]), fields[0])
+        except PermissionError:
+            if pid in known and stat_path.parent.exists():
+                unreadable[pid] = "stat_permission_denied"
             continue
-    descendants = {root_pid}
+        except (FileNotFoundError, ProcessLookupError, ValueError):
+            continue
+    descendants = {root_pid, *(pid for pid in known if pid in rows)}
     changed = True
     while changed:
         changed = False
-        for pid, parent in rows.items():
+        for pid, (parent, _state) in rows.items():
             if parent in descendants and pid not in descendants:
                 descendants.add(pid)
                 changed = True
+    for pid in descendants:
+        if pid in rows:
+            known[pid] = rows[pid][0]
     output: list[dict[str, Any]] = []
+    for pid, inspection_error in sorted(unreadable.items()):
+        output.append(
+            {
+                "pid": pid,
+                "ppid": known[pid],
+                "executable": None,
+                "inspection_error": inspection_error,
+            }
+        )
     for pid in sorted(descendants):
         if pid not in rows:
             continue
+        proc_dir = proc_root / str(pid)
+        parent, state = rows[pid]
         try:
-            executable = str((Path("/proc") / str(pid) / "exe").resolve(strict=True))
-        except (FileNotFoundError, PermissionError, ProcessLookupError):
+            executable = executable_resolver(proc_dir)
+        except PermissionError:
+            if proc_dir.exists() and state != "Z":
+                output.append(
+                    {
+                        "pid": pid,
+                        "ppid": parent,
+                        "executable": None,
+                        "inspection_error": "executable_permission_denied",
+                    }
+                )
             continue
-        output.append({"pid": pid, "ppid": rows[pid], "executable": executable})
+        except (FileNotFoundError, ProcessLookupError):
+            if proc_dir.exists() and state != "Z":
+                output.append(
+                    {
+                        "pid": pid,
+                        "ppid": parent,
+                        "executable": None,
+                        "inspection_error": "executable_unavailable",
+                    }
+                )
+            continue
+        output.append(
+            {
+                "pid": pid,
+                "ppid": parent,
+                "executable": executable,
+                "inspection_error": None,
+            }
+        )
     return output
 
 
@@ -466,12 +533,17 @@ def monitor_processes(
     stop: threading.Event,
     violation: threading.Event,
     observed: dict[tuple[int, str], dict[str, Any]],
+    failure_state: dict[str, str],
 ) -> None:
     """Continuously reject descendants whose procfs executable is not pinned."""
+    known_descendants = {root_pid: 0}
     while not stop.is_set():
-        checked = verify_descendants(process_snapshot(root_pid), allowed)
+        checked = verify_descendants(
+            process_snapshot(root_pid, known_descendants=known_descendants), allowed
+        )
         for row in checked["observed"]:
             observed[(int(row["pid"]), str(row["executable"]))] = row
         if checked["failures"]:
+            failure_state["reason"] = str(checked["failures"][0])
             violation.set()
         stop.wait(0.05)

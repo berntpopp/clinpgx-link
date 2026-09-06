@@ -4,15 +4,12 @@
 from __future__ import annotations
 
 import argparse
-import contextlib
 import datetime as dt
 import hashlib
 import json
 import os
 import pwd
-import selectors
 import shutil
-import signal
 import stat
 import subprocess
 import sys
@@ -47,19 +44,14 @@ from scripts.benchmark_codex_protocol import (
     ProtocolTrace,
     assess_acceptance,
 )
+from scripts.benchmark_codex_transport import (
+    AppServerSession,
+    SessionError,
+    terminate_process,
+)
 
-CHUNK_BYTES = 64 * 1024
-TERMINATION_GRACE_SECONDS = 0.5
 PRIVATE_PROMPT_LIMIT_BYTES = 1024 * 1024
 SANDBOX_CWD = Path("/tmp/clinpgx-codex-benchmark")  # noqa: S108 - namespace tmpfs
-
-
-class SessionError(RuntimeError):
-    """A sanitized app-server transport or hard-limit failure."""
-
-    def __init__(self, reason: str) -> None:
-        self.reason = reason
-        super().__init__(reason)
 
 
 def _canonical(value: object) -> bytes:
@@ -72,223 +64,6 @@ def _private_file(path: Path) -> BinaryIO:
         flags |= os.O_NOFOLLOW
     descriptor = os.open(path, flags, 0o600)
     return os.fdopen(descriptor, "wb", buffering=0)
-
-
-def _signal_group(process: subprocess.Popen[bytes], chosen: int) -> None:
-    with contextlib.suppress(ProcessLookupError):
-        os.killpg(process.pid, chosen)
-
-
-def _terminate(process: subprocess.Popen[bytes]) -> None:
-    _signal_group(process, signal.SIGTERM)
-    if process.poll() is None:
-        try:
-            process.wait(timeout=TERMINATION_GRACE_SECONDS)
-        except subprocess.TimeoutExpired:
-            _signal_group(process, signal.SIGKILL)
-            process.wait(timeout=2)
-    _signal_group(process, signal.SIGKILL)
-
-
-class AppServerSession:
-    """Bounded JSONL request/notification channel with private turn capture."""
-
-    def __init__(
-        self,
-        process: subprocess.Popen[bytes],
-        *,
-        trace_output: BinaryIO,
-        max_trace_bytes: int,
-        deadline: float,
-        process_violation: threading.Event | None = None,
-    ) -> None:
-        if process.stdin is None or process.stdout is None or process.stderr is None:
-            raise SessionError("app_server_pipes_unavailable")
-        self.process = process
-        self.trace_output = trace_output
-        self.max_trace_bytes = max_trace_bytes
-        self.deadline = deadline
-        self.process_violation = process_violation
-        self.started = time.monotonic()
-        self.stderr_bytes = 0
-        self.stderr_chunks = 0
-        self.notification_methods: list[str] = []
-        self.trace_bytes = 0
-        self.trace_records = 0
-        self.trace_complete = True
-        self._capture = False
-        self._trace: ProtocolTrace | None = None
-        self._pending = bytearray()
-        self._ready: list[dict[str, Any]] = []
-        self._closed = False
-        self._selector = selectors.DefaultSelector()
-        for stream in (process.stdout, process.stderr):
-            os.set_blocking(stream.fileno(), False)
-            self._selector.register(stream.fileno(), selectors.EVENT_READ)
-
-    def begin_turn(self, trace: ProtocolTrace) -> None:
-        if self._capture:
-            raise SessionError("second_model_turn_refused")
-        self._trace = trace
-        self._capture = True
-
-    def bind_turn_id(self, turn_id: str) -> None:
-        if self._trace is None:
-            raise SessionError("turn_trace_unavailable")
-        if self._trace.turn_id not in {None, turn_id}:
-            raise SessionError("turn_id_mismatch")
-        self._trace.turn_id = turn_id
-
-    def _record(self, direction: str, message: dict[str, Any]) -> None:
-        wrapper = {
-            "direction": direction,
-            "elapsed_ms": int((time.monotonic() - self.started) * 1000),
-            "message": message,
-        }
-        raw = _canonical(wrapper)
-        if self.trace_bytes + len(raw) > self.max_trace_bytes:
-            self.trace_complete = False
-            raise SessionError("trace_byte_limit")
-        self.trace_output.write(raw)
-        self.trace_bytes += len(raw)
-        self.trace_records += 1
-
-    def send(self, method: str, request_id: int | None, params: dict[str, Any]) -> None:
-        if self._closed or self.process.stdin is None:
-            raise SessionError("app_server_stdin_unavailable")
-        message: dict[str, Any] = {"method": method, "params": params}
-        if request_id is not None:
-            message["id"] = request_id
-        if self._capture:
-            self._record("client_to_server", message)
-        try:
-            self.process.stdin.write(_canonical(message))
-            self.process.stdin.flush()
-        except (BrokenPipeError, OSError) as exc:
-            raise SessionError("app_server_stdin_closed") from exc
-
-    def request(self, method: str, request_id: int, params: dict[str, Any]) -> dict[str, Any]:
-        self.send(method, request_id, params)
-        while True:
-            message = self.next_message()
-            if message.get("id") != request_id:
-                if "id" in message and not isinstance(message.get("method"), str):
-                    raise SessionError("unexpected_response_id")
-                continue
-            if message.get("error") is not None:
-                raise SessionError(f"{method.replace('/', '_')}_protocol_error")
-            result = message.get("result")
-            if not isinstance(result, dict):
-                raise SessionError(f"{method.replace('/', '_')}_missing_result")
-            return result
-
-    def _check_limits(self) -> None:
-        if self.process_violation is not None and self.process_violation.is_set():
-            raise SessionError("unexpected_descendant")
-        if time.monotonic() >= self.deadline:
-            raise SessionError("deadline")
-
-    def next_message(self) -> dict[str, Any]:
-        while not self._ready:
-            self._pump()
-        message = self._ready.pop(0)
-        if self._capture:
-            self._record("server_to_client", message)
-        method = message.get("method")
-        if isinstance(method, str):
-            self.notification_methods.append(method)
-            if self._trace is None and method == "model/rerouted":
-                raise SessionError("model_rerouted")
-            if self._trace is None and "id" in message:
-                raise SessionError("unexpected_server_request")
-        if self._trace is not None:
-            before = set(self._trace.failures)
-            self._trace.observe(message, int((time.monotonic() - self.started) * 1000))
-            new_failures = [reason for reason in self._trace.failures if reason not in before]
-            if new_failures:
-                raise SessionError(new_failures[0])
-        return message
-
-    def _pump(self, timeout_seconds: float | None = None) -> bool:
-        self._check_limits()
-        timeout = min(
-            0.05 if timeout_seconds is None else timeout_seconds,
-            max(0.0, self.deadline - time.monotonic()),
-        )
-        events = self._selector.select(timeout)
-        if not events:
-            self._check_limits()
-            if self.process.poll() is not None:
-                if self._pending:
-                    self.trace_complete = False
-                    raise SessionError("truncated_jsonl")
-                raise SessionError("app_server_exited")
-            return False
-        assert self.process.stdout is not None and self.process.stderr is not None
-        for key, _mask in events:
-            try:
-                raw = os.read(key.fd, CHUNK_BYTES)
-            except BlockingIOError:
-                continue
-            if not raw:
-                self._selector.unregister(key.fd)
-                if key.fd == self.process.stdout.fileno() and self._pending:
-                    self.trace_complete = False
-                    raise SessionError("truncated_jsonl")
-                continue
-            if key.fd == self.process.stderr.fileno():
-                self.stderr_bytes += len(raw)
-                self.stderr_chunks += 1
-                if self.stderr_bytes > self.max_trace_bytes:
-                    raise SessionError("stderr_byte_limit")
-                continue
-            self._pending.extend(raw)
-            if len(self._pending) > self.max_trace_bytes:
-                self.trace_complete = False
-                raise SessionError("trace_byte_limit")
-            while True:
-                newline = self._pending.find(b"\n")
-                if newline < 0:
-                    break
-                line = bytes(self._pending[:newline])
-                del self._pending[: newline + 1]
-                if not line:
-                    continue
-                try:
-                    value = json.loads(line)
-                except (UnicodeError, json.JSONDecodeError, RecursionError) as exc:
-                    raise SessionError("invalid_jsonl") from exc
-                if not isinstance(value, dict):
-                    raise SessionError("invalid_jsonl")
-                self._ready.append(value)
-        return True
-
-    def wait_for_terminal(self) -> None:
-        if self._trace is None:
-            raise SessionError("turn_trace_unavailable")
-        while not self._trace.turn_completed:
-            self.next_message()
-        while self._ready:
-            self.next_message()
-        drain_deadline = min(self.deadline, time.monotonic() + 0.05)
-        while time.monotonic() < drain_deadline:
-            if not self._pump(drain_deadline - time.monotonic()):
-                break
-            while self._ready:
-                self.next_message()
-
-    def close(self) -> None:
-        if self._closed:
-            return
-        self._closed = True
-        if self.process.stdin is not None:
-            with contextlib.suppress(BrokenPipeError, OSError):
-                self.process.stdin.close()
-        _terminate(self.process)
-        self._selector.close()
-        for stream in (self.process.stdout, self.process.stderr):
-            if stream is not None:
-                stream.close()
 
 
 def _sha256_file(path: Path) -> str:
@@ -413,13 +188,9 @@ def run(args: argparse.Namespace) -> bool:
         raise RunInputError("Codex authentication cache is unavailable") from exc
     if stat.S_ISLNK(auth_stat.st_mode) or not stat.S_ISREG(auth_stat.st_mode):
         raise RunInputError("Codex authentication cache must be a regular non-symlink file")
-    prompt_handle, prompt_metadata = open_prompt(
+    prompt_raw, prompt_metadata = open_prompt(
         args.prompt_file, max_bytes=PRIVATE_PROMPT_LIMIT_BYTES
     )
-    try:
-        prompt_raw = prompt_handle.read()
-    finally:
-        prompt_handle.close()
     try:
         prompt = prompt_raw.decode("utf-8")
     except UnicodeDecodeError as exc:
@@ -443,6 +214,7 @@ def run(args: argparse.Namespace) -> bool:
     observed_processes: dict[tuple[int, str], dict[str, Any]] = {}
     monitor_stop = threading.Event()
     process_violation = threading.Event()
+    process_failure_state: dict[str, str] = {}
     monitor_thread: threading.Thread | None = None
     with _private_file(trace_path) as trace_output:
         try:
@@ -476,6 +248,7 @@ def run(args: argparse.Namespace) -> bool:
                     monitor_stop,
                     process_violation,
                     observed_processes,
+                    process_failure_state,
                 ),
                 daemon=True,
             )
@@ -486,10 +259,11 @@ def run(args: argparse.Namespace) -> bool:
                 max_trace_bytes=args.max_trace_bytes,
                 deadline=started + args.deadline_seconds,
                 process_violation=process_violation,
+                process_failure_state=process_failure_state,
             )
             preflight, thread_id = _preflight(session, home)
             if process_violation.is_set():
-                raise SessionError("unexpected_descendant")
+                raise SessionError(process_failure_state.get("reason", "unexpected_descendant"))
             schemas = {name: value["schema"] for name, value in preflight["tool_schemas"].items()}
             trace = ProtocolTrace(
                 thread_id=thread_id,
@@ -520,7 +294,7 @@ def run(args: argparse.Namespace) -> bool:
             session.bind_turn_id(turn_id)
             session.wait_for_terminal()
             if process_violation.is_set():
-                raise SessionError("unexpected_descendant")
+                raise SessionError(process_failure_state.get("reason", "unexpected_descendant"))
             result = assess_acceptance(
                 trace,
                 termination="completed",
@@ -543,7 +317,7 @@ def run(args: argparse.Namespace) -> bool:
             if session is not None:
                 session.close()
             elif process is not None:
-                _terminate(process)
+                terminate_process(process)
             monitor_stop.set()
             if monitor_thread is not None:
                 monitor_thread.join(timeout=1)
@@ -553,7 +327,7 @@ def run(args: argparse.Namespace) -> bool:
     process_evidence = verify_descendants(list(observed_processes.values()), allowed_executables)
     accepted = bool(result is not None and result["accepted"] and not process_evidence["failures"])
     if process_evidence["failures"] and not failure:
-        failure = "unexpected_descendant"
+        failure = str(process_evidence["failures"][0])
     summary = {
         "schema": "clinpgx-codex-benchmark-v1",
         "accepted": accepted,

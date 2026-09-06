@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 import stat
 import subprocess
@@ -17,6 +19,7 @@ from scripts.benchmark_codex_isolation import (
     build_sandbox_command,
     create_private_run_directory,
     open_prompt,
+    process_snapshot,
     validate_home_environment,
     validate_loopback_url,
     validate_preflight,
@@ -48,6 +51,8 @@ TOOLS = {
 
 
 def _message(method: str, params: dict[str, Any]) -> dict[str, Any]:
+    if method in {"turn/started", "turn/completed"} and "threadId" not in params:
+        params = {"threadId": "thread-1", **params}
     return {"method": method, "params": params}
 
 
@@ -78,17 +83,38 @@ def _item(
     )
 
 
+def _wire_result(envelope: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "content": [
+            {
+                "type": "text",
+                "text": json.dumps(envelope, ensure_ascii=False, separators=(",", ":")),
+            }
+        ],
+        "structuredContent": envelope,
+    }
+
+
 def _success_result() -> dict[str, Any]:
-    return {"structuredContent": {"success": True, "data": {"records": []}}}
+    return _wire_result({"success": True, "data": {"records": []}})
 
 
 def _error_result(code: str = "invalid_input") -> dict[str, Any]:
-    return {
-        "structuredContent": {
-            "success": False,
-            "error": {"code": code, "message": "Safe public error."},
-        }
+    return _wire_result({"success": False, "error_code": code, "message": "Safe public error."})
+
+
+def _agent_item(method: str, *, text: str | None = None) -> dict[str, Any]:
+    item: dict[str, Any] = {
+        "id": "answer",
+        "type": "agentMessage",
+        "phase": "final_answer",
     }
+    if text is not None:
+        item["text"] = text
+    return _message(
+        method,
+        {"threadId": "thread-1", "turnId": "turn-1", "item": item},
+    )
 
 
 def _trace() -> ProtocolTrace:
@@ -106,6 +132,232 @@ def _trace() -> ProtocolTrace:
         },
         max_calls=4,
     )
+
+
+def test_turn_events_require_matching_thread_identity() -> None:
+    trace = _trace()
+    trace.observe(
+        _message(
+            "turn/started",
+            {"threadId": "other", "turn": {"id": "turn-1", "status": "inProgress"}},
+        ),
+        1,
+    )
+    trace.observe(
+        _message(
+            "turn/completed",
+            {"threadId": "other", "turn": {"id": "turn-1", "status": "completed"}},
+        ),
+        2,
+    )
+
+    assert "thread_id_mismatch" in trace.failures
+
+
+@pytest.mark.parametrize(
+    ("events", "failure"),
+    [
+        (
+            [
+                _message(
+                    "item/completed",
+                    {
+                        "threadId": "thread-1",
+                        "turnId": "turn-1",
+                        "item": {
+                            "type": "agentMessage",
+                            "phase": "final_answer",
+                            "text": "Unidentified.",
+                        },
+                    },
+                )
+            ],
+            "item_missing_id",
+        ),
+        (
+            [
+                _message(
+                    "item/completed",
+                    {
+                        "threadId": "thread-1",
+                        "turnId": "turn-1",
+                        "item": {
+                            "id": "answer",
+                            "type": "agentMessage",
+                            "phase": "final_answer",
+                            "text": "Unpaired.",
+                        },
+                    },
+                )
+            ],
+            "completed_without_start",
+        ),
+        (
+            [
+                _message(
+                    "item/started",
+                    {
+                        "threadId": "thread-1",
+                        "turnId": "turn-1",
+                        "item": {"id": "answer", "type": "agentMessage"},
+                    },
+                ),
+                _message(
+                    "item/started",
+                    {
+                        "threadId": "thread-1",
+                        "turnId": "turn-1",
+                        "item": {"id": "answer", "type": "agentMessage"},
+                    },
+                ),
+            ],
+            "duplicate_item_start",
+        ),
+        (
+            [
+                _message(
+                    "item/started",
+                    {
+                        "threadId": "thread-1",
+                        "turnId": "turn-1",
+                        "item": {"id": "answer", "type": "reasoning"},
+                    },
+                ),
+                _message(
+                    "item/completed",
+                    {
+                        "threadId": "thread-1",
+                        "turnId": "turn-1",
+                        "item": {"id": "answer", "type": "agentMessage"},
+                    },
+                ),
+            ],
+            "item_identity_mismatch",
+        ),
+        (
+            [
+                _message(
+                    "item/started",
+                    {
+                        "threadId": "thread-1",
+                        "turnId": "turn-1",
+                        "item": {"id": "answer", "type": "agentMessage"},
+                    },
+                ),
+                _message(
+                    "item/completed",
+                    {
+                        "threadId": "thread-1",
+                        "turnId": "turn-1",
+                        "item": {"id": "answer", "type": "agentMessage"},
+                    },
+                ),
+                _message(
+                    "item/completed",
+                    {
+                        "threadId": "thread-1",
+                        "turnId": "turn-1",
+                        "item": {"id": "answer", "type": "agentMessage"},
+                    },
+                ),
+            ],
+            "duplicate_item_completion",
+        ),
+    ],
+)
+def test_non_tool_items_require_paired_stable_identity(
+    events: list[dict[str, Any]], failure: str
+) -> None:
+    trace = _trace()
+    trace.observe(
+        _message(
+            "turn/started",
+            {
+                "threadId": "thread-1",
+                "turn": {"id": "turn-1", "status": "inProgress"},
+            },
+        ),
+        1,
+    )
+    for elapsed, event in enumerate(events, 2):
+        trace.observe(event, elapsed)
+
+    assert failure in trace.failures
+
+
+def test_mcp_result_requires_exact_text_structured_mirror() -> None:
+    trace = _trace()
+    trace.observe(
+        _message(
+            "turn/started",
+            {
+                "threadId": "thread-1",
+                "turn": {"id": "turn-1", "status": "inProgress"},
+            },
+        ),
+        1,
+    )
+    trace.observe(
+        _item(
+            "item/started",
+            item_id="a",
+            tool="get_record",
+            arguments={"id": "PA1"},
+            status="inProgress",
+        ),
+        2,
+    )
+    result = _success_result()
+    result["content"] = [{"type": "text", "text": json.dumps({"success": False})}]
+    trace.observe(
+        _item(
+            "item/completed",
+            item_id="a",
+            tool="get_record",
+            arguments={"id": "PA1"},
+            status="completed",
+            result=result,
+        ),
+        3,
+    )
+
+    assert "mcp_mirror_mismatch" in trace.failures
+
+
+def test_mcp_result_rejects_missing_text_mirror() -> None:
+    trace = _trace()
+    trace.observe(
+        _message(
+            "turn/started",
+            {"turn": {"id": "turn-1", "status": "inProgress"}},
+        ),
+        1,
+    )
+    trace.observe(
+        _item(
+            "item/started",
+            item_id="a",
+            tool="get_record",
+            arguments={"id": "PA1"},
+            status="inProgress",
+        ),
+        2,
+    )
+    result = _success_result()
+    del result["content"]
+    trace.observe(
+        _item(
+            "item/completed",
+            item_id="a",
+            tool="get_record",
+            arguments={"id": "PA1"},
+            status="completed",
+            result=result,
+        ),
+        3,
+    )
+
+    assert "mcp_mirror_mismatch" in trace.failures
 
 
 def _complete_trace(trace: ProtocolTrace) -> None:
@@ -135,19 +387,11 @@ def _complete_trace(trace: ProtocolTrace) -> None:
         30,
     )
     trace.observe(
-        _message(
-            "item/completed",
-            {
-                "threadId": "thread-1",
-                "turnId": "turn-1",
-                "item": {
-                    "id": "answer",
-                    "type": "agentMessage",
-                    "phase": "final_answer",
-                    "text": "Grounded answer.",
-                },
-            },
-        ),
+        _agent_item("item/started"),
+        35,
+    )
+    trace.observe(
+        _agent_item("item/completed", text="Grounded answer."),
         40,
     )
     trace.observe(
@@ -208,19 +452,11 @@ def test_multicall_trace_accepts_concurrent_completion_order() -> None:
         35,
     )
     trace.observe(
-        _message(
-            "item/completed",
-            {
-                "threadId": "thread-1",
-                "turnId": "turn-1",
-                "item": {
-                    "id": "answer",
-                    "type": "agentMessage",
-                    "phase": "final_answer",
-                    "text": "Done.",
-                },
-            },
-        ),
+        _agent_item("item/started"),
+        38,
+    )
+    trace.observe(
+        _agent_item("item/completed", text="Done."),
         40,
     )
     trace.observe(
@@ -284,19 +520,11 @@ def test_valid_mcp_error_is_observed_and_recovery_can_succeed() -> None:
         5,
     )
     trace.observe(
-        _message(
-            "item/completed",
-            {
-                "threadId": "thread-1",
-                "turnId": "turn-1",
-                "item": {
-                    "id": "answer",
-                    "type": "agentMessage",
-                    "phase": "final_answer",
-                    "text": "Recovered.",
-                },
-            },
-        ),
+        _agent_item("item/started"),
+        5,
+    )
+    trace.observe(
+        _agent_item("item/completed", text="Recovered."),
         6,
     )
     trace.observe(
@@ -350,19 +578,11 @@ def test_each_public_mcp_error_code_is_a_valid_observation(code: str) -> None:
         3,
     )
     trace.observe(
-        _message(
-            "item/completed",
-            {
-                "threadId": "thread-1",
-                "turnId": "turn-1",
-                "item": {
-                    "id": "answer",
-                    "type": "agentMessage",
-                    "phase": "final_answer",
-                    "text": "Reported the source error.",
-                },
-            },
-        ),
+        _agent_item("item/started"),
+        3,
+    )
+    trace.observe(
+        _agent_item("item/completed", text="Reported the source error."),
         4,
     )
     trace.observe(
@@ -477,20 +697,9 @@ def test_invalid_lifecycle_and_forbidden_tools_fail_closed(mutation: str, failur
     trace = _trace()
     if mutation == "no_tool":
         trace.observe(_message("turn/started", {"turn": {"id": "turn-1"}}), 1)
+        trace.observe(_agent_item("item/started"), 2)
         trace.observe(
-            _message(
-                "item/completed",
-                {
-                    "threadId": "thread-1",
-                    "turnId": "turn-1",
-                    "item": {
-                        "id": "answer",
-                        "type": "agentMessage",
-                        "phase": "final_answer",
-                        "text": "No call.",
-                    },
-                },
-            ),
+            _agent_item("item/completed", text="No call."),
             2,
         )
         trace.observe(
@@ -701,15 +910,106 @@ def test_descendant_verification_requires_exact_executable_paths() -> None:
     assert rejected["failures"] == ["unexpected_descendant"]
 
 
+def _fake_proc_stat(proc_root: Path, pid: int, ppid: int, state: str = "S") -> None:
+    proc_dir = proc_root / str(pid)
+    proc_dir.mkdir()
+    (proc_dir / "stat").write_text(f"{pid} (worker) {state} {ppid} 0 0 0\n")
+
+
+def test_process_snapshot_rejects_live_uninspectable_owned_descendant(tmp_path: Path) -> None:
+    proc_root = tmp_path / "proc"
+    proc_root.mkdir()
+    _fake_proc_stat(proc_root, 100, 1)
+    _fake_proc_stat(proc_root, 101, 100)
+    _fake_proc_stat(proc_root, 999, 1)
+
+    def resolve(proc_dir: Path) -> str:
+        if proc_dir.name == "101":
+            raise PermissionError
+        if proc_dir.name == "999":
+            raise AssertionError("unrelated process executable must not be inspected")
+        return "/usr/bin/bwrap"
+
+    snapshot = process_snapshot(100, proc_root=proc_root, executable_resolver=resolve)
+    evidence = verify_descendants(snapshot, {Path("/usr/bin/bwrap")})
+
+    assert evidence["failures"] == ["uninspectable_descendant"]
+    assert evidence["unexpected"] == [
+        {
+            "pid": 101,
+            "ppid": 100,
+            "executable": None,
+            "inspection_error": "executable_permission_denied",
+            "identity_verified": False,
+        }
+    ]
+
+
+def test_process_snapshot_ignores_confirmed_exit_race(tmp_path: Path) -> None:
+    proc_root = tmp_path / "proc"
+    proc_root.mkdir()
+    _fake_proc_stat(proc_root, 100, 1)
+    _fake_proc_stat(proc_root, 101, 100)
+
+    def resolve(proc_dir: Path) -> str:
+        if proc_dir.name == "101":
+            (proc_dir / "stat").unlink()
+            proc_dir.rmdir()
+            raise FileNotFoundError
+        return "/usr/bin/bwrap"
+
+    snapshot = process_snapshot(100, proc_root=proc_root, executable_resolver=resolve)
+    evidence = verify_descendants(snapshot, {Path("/usr/bin/bwrap")})
+
+    assert evidence["failures"] == []
+    assert evidence["observed"] == [
+        {
+            "pid": 100,
+            "ppid": 1,
+            "executable": "/usr/bin/bwrap",
+            "inspection_error": None,
+            "identity_verified": True,
+        }
+    ]
+
+
+def test_process_snapshot_retains_live_known_child_when_stat_becomes_unreadable(
+    tmp_path: Path,
+) -> None:
+    proc_root = tmp_path / "proc"
+    proc_root.mkdir()
+    _fake_proc_stat(proc_root, 100, 1)
+    _fake_proc_stat(proc_root, 101, 100)
+    _fake_proc_stat(proc_root, 999, 1)
+    known = {100: 1, 101: 100}
+
+    def read_stat(stat_path: Path) -> str:
+        if stat_path.parent.name in {"101", "999"}:
+            raise PermissionError
+        return stat_path.read_text()
+
+    snapshot = process_snapshot(
+        100,
+        proc_root=proc_root,
+        executable_resolver=lambda _proc_dir: "/usr/bin/bwrap",
+        stat_reader=read_stat,
+        known_descendants=known,
+    )
+    evidence = verify_descendants(snapshot, {Path("/usr/bin/bwrap")})
+
+    assert evidence["failures"] == ["uninspectable_descendant"]
+    assert [row["pid"] for row in evidence["unexpected"]] == [101]
+    assert evidence["unexpected"][0]["inspection_error"] == "stat_permission_denied"
+
+
 def test_private_artifacts_prompt_and_sandbox_command(tmp_path: Path) -> None:
     prompt = tmp_path / "prompt.md"
     prompt.write_text("immutable prompt\n")
-    handle, metadata = open_prompt(prompt, max_bytes=1024)
-    try:
-        assert handle.read() == b"immutable prompt\n"
-    finally:
-        handle.close()
+    prompt_bytes, metadata = open_prompt(prompt, max_bytes=1024)
+    prompt.write_text("changed after validation\n")
+    assert prompt_bytes == b"immutable prompt\n"
     assert metadata["bytes"] == 17
+    assert metadata["sha256"] == hashlib.sha256(prompt_bytes).hexdigest()
 
     output = create_private_run_directory(tmp_path / "output")
     assert stat.S_IMODE(output.stat().st_mode) == 0o700
@@ -868,19 +1168,8 @@ for line in sys.stdin:
                 status="completed",
                 result=_success_result(),
             ),
-            _message(
-                "item/completed",
-                {
-                    "threadId": "thread-1",
-                    "turnId": "turn-1",
-                    "item": {
-                        "id": "answer",
-                        "type": "agentMessage",
-                        "phase": "final_answer",
-                        "text": "Done.",
-                    },
-                },
-            ),
+            _agent_item("item/started"),
+            _agent_item("item/completed", text="Done."),
             _message("turn/completed", {"turn": {"id": "turn-1", "status": "completed"}}),
         ]!r
     }
@@ -907,6 +1196,163 @@ for line in sys.stdin:
     assert assess_acceptance(trace, termination="completed", trace_complete=True)["accepted"]
     assert b"private diagnostic" not in trace_path.read_bytes()
     assert session.stderr_bytes > 0
+
+
+def test_jsonrpc_terminal_rejects_partial_trailing_record(tmp_path: Path) -> None:
+    events = [
+        _message("turn/started", {"turn": {"id": "turn-1", "status": "inProgress"}}),
+        _item(
+            "item/started",
+            item_id="a",
+            tool="search_records",
+            arguments={"query": "CYP2C19"},
+            status="inProgress",
+        ),
+        _item(
+            "item/completed",
+            item_id="a",
+            tool="search_records",
+            arguments={"query": "CYP2C19"},
+            status="completed",
+            result=_success_result(),
+        ),
+        _agent_item("item/started"),
+        _agent_item("item/completed", text="Done."),
+        _message("turn/completed", {"turn": {"id": "turn-1", "status": "completed"}}),
+    ]
+    body = f"""
+import json, os, sys
+for line in sys.stdin:
+    request = json.loads(line)
+    if request.get('method') == 'turn/start':
+        records = [{{'id': request['id'], 'result': {{'turn': {{'id': 'turn-1'}}}}}}, *{events!r}]
+        payload = b''.join((json.dumps(record) + '\\n').encode() for record in records)
+        os.write(1, payload + b'{{\"partial\"')
+"""
+    process = _stub_process(body)
+    with (tmp_path / "trace.jsonl").open("xb") as output:
+        session = AppServerSession(
+            process,
+            trace_output=output,
+            max_trace_bytes=65536,
+            deadline=time.monotonic() + 2,
+        )
+        session.begin_turn(_trace())
+        session.request("turn/start", 8, {"threadId": "thread-1"})
+        with pytest.raises(SessionError) as caught:
+            session.wait_for_terminal()
+        session.close()
+
+    assert caught.value.reason == "truncated_jsonl"
+    assert session.trace_complete is False
+
+
+def test_jsonrpc_large_write_obeys_deadline_and_reaps_child(tmp_path: Path) -> None:
+    process = _stub_process("import time; time.sleep(5)")
+    started = time.monotonic()
+    with (tmp_path / "trace.jsonl").open("xb") as output:
+        session = AppServerSession(
+            process,
+            trace_output=output,
+            max_trace_bytes=2 * 1024 * 1024,
+            deadline=started + 0.15,
+        )
+        session.begin_turn(_trace())
+        with pytest.raises(SessionError) as caught:
+            session.send("turn/start", 8, {"input": [{"text": "x" * 1024 * 1024}]})
+        session.close()
+
+    assert caught.value.reason == "deadline"
+    assert time.monotonic() - started < 1.5
+    assert process.poll() is not None
+
+
+@pytest.mark.parametrize(
+    ("body", "kwargs", "reason"),
+    [
+        (
+            "import json; [print(json.dumps({'method': 'notice/' + str(i)}), flush=True) "
+            "for i in range(4)]; import time; time.sleep(5)",
+            {"max_preflight_events": 3},
+            "preflight_event_limit",
+        ),
+        (
+            "import json; print(json.dumps({'method': 'notice', 'params': {'value': "
+            "'x' * 512}}), flush=True); import time; time.sleep(5)",
+            {"max_preflight_bytes": 128},
+            "preflight_byte_limit",
+        ),
+    ],
+)
+def test_jsonrpc_preflight_output_is_bounded(
+    tmp_path: Path, body: str, kwargs: dict[str, int], reason: str
+) -> None:
+    process = _stub_process(body)
+    with (tmp_path / "trace.jsonl").open("xb") as output:
+        session = AppServerSession(
+            process,
+            trace_output=output,
+            max_trace_bytes=4096,
+            deadline=time.monotonic() + 2,
+            **kwargs,
+        )
+        with pytest.raises(SessionError) as caught:
+            while True:
+                session.next_message()
+        session.close()
+
+    assert caught.value.reason == reason
+
+
+def test_jsonrpc_notification_evidence_is_sanitized_and_deduplicated(tmp_path: Path) -> None:
+    body = """
+import json, sys
+for line in sys.stdin:
+    request = json.loads(line)
+    print(json.dumps({'method': 'unsafe method with spaces'}), flush=True)
+    print(json.dumps({'method': 'safe/notice'}), flush=True)
+    print(json.dumps({'method': 'safe/notice'}), flush=True)
+    print(json.dumps({'id': request['id'], 'result': {}}), flush=True)
+"""
+    process = _stub_process(body)
+    with (tmp_path / "trace.jsonl").open("xb") as output:
+        session = AppServerSession(
+            process,
+            trace_output=output,
+            max_trace_bytes=4096,
+            deadline=time.monotonic() + 2,
+        )
+        assert session.request("thread/start", 6, {}) == {}
+        session.close()
+
+    assert session.notification_methods == {
+        "safe/notice",
+        "invalid_or_oversized_method",
+    }
+
+
+def test_jsonrpc_notification_method_evidence_has_independent_cap(tmp_path: Path) -> None:
+    body = """
+import json, sys
+for line in sys.stdin:
+    request = json.loads(line)
+    for number in range(140):
+        print(json.dumps({'method': 'notice/' + str(number)}), flush=True)
+    print(json.dumps({'id': request['id'], 'result': {}}), flush=True)
+"""
+    process = _stub_process(body)
+    with (tmp_path / "trace.jsonl").open("xb") as output:
+        session = AppServerSession(
+            process,
+            trace_output=output,
+            max_trace_bytes=65536,
+            deadline=time.monotonic() + 2,
+        )
+        assert session.request("thread/start", 6, {}) == {}
+        session.close()
+
+    assert len(session.notification_methods) == 128
+    assert "additional_methods_omitted" in session.notification_methods
 
 
 @pytest.mark.parametrize(
@@ -1016,7 +1462,7 @@ for line in sys.stdin:
         session.close()
 
     assert caught.value.reason == "model_rerouted"
-    assert session.notification_methods == ["model/rerouted"]
+    assert session.notification_methods == {"model/rerouted"}
 
 
 def test_session_close_kills_residual_process_group_and_private_file_is_exclusive(

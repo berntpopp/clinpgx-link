@@ -22,6 +22,10 @@ PUBLIC_ERROR_CODES = frozenset(
 _BENIGN_ITEM_TYPES = frozenset({"userMessage", "agentMessage", "reasoning", "plan"})
 
 
+def _reject_json_constant(_constant: str) -> None:
+    raise ValueError
+
+
 def canonical_sha256(value: object) -> str:
     raw = json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
     return hashlib.sha256(raw).hexdigest()
@@ -47,6 +51,8 @@ class ProtocolTrace:
         self.failures: list[str] = []
         self.calls: list[dict[str, Any]] = []
         self._calls_by_id: dict[str, dict[str, Any]] = {}
+        self._started_items: dict[str, str] = {}
+        self._completed_items: set[str] = set()
         self.errors: list[dict[str, str]] = []
         self.turn_id: str | None = None
         self.turn_started_elapsed_ms: int | None = None
@@ -62,6 +68,10 @@ class ProtocolTrace:
     def _add_failure(self, reason: str) -> None:
         if reason not in self.failures:
             self.failures.append(reason)
+
+    @property
+    def has_incomplete_items(self) -> bool:
+        return set(self._started_items) != self._completed_items
 
     def _validate_identity(self, model: str, provider: str, effort: str) -> None:
         observed_model = self.observed_identity.get("model")
@@ -111,6 +121,8 @@ class ProtocolTrace:
 
     def _turn_started(self, message: dict[str, Any], elapsed_ms: int) -> None:
         params = message.get("params")
+        if not isinstance(params, dict) or params.get("threadId") != self.thread_id:
+            self._add_failure("thread_id_mismatch")
         turn = params.get("turn") if isinstance(params, dict) else None
         turn_id = turn.get("id") if isinstance(turn, dict) else None
         if not isinstance(turn_id, str) or not turn_id:
@@ -144,6 +156,35 @@ class ProtocolTrace:
             self._add_failure("item_before_turn_start")
         self._validate_ids(params)
         item_type = item.get("type")
+        item_id = item.get("id")
+        if not isinstance(item_id, str) or not item_id:
+            self._add_failure(
+                "mcp_item_missing_id" if item_type == "mcpToolCall" else "item_missing_id"
+            )
+            return
+        if method == "item/started":
+            if item_id in self._started_items:
+                self._add_failure(
+                    "duplicate_mcp_start" if item_type == "mcpToolCall" else "duplicate_item_start"
+                )
+                return
+            self._started_items[item_id] = str(item_type)
+        else:
+            started_type = self._started_items.get(item_id)
+            if started_type is None:
+                self._add_failure("completed_without_start")
+                return
+            if item_id in self._completed_items:
+                self._add_failure(
+                    "duplicate_mcp_completion"
+                    if item_type == "mcpToolCall"
+                    else "duplicate_item_completion"
+                )
+                return
+            if started_type != item_type:
+                self._add_failure("item_identity_mismatch")
+                return
+            self._completed_items.add(item_id)
         if item_type == "mcpToolCall":
             self._mcp_item(method, item, elapsed_ms)
             return
@@ -171,9 +212,7 @@ class ProtocolTrace:
         item_id = item.get("id")
         tool = item.get("tool")
         arguments = item.get("arguments")
-        if not isinstance(item_id, str) or not item_id:
-            self._add_failure("mcp_item_missing_id")
-            return
+        assert isinstance(item_id, str)
         if not isinstance(tool, str) or tool not in self.advertised_tools:
             self._add_failure("unadvertised_mcp_tool")
         elif not self._valid_arguments(tool, arguments):
@@ -224,16 +263,14 @@ class ProtocolTrace:
             self._add_failure("failed_mcp_transport")
             return
         result = item.get("result")
-        structured = result.get("structuredContent") if isinstance(result, dict) else None
+        structured = self._mirrored_envelope(result)
         if not isinstance(structured, dict):
-            self._add_failure("missing_structured_mcp_result")
             return
         success = structured.get("success")
         if success is True:
             matched_call["outcome"] = "success"
         elif success is False:
-            error = structured.get("error")
-            code = error.get("code") if isinstance(error, dict) else None
+            code = structured.get("error_code")
             if not isinstance(code, str) or code not in PUBLIC_ERROR_CODES:
                 self._add_failure("invalid_mcp_error_code")
                 return
@@ -252,6 +289,36 @@ class ProtocolTrace:
         ):
             matched_call["boundary_elapsed_ms"] = boundary
 
+    def _mirrored_envelope(self, result: object) -> dict[str, Any] | None:
+        if not isinstance(result, dict):
+            self._add_failure("missing_structured_mcp_result")
+            return None
+        structured = result.get("structuredContent")
+        if not isinstance(structured, dict):
+            self._add_failure("missing_structured_mcp_result")
+            return None
+        content = result.get("content")
+        if not isinstance(content, list) or len(content) != 1:
+            self._add_failure("mcp_mirror_mismatch")
+            return None
+        text_block = content[0]
+        if not isinstance(text_block, dict) or text_block.get("type") != "text":
+            self._add_failure("mcp_mirror_mismatch")
+            return None
+        text = text_block.get("text")
+        if not isinstance(text, str):
+            self._add_failure("mcp_mirror_mismatch")
+            return None
+        try:
+            mirrored = json.loads(text, parse_constant=_reject_json_constant)
+        except (ValueError, TypeError, RecursionError):
+            self._add_failure("mcp_mirror_mismatch")
+            return None
+        if mirrored != structured:
+            self._add_failure("mcp_mirror_mismatch")
+            return None
+        return structured
+
     def _valid_arguments(self, tool: str, arguments: object) -> bool:
         if not isinstance(arguments, dict):
             return False
@@ -263,6 +330,8 @@ class ProtocolTrace:
 
     def _turn_completed(self, message: dict[str, Any], elapsed_ms: int) -> None:
         params = message.get("params")
+        if not isinstance(params, dict) or params.get("threadId") != self.thread_id:
+            self._add_failure("thread_id_mismatch")
         turn = params.get("turn") if isinstance(params, dict) else None
         turn_id = turn.get("id") if isinstance(turn, dict) else None
         if not isinstance(turn_id, str) or self.turn_id != turn_id:
@@ -298,6 +367,8 @@ def assess_acceptance(
         add("missing_mcp_call")
     if any(call["completed_elapsed_ms"] is None for call in trace.calls):
         add("incomplete_mcp_call")
+    if trace.has_incomplete_items:
+        add("incomplete_item_lifecycle")
     if trace.final_answer is None:
         add("missing_final_answer")
     if not trace.turn_completed:
