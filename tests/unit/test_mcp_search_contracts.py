@@ -148,6 +148,10 @@ async def test_capability_examples_execute_through_captured_api_routes(tmp_path)
                 }
                 assert "membership" in contracts["download"]["semantics"]
                 assert "entity-family identity" not in contracts["download"]["semantics"]
+                examples = contracts["download"]["installed_dataset_examples"]
+                assert examples["gene"]["dataset_id"] == "data/genes.zip"
+                assert examples["gene"]["canonical_filter"] == "gene"
+                assert examples["gene"]["source_column"] == "Symbol"
 
                 for entity_type, contract in api_contracts.items():
                     filters, expected_path, expected_filters = expected[entity_type]

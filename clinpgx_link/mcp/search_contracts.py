@@ -280,6 +280,34 @@ def capabilities_payload() -> dict[str, Any]:
             "entities": sorted(LOCAL_SEARCH_ENTITIES),
             "filters": list(DOWNLOAD_FILTERS),
             "semantics": DOWNLOAD_SEMANTICS,
+            "installed_dataset_examples": {
+                "gene": {
+                    "dataset_id": "data/genes.zip",
+                    "member": "genes.tsv",
+                    "canonical_filter": "gene",
+                    "source_column": "Symbol",
+                    "example_call": {
+                        "tool": "search_dataset",
+                        "arguments": {
+                            "dataset_id": "data/genes.zip",
+                            "filters": {"gene": "DPYD"},
+                        },
+                    },
+                },
+                "chemical": {
+                    "dataset_id": "data/chemicals.zip",
+                    "member": "chemicals.tsv",
+                    "canonical_filter": "chemical",
+                    "source_column": "Name",
+                    "example_call": {
+                        "tool": "search_dataset",
+                        "arguments": {
+                            "dataset_id": "data/chemicals.zip",
+                            "filters": {"chemical": "warfarin"},
+                        },
+                    },
+                },
+            },
         },
     }
 
