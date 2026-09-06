@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from copy import deepcopy
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, Literal, NamedTuple
@@ -160,6 +161,8 @@ DOWNLOAD_SEMANTICS = (
 FILTER_DESCRIPTION = (
     "ANDed canonical filters (" + ", ".join(CANONICAL_FILTERS) + "); API choices vary by entity."
 )
+_API_CONTRACT_DEFAULT_FIELDS = ("source", "semantics", "example_purpose")
+_API_CONTRACT_DEFAULTS_SCOPE = "Every API row unless that row overrides the field."
 
 
 def api_contract(entity_type: str) -> SearchContract | None:
@@ -258,7 +261,7 @@ def resolve_search_route(
 
 
 def capabilities_payload() -> dict[str, Any]:
-    """Return a defensive, bounded projection for server capabilities."""
+    """Return the complete canonical search-capabilities contract."""
     return {
         "api": {
             entity: {
@@ -281,6 +284,33 @@ def capabilities_payload() -> dict[str, Any]:
     }
 
 
+def compact_capabilities_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
+    """Factor only uniform API-row defaults into a defensive payload copy."""
+    projected = deepcopy(dict(payload))
+    api = projected.get("api")
+    if not isinstance(api, dict) or not api:
+        return projected
+
+    rows = list(api.values())
+    defaults: dict[str, Any] = {}
+    for field in _API_CONTRACT_DEFAULT_FIELDS:
+        if not all(isinstance(row, dict) and field in row for row in rows):
+            continue
+        first = rows[0][field]
+        if all(row[field] == first for row in rows[1:]):
+            defaults[field] = deepcopy(first)
+
+    if defaults:
+        projected["api_contract_defaults"] = {
+            "applies_to": _API_CONTRACT_DEFAULTS_SCOPE,
+            **defaults,
+        }
+        for row in rows:
+            for field in defaults:
+                del row[field]
+    return projected
+
+
 __all__ = [
     "API_SEARCH_CONTRACTS",
     "CANONICAL_FILTERS",
@@ -295,6 +325,7 @@ __all__ = [
     "api_filter_value_choices",
     "api_filters",
     "capabilities_payload",
+    "compact_capabilities_payload",
     "resolve_search_route",
     "supports_accession_shortcut",
     "supports_api_search",

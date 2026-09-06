@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 
 import httpx
 import pytest
@@ -11,7 +12,9 @@ from fastmcp import Client
 from clinpgx_link.api.client import ClinPGxClient
 from clinpgx_link.config import Settings
 from clinpgx_link.content.store import ContentStore
+from clinpgx_link.mcp import search_contracts
 from clinpgx_link.mcp.facade import create_mcp
+from clinpgx_link.mcp.search_contracts import capabilities_payload
 from clinpgx_link.services.api import ApiService
 
 API_CASES = {
@@ -65,6 +68,7 @@ def _api(tmp_path, handler):
 async def test_capability_examples_execute_through_captured_api_routes(tmp_path):
     expected = dict(API_CASES)
     calls: list[httpx.Request] = []
+    modes = ("minimal", "compact", "standard", "full")
 
     def handle(request: httpx.Request) -> httpx.Response:
         calls.append(request)
@@ -73,53 +77,159 @@ async def test_capability_examples_execute_through_captured_api_routes(tmp_path)
     store, upstream, service = _api(tmp_path, handle)
     try:
         async with Client(create_mcp(content_store=store, api_service=service)) as client:
-            capabilities = await client.call_tool("get_server_capabilities", {})
-            contracts = capabilities.structured_content["result"]["search_contracts"]
-            api_contracts = contracts["api"]
-            assert set(api_contracts) == set(expected)
-            assert api_contracts["guideline_annotation"]["filter_values"] == {
-                "source": ["cpic", "dpwg", "pro"]
-            }
-            assert api_contracts["label"]["filter_values"] == {
-                "source": ["ema", "fda", "hcsc", "pmda"]
-            }
-            assert "membership" in contracts["download"]["semantics"]
-            assert "entity-family identity" not in contracts["download"]["semantics"]
+            capability_tool = next(
+                tool for tool in await client.list_tools() if tool.name == "get_server_capabilities"
+            )
+            assert "api_contract_defaults" in capability_tool.description
+            assert "full" in capability_tool.description
 
-            for entity_type, contract in api_contracts.items():
-                filters, expected_path, expected_filters = expected[entity_type]
-                assert contract["source"] == "api"
-                assert contract["operation"] == "GET " + expected_path.removeprefix("/v1")
-                assert contract["filters"] == sorted(contract["filter_mapping"])
-                assert contract["example_purpose"].endswith("not evidence of a match.")
-                assert contract["example"] == {
-                    "tool": "search_records",
-                    "arguments": {
-                        "entity_type": entity_type,
-                        "filters": filters,
-                        "source": "api",
-                    },
-                }
-                result = await client.call_tool(
-                    contract["example"]["tool"], contract["example"]["arguments"]
+            canonical = capabilities_payload()
+            results = {}
+            outer_keys = None
+            stable_result = None
+            for mode in modes:
+                capabilities = await client.call_tool(
+                    "get_server_capabilities", {"response_mode": mode}
                 )
-                assert result.structured_content["success"] is True
-                request = calls[-1]
-                assert request.url.path == expected_path
-                assert dict(request.url.params) == {**expected_filters, "view": "base"}
+                payload = capabilities.structured_content
+                result_payload = payload["result"]
+                results[mode] = result_payload
+                assert result_payload["response_mode"] == mode
+                assert payload["success"] is True
+                assert json.loads(capabilities.content[0].text) == payload
+                if outer_keys is None:
+                    outer_keys = set(payload)
+                assert set(payload) == outer_keys
+
+                current_stable = {
+                    key: value
+                    for key, value in result_payload.items()
+                    if key not in {"response_mode", "search_contracts"}
+                }
+                if stable_result is None:
+                    stable_result = current_stable
+                assert current_stable == stable_result
+
+                contracts = result_payload["search_contracts"]
+                if mode == "full":
+                    assert contracts == canonical
+                    api_contracts = contracts["api"]
+                else:
+                    assert contracts["api_contract_defaults"] == {
+                        "applies_to": "Every API row unless that row overrides the field.",
+                        "source": "api",
+                        "semantics": (
+                            "All supplied canonical exact filters are combined with AND semantics."
+                        ),
+                        "example_purpose": (
+                            "Request syntax and route binding; not evidence of a match."
+                        ),
+                    }
+                    defaults = {
+                        key: contracts["api_contract_defaults"][key]
+                        for key in ("source", "semantics", "example_purpose")
+                    }
+                    assert all(
+                        not set(defaults) & set(contract) for contract in contracts["api"].values()
+                    )
+                    api_contracts = {
+                        entity_type: {**defaults, **contract}
+                        for entity_type, contract in contracts["api"].items()
+                    }
+                    assert api_contracts == canonical["api"]
+                    assert contracts["download"] == canonical["download"]
+
+                assert set(api_contracts) == set(expected)
+                assert api_contracts["guideline_annotation"]["filter_values"] == {
+                    "source": ["cpic", "dpwg", "pro"]
+                }
+                assert api_contracts["label"]["filter_values"] == {
+                    "source": ["ema", "fda", "hcsc", "pmda"]
+                }
+                assert "membership" in contracts["download"]["semantics"]
+                assert "entity-family identity" not in contracts["download"]["semantics"]
+
+                for entity_type, contract in api_contracts.items():
+                    filters, expected_path, expected_filters = expected[entity_type]
+                    assert contract["source"] == "api"
+                    assert contract["operation"] == "GET " + expected_path.removeprefix("/v1")
+                    assert contract["filters"] == sorted(contract["filter_mapping"])
+                    assert contract["example_purpose"].endswith("not evidence of a match.")
+                    assert contract["example"] == {
+                        "tool": "search_records",
+                        "arguments": {
+                            "entity_type": entity_type,
+                            "filters": filters,
+                            "source": "api",
+                        },
+                    }
+                    call = await client.call_tool(
+                        contract["example"]["tool"], contract["example"]["arguments"]
+                    )
+                    assert call.structured_content["success"] is True
+                    if mode == "minimal":
+                        request = calls[-1]
+                        assert request.url.path == expected_path
+                        assert dict(request.url.params) == {**expected_filters, "view": "base"}
 
             assert len(calls) == len(expected)
-            serialized = json.dumps(
-                capabilities.structured_content,
+            full_serialized = json.dumps(
+                results["full"],
                 sort_keys=True,
                 ensure_ascii=False,
                 allow_nan=False,
                 separators=(",", ":"),
             ).encode("utf-8")
-            assert len(serialized) <= 100_000
-            assert (len(serialized) + 3) // 4 <= 25_000
+            compact_serialized = json.dumps(
+                results["compact"],
+                sort_keys=True,
+                ensure_ascii=False,
+                allow_nan=False,
+                separators=(",", ":"),
+            ).encode("utf-8")
+            assert len(full_serialized) - len(compact_serialized) >= 1_000
+            assert len(full_serialized) <= 100_000
+            assert (len(full_serialized) + 3) // 4 <= 25_000
     finally:
         await upstream.close()
+
+
+def test_compact_capability_projection_preserves_heterogeneous_and_missing_fields():
+    payload = {
+        "api": {
+            "one": {
+                "source": "api",
+                "semantics": "shared semantics",
+                "example_purpose": "row-only purpose",
+                "operation": "GET /one",
+                "nested": {"values": ["one"]},
+            },
+            "two": {
+                "source": "website",
+                "semantics": "shared semantics",
+                "operation": "GET /two",
+                "nested": {"values": ["two"]},
+            },
+        },
+        "download": {"entities": ["gene"]},
+    }
+    original = deepcopy(payload)
+
+    projected = search_contracts.compact_capabilities_payload(payload)
+
+    assert payload == original
+    assert projected["api_contract_defaults"] == {
+        "applies_to": "Every API row unless that row overrides the field.",
+        "semantics": "shared semantics",
+    }
+    assert projected["api"]["one"]["source"] == "api"
+    assert projected["api"]["two"]["source"] == "website"
+    assert projected["api"]["one"]["example_purpose"] == "row-only purpose"
+    assert "example_purpose" not in projected["api"]["two"]
+    assert "semantics" not in projected["api"]["one"]
+    assert "semantics" not in projected["api"]["two"]
+    projected["api"]["one"]["nested"]["values"].append("changed")
+    assert payload == original
 
 
 @pytest.mark.asyncio

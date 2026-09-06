@@ -30,7 +30,11 @@ from clinpgx_link.mcp.middleware import BoundaryGuard
 from clinpgx_link.mcp.record_tools import register_record_tools
 from clinpgx_link.mcp.relationship_contracts import relationship_capabilities_payload
 from clinpgx_link.mcp.schema_tools import register_schema_tool
-from clinpgx_link.mcp.search_contracts import api_filter_choices, capabilities_payload
+from clinpgx_link.mcp.search_contracts import (
+    api_filter_choices,
+    capabilities_payload,
+    compact_capabilities_payload,
+)
 from clinpgx_link.mcp.untrusted_content import UntrustedText, enforce_limits, fence_text
 from clinpgx_link.models import SourceInfo
 from clinpgx_link.services.api import ApiService
@@ -163,10 +167,11 @@ def create_mcp(
     @server.tool(annotations=_ANNOTATIONS, tags={"metadata"}, output_schema=None)
     async def get_server_capabilities(
         response_mode: Annotated[
-            ResponseMode, Field(description="Response detail mode.")
+            ResponseMode,
+            Field(description="Response detail mode; full expands shared API-row defaults."),
         ] = "compact",
     ) -> ToolResult:
-        """Discover currently registered tools and source-retention limits."""
+        """Discover tools and source limits; non-full modes use api_contract_defaults, while full expands every API row."""
         names = [tool.name for tool in await server.list_tools()]
         now = datetime.now(UTC).isoformat()
         source = SourceInfo(
@@ -177,6 +182,9 @@ def create_mcp(
             "server",
             coverage="complete",
         )
+        search_contracts = capabilities_payload()
+        if response_mode != "full":
+            search_contracts = compact_capabilities_payload(search_contracts)
         return success_result(
             {
                 "name": "clinpgx-link",
@@ -185,7 +193,7 @@ def create_mcp(
                 "research_only": True,
                 "response_mode": response_mode,
                 "coverage_status": "implementation_in_progress",
-                "search_contracts": capabilities_payload(),
+                "search_contracts": search_contracts,
                 "relationship_contract": relationship_capabilities_payload(),
                 "detail_identifier_contracts": detail_identifier_capabilities(api_filter_choices),
             },
