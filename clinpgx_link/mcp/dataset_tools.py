@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import time
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any
 
 from fastmcp import FastMCP
 from fastmcp.tools.base import ToolResult
@@ -21,13 +21,13 @@ from clinpgx_link.exceptions import (
     UpstreamUnavailableError,
 )
 from clinpgx_link.mcp.admission import run_sync
+from clinpgx_link.mcp.dataset_description_modes import ResponseMode, project_dataset_description
 from clinpgx_link.mcp.envelope import error_result, success_result
 from clinpgx_link.mcp.pagination import CursorCodec
 from clinpgx_link.mcp.row_provenance import row_provenance
 from clinpgx_link.mcp.untrusted_content import fence_text
 from clinpgx_link.models import SourceInfo, SourceResponse
 
-ResponseMode = Literal["minimal", "compact", "standard", "full"]
 _ANNOTATIONS = {
     "readOnlyHint": True,
     "destructiveHint": False,
@@ -86,12 +86,13 @@ def _decorate_member(member: dict[str, Any], source: SourceInfo, dataset_id: str
     value["path"] = _fence(path, source, f"{dataset_id}:{path}")
     if value.get("limitation"):
         value["limitation"] = _fence(value["limitation"], source, f"{dataset_id}:{path}")
-    fields = []
-    for field in value.get("fields", []):
-        item = dict(field)
-        item["name"] = _fence(item["name"], source, f"{dataset_id}:{path}")
-        fields.append(item)
-    value["fields"] = fields
+    if "fields" in value:
+        fields = []
+        for field in value["fields"]:
+            item = dict(field)
+            item["name"] = _fence(item["name"], source, f"{dataset_id}:{path}")
+            fields.append(item)
+        value["fields"] = fields
     if isinstance(value.get("sheets"), list):
         value["sheets"] = [
             decorate_sheet(sheet, "sheets", f"{dataset_id}:{path}") for sheet in value["sheets"]
@@ -105,6 +106,7 @@ def _decorate_dataset(
     snapshot_id: str,
     store: ContentStore,
     *,
+    complete_description: dict[str, Any] | None = None,
     member_start: int = 0,
     member_stop: int | None = None,
 ) -> dict[str, Any]:
@@ -127,7 +129,8 @@ def _decorate_dataset(
         ).encode()
         decorated_members.append(item)
     value["members"] = decorated_members
-    metadata_ref = _metadata_ref(store, SourceResponse(description, source))
+    metadata_source = complete_description if complete_description is not None else description
+    metadata_ref = _metadata_ref(store, SourceResponse(metadata_source, source))
     if metadata_ref is not None:
         value["metadata_ref"] = metadata_ref
         value["metadata_deferred"] = False
@@ -308,17 +311,33 @@ def register_dataset_tools(
             total = len(response.value.get("members", []))
             if offset > total:
                 raise InvalidInputError("Offset exceeds dataset members.", field="offset")
+            page_description = dict(response.value)
+            page_description["members"] = response.value.get("members", [])[offset : offset + limit]
+            projected, detail_omitted = project_dataset_description(page_description, response_mode)
             value = await run_sync(
                 _decorate_dataset,
-                response.value,
+                projected,
                 response.source,
                 snapshot_id,
                 store,
-                member_start=offset,
-                member_stop=offset + limit,
+                complete_description=response.value,
             )
             selected = value["members"]
             value["response_mode"] = response_mode
+            if detail_omitted:
+                value["metadata_projection"] = {
+                    "omitted_optional_detail": True,
+                    "note": "Optional presentation detail is omitted; source metadata is unchanged.",
+                    "full_retrieval": {
+                        "tool": "get_dataset",
+                        "arguments": {
+                            "dataset_id": str(response.value["dataset_id"]),
+                            "limit": limit,
+                            "offset": offset,
+                            "response_mode": "full",
+                        },
+                    },
+                }
             stop = offset + len(selected)
             next_cursor = (
                 cursors.encode(selectors, identity=snapshot_id, offset=stop)

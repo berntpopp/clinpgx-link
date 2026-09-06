@@ -27,6 +27,18 @@ including representation and pointer, but not response mode or requested page si
 | get_dataset_record | record_id | pointer="" |
 | get_source_content | content_ref | pointer="", representation=structure/text/base64, start=0, length=4096 (1–8192); not row-paged |
 
+`get_dataset` applies presentation modes before fencing optional member metadata.
+Every mode retains dataset/member identity, provenance, digests, license, counts,
+limitations, profile status and drift/unprofiled evidence. Minimal retains profile
+identity, shape, status and missing required fields; compact adds executable tabular
+field/filter/type metadata plus exact profile field lists, modes and selectors without
+descriptive prose; standard adds full sheet/field/profile descriptions except profile
+field inclusion reasons; full returns the complete bounded declaration. A projected
+response identifies the omission and supplies an executable full-mode command for the
+same member page. Projection never labels source data truncated, changes cursor
+membership, or replaces the complete metadata and exact source bytes available through
+full mode and retained-content references.
+
 Entity types and result types derive from verified registry mappings, with closed
 enums in tool schemas. Dataset identifiers come from the catalog, never arbitrary
 paths. Stable operation IDs are `GET /data/...`, `GET /report/...`, `POST /infobutton`,

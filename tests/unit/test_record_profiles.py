@@ -514,12 +514,69 @@ async def test_real_get_dataset_active_profile_matches_repository_metadata(tmp_p
     register_dataset_tools(server, repository, store)
     try:
         async with Client(server) as client:
-            call = await client.call_tool("get_dataset", {"dataset_id": "data/pharmcat.zip"})
+            call = await client.call_tool(
+                "get_dataset",
+                {"dataset_id": "data/pharmcat.zip", "response_mode": "full"},
+            )
+            compact_call = await client.call_tool(
+                "get_dataset",
+                {"dataset_id": "data/pharmcat.zip", "response_mode": "compact"},
+            )
         result = call.structured_content["result"]
         assert result["profile_gate_status"] == expected["profile_gate_status"] == "passing"
         assert result["members"][0]["record_profile_status"] == "active"
         assert result["members"][0]["record_profiles"] == expected["members"][0]["record_profiles"]
         assert result["members"][0]["record_profiles"][0]["fields"][0]["name"] == "diplotype"
+        assert compact_call.structured_content["result"]["members"][0]["record_profiles"][0] == {
+            "profile_id": "pharmcat.diplotype.v1",
+            "shape_id": "diplotype",
+            "status": "active",
+            "missing_required_fields": [],
+            "required_fields": [
+                "diplotype",
+                "diplotypekey",
+                "generesult",
+                "lookupkey",
+                "phenotype",
+            ],
+            "optional_fields": ["activityScore"],
+            "modes": {
+                "minimal": {
+                    "fields": ["diplotype", "lookupkey"],
+                    "include_all_reachable": False,
+                },
+                "compact": {
+                    "fields": ["diplotype", "lookupkey", "generesult", "phenotype"],
+                    "include_all_reachable": False,
+                },
+                "standard": {
+                    "fields": [
+                        "diplotype",
+                        "diplotypekey",
+                        "generesult",
+                        "lookupkey",
+                        "phenotype",
+                        "activityScore",
+                    ],
+                    "include_all_reachable": False,
+                },
+                "full": {
+                    "fields": [
+                        "diplotype",
+                        "diplotypekey",
+                        "generesult",
+                        "lookupkey",
+                        "phenotype",
+                        "activityScore",
+                    ],
+                    "include_all_reachable": True,
+                },
+            },
+            "selector": {
+                "kind": "json_pointer",
+                "pointer_pattern": "/[0-9]+/diplotypes/[0-9]+",
+            },
+        }
         assert len(json.dumps(call.structured_content, separators=(",", ":")).encode()) < 100_000
     finally:
         repository.close()
