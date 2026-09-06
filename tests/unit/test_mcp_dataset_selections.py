@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
+from copy import deepcopy
+from typing import Any
 
 import pytest
 from fastmcp import Client
@@ -16,6 +19,57 @@ from tests.unit.test_builder import FIXTURES, RELEASE_TAG, _archive, _source
 from tests.unit.test_mcp_dataset_records import _record_server
 from tests.unit.test_record_profiles import _pharmcat_candidate
 from tests.unit.test_repository import _repository
+
+
+def _expected_fence(raw: str, source: Any, record_id: str) -> dict[str, Any]:
+    return {
+        "kind": "untrusted_text",
+        "text": raw,
+        "raw_sha256": hashlib.sha256(raw.encode()).hexdigest(),
+        "provenance": {
+            "source": source.source,
+            "record_id": record_id,
+            "retrieved_at": source.retrieved_at,
+        },
+    }
+
+
+def _assert_exact_projected_byte_reduction(
+    call: Any,
+    shaped_row: dict[str, Any],
+    raw_row: dict[str, Any],
+    source: Any,
+) -> tuple[int, int]:
+    """Measure only the finite JSON bytes occupied by the removed duplicate list."""
+    payload = call.structured_content
+    assert json.loads(call.content[0].text) == payload
+    assert "field_names" not in shaped_row
+    current_bytes = len(call.content[0].text.encode("utf-8"))
+    duplicate_names = [
+        _expected_fence(name, source, str(raw_row["record_id"])) for name in shaped_row["fields"]
+    ]
+    with_duplicate = deepcopy(payload)
+    target = (
+        with_duplicate["result"]
+        if payload.get("result") is shaped_row
+        else with_duplicate["results"][payload["results"].index(shaped_row)]
+    )
+    target["field_names"] = duplicate_names
+    legacy_bytes = len(
+        json.dumps(
+            with_duplicate,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            allow_nan=False,
+        ).encode("utf-8")
+    )
+    field_names_object = json.dumps(
+        {"field_names": duplicate_names}, ensure_ascii=False, separators=(",", ":")
+    )
+    removed_bytes = legacy_bytes - current_bytes
+    assert removed_bytes == len(field_names_object[1:].encode("utf-8"))
+    assert 0 < removed_bytes < legacy_bytes
+    return current_bytes, removed_bytes
 
 
 @pytest.mark.asyncio
@@ -67,22 +121,37 @@ async def test_gene_modes_and_explicit_fields_preserve_record_invariants(tmp_pat
     repository, built = _repository(tmp_path)
     store = ContentStore(tmp_path / "content.sqlite")
     try:
-        row = repository.search("data/genes.zip", member="genes.tsv", limit=1).value[0]
+        record_response = repository.search("data/genes.zip", member="genes.tsv", limit=1)
+        row = record_response.value[0]
         async with Client(_record_server(repository, store)) as client:
             modes = {}
+            calls = {}
             for mode in ("minimal", "compact", "standard", "full"):
                 call = await client.call_tool(
                     "get_dataset_record",
                     {"record_id": row["record_id"], "response_mode": mode},
                 )
+                calls[mode] = call
                 result = call.structured_content["result"]
                 modes[mode] = list(result["fields"])
+                assert json.loads(call.content[0].text) == call.structured_content
                 assert result["record_id"] == row["record_id"]
                 assert result["dataset_id"] == "data/genes.zip"
                 assert result["ordinal"] == 1
                 assert result["content_ref"].startswith("asset:")
                 assert result["provenance"]["archive_sha256"]
                 assert result["snapshot_id"] == built.snapshot_id
+
+                if mode == "full":
+                    assert result["field_names"] == [
+                        _expected_fence(name, record_response.source, row["record_id"])
+                        for name in row["fields"]
+                    ]
+                else:
+                    assert "field_names" not in result
+                    assert result["fields"]["Symbol"] == _expected_fence(
+                        "CYP2C19", record_response.source, row["record_id"]
+                    )
 
             assert modes["minimal"] == ["PharmGKB Accession Id", "Symbol"]
             assert modes["compact"] == [
@@ -105,6 +174,17 @@ async def test_gene_modes_and_explicit_fields_preserve_record_invariants(tmp_pat
                 "Has Variant Annotation",
             ]
             assert modes["full"] == list(row["fields"])
+
+            direct_bytes, direct_removed = _assert_exact_projected_byte_reduction(
+                calls["standard"],
+                calls["standard"].structured_content["result"],
+                row,
+                record_response.source,
+            )
+            print(
+                "candidate_direct_standard_bytes="
+                f"{direct_bytes} candidate_direct_field_names_removed_bytes={direct_removed}"
+            )
 
             selected = await client.call_tool(
                 "get_dataset_record",
@@ -132,6 +212,7 @@ async def test_gene_modes_and_explicit_fields_preserve_record_invariants(tmp_pat
             }
             assert result["selections"][0]["original_locator"]["column"]["text"] == "Symbol"
             assert result["normalized_record_ref"].startswith("content:")
+            assert json.loads(selected.content[0].text) == payload
             assert len(json.dumps(payload, separators=(",", ":")).encode()) < 8_000
     finally:
         repository.close()
@@ -190,6 +271,85 @@ async def test_search_field_selection_is_ordered_and_bound_into_cursor(tmp_path)
             )
             assert changed.is_error
             assert changed.structured_content["error_code"] == "invalid_input"
+    finally:
+        repository.close()
+        store.close()
+
+
+@pytest.mark.asyncio
+async def test_search_mode_projection_omits_names_without_changing_page_membership(tmp_path):
+    """Mode projection removes only duplicate names and preserves a usable continuation."""
+    repository, built = _repository(tmp_path)
+    store = ContentStore(tmp_path / "content.sqlite")
+    raw_page = repository.search("data/genes.zip", member="genes.tsv", limit=2)
+    first_raw, second_raw = raw_page.value
+    try:
+        async with Client(_record_server(repository, store)) as client:
+            first = await client.call_tool(
+                "search_dataset",
+                {
+                    "dataset_id": "data/genes.zip",
+                    "member": "genes.tsv",
+                    "limit": 1,
+                    "response_mode": "minimal",
+                },
+            )
+            first_payload = first.structured_content
+            first_row = first_payload["results"][0]
+            assert json.loads(first.content[0].text) == first_payload
+            assert first_row["record_id"] == first_raw["record_id"]
+            assert list(first_row["fields"]) == ["PharmGKB Accession Id", "Symbol"]
+            assert "field_names" not in first_row
+            assert first_row["fields"]["Symbol"] == _expected_fence(
+                "CYP2C19", raw_page.source, first_raw["record_id"]
+            )
+            assert first_row["provenance"]["archive_sha256"] == raw_page.source.sha256
+            first_ref = AssetReference.decode(first_row["content_ref"])
+            assert (first_ref.snapshot_id, first_ref.dataset_id, first_ref.member) == (
+                built.snapshot_id,
+                "data/genes.zip",
+                "genes.tsv",
+            )
+            pagination = first_payload["_meta"]["pagination"]
+            assert pagination["total_count"] == 2
+            assert pagination["returned"] == 1
+            assert pagination["has_more"] is True
+            assert pagination["next_cursor"]
+            search_bytes, search_removed = _assert_exact_projected_byte_reduction(
+                first, first_row, first_raw, raw_page.source
+            )
+            print(
+                "candidate_search_minimal_bytes="
+                f"{search_bytes} candidate_search_field_names_removed_bytes={search_removed}"
+            )
+
+            resumed = await client.call_tool(
+                "search_dataset",
+                {
+                    "dataset_id": "data/genes.zip",
+                    "member": "genes.tsv",
+                    "limit": 1,
+                    "response_mode": "full",
+                    "cursor": pagination["next_cursor"],
+                },
+            )
+            resumed_payload = resumed.structured_content
+            resumed_row = resumed_payload["results"][0]
+            assert json.loads(resumed.content[0].text) == resumed_payload
+            assert resumed_row["record_id"] == second_raw["record_id"]
+            assert list(resumed_row["fields"]) == list(second_raw["fields"])
+            assert resumed_row["field_names"] == [
+                _expected_fence(name, raw_page.source, second_raw["record_id"])
+                for name in second_raw["fields"]
+            ]
+            assert resumed_payload["_meta"]["pagination"] == {
+                "offset": 1,
+                "returned": 1,
+                "total_count": 2,
+                "has_more": False,
+                "next_cursor": None,
+                "snapshot_id": built.snapshot_id,
+            }
     finally:
         repository.close()
         store.close()
@@ -282,10 +442,18 @@ async def test_pharmcat_modes_validate_nested_shape_before_projecting_fields(tmp
                 "get_dataset_record",
                 {"record_id": row["record_id"], "response_mode": "standard"},
             )
+            full = await client.call_tool(
+                "get_dataset_record",
+                {"record_id": row["record_id"], "response_mode": "full"},
+            )
+        assert json.loads(minimal.content[0].text) == minimal.structured_content
+        assert json.loads(standard.content[0].text) == standard.structured_content
+        assert json.loads(full.content[0].text) == full.structured_content
         assert list(minimal.structured_content["result"]["fields"]) == [
             "diplotype",
             "lookupkey",
         ]
+        assert "field_names" not in minimal.structured_content["result"]
         assert list(standard.structured_content["result"]["fields"]) == [
             "diplotype",
             "diplotypekey",
@@ -293,7 +461,13 @@ async def test_pharmcat_modes_validate_nested_shape_before_projecting_fields(tmp
             "lookupkey",
             "phenotype",
         ]
+        assert "field_names" not in standard.structured_content["result"]
         assert standard.structured_content["result"]["fields"]["diplotypekey"] == {"*1": 2}
+        assert type(standard.structured_content["result"]["fields"]["diplotypekey"]["*1"]) is int
+        assert full.structured_content["result"]["field_names"] == [
+            _expected_fence(name, repository.get_record(row["record_id"]).source, row["record_id"])
+            for name in row["fields"]
+        ]
     finally:
         repository.close()
         store.close()

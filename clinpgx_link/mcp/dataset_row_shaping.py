@@ -277,7 +277,7 @@ def shape_dataset_row(
             source=source,
             record_id=record_id,
         )
-        if isinstance(fields, dict):
+        if isinstance(fields, dict) and not profile_projection:
             result["field_names"] = [
                 fence_text(str(name), source=source, record_id=record_id) for name in fields
             ]
