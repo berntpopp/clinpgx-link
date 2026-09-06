@@ -69,6 +69,11 @@ The adapters do not unfence, sanitize, select, or duplicate source content.
 both Terra mirror copies or a pretty-print. Missing counters, timing, cost, and
 usage stay null rather than zero. Client-reported usage distinctions that do not
 map unambiguously to `Measurements` remain in finite `raw_usage`.
+Claude summary comparison uses the runner's exact four-counter usage projection;
+additional raw terminal usage fields remain in `raw_usage` without invalidating
+that projection. Runner duration is a required observation in `NormalizedRun`:
+missing, nonfinite, negative, boolean, or wrongly typed duration is a malformed
+artifact, while an observed numeric zero remains zero.
 
 `final_answer` is the raw private consumer prose, including any self-review. It is
 not a blinded judge view and must never be sent to a judge as-is.

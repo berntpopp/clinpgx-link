@@ -29,6 +29,12 @@ SCHEMA = {
     "required": ["id"],
     "additionalProperties": False,
 }
+EMPTY_CLAUDE_USAGE = {
+    "input_tokens": None,
+    "output_tokens": None,
+    "cache_creation_input_tokens": None,
+    "cache_read_input_tokens": None,
+}
 
 
 def _jsonl(rows: list[dict[str, Any]]) -> bytes:
@@ -177,7 +183,9 @@ def _claude_artifacts(tmp_path: Path, *, envelope: dict[str, Any] = SUCCESS) -> 
             }
         ],
         "errors": (
-            [{"call_id": "call-1", "code": "invalid_input"}] if envelope["success"] is False else []
+            [{"kind": "tool_result", "tool_use_id": "call-1"}]
+            if envelope["success"] is False
+            else []
         ),
         "usage": rows[-1]["usage"],
         "total_cost_usd": 0.25,
@@ -479,7 +487,7 @@ def test_failed_claude_run_with_missing_model_is_recorded_not_raised(tmp_path: P
         "trace_size_bytes": 0,
         "calls": [],
         "errors": [],
-        "usage": {},
+        "usage": EMPTY_CLAUDE_USAGE,
         "model_usage": {},
         "total_cost_usd": None,
         "final_response": None,
@@ -764,7 +772,7 @@ def test_missing_claude_counters_and_cost_stay_null_not_zero(tmp_path: Path) -> 
     rows[-1].pop("total_cost_usd")
     _rewrite_trace(run, "stdout.jsonl", rows)
     summary = _read_json(run / "summary.json")
-    summary.update({"usage": {}, "model_usage": {}, "total_cost_usd": None})
+    summary.update({"usage": EMPTY_CLAUDE_USAGE, "model_usage": {}, "total_cost_usd": None})
     _rewrite(run / "summary.json", summary)
 
     result = normalize_run(run, expected=_expectation(run, "opus"))
@@ -773,6 +781,41 @@ def test_missing_claude_counters_and_cost_stay_null_not_zero(tmp_path: Path) -> 
     assert result.measurements.output_tokens is None
     assert result.measurements.total_cost_usd is None
     assert result.raw_usage is None
+    assert result.transport_passed is True
+
+
+def test_claude_extra_raw_usage_is_retained_without_changing_known_projection(
+    tmp_path: Path,
+) -> None:
+    run = _claude_artifacts(tmp_path)
+    rows = [json.loads(line) for line in (run / "stdout.jsonl").read_text().splitlines()]
+    rows[-1]["usage"]["service_tier"] = "synthetic-tier"
+    _rewrite_trace(run, "stdout.jsonl", rows)
+
+    result = normalize_run(run, expected=_expectation(run, "opus"))
+
+    assert result.transport_passed is True
+    assert result.measurements.input_tokens == 10
+    assert result.raw_usage is not None
+    assert result.raw_usage["usage"]["service_tier"] == "synthetic-tier"
+
+
+@pytest.mark.parametrize("mutation", ["wrong_counter", "missing_counter"])
+def test_claude_summary_requires_exact_known_usage_projection(
+    tmp_path: Path, mutation: str
+) -> None:
+    run = _claude_artifacts(tmp_path)
+    summary = _read_json(run / "summary.json")
+    if mutation == "wrong_counter":
+        summary["usage"]["input_tokens"] = 11
+    else:
+        summary["usage"].pop("output_tokens")
+    _rewrite(run / "summary.json", summary)
+
+    result = normalize_run(run, expected=_expectation(run, "opus"))
+
+    assert result.transport_passed is False
+    assert "summary_usage_mismatch" in result.failures
 
 
 def test_artifact_mode_must_remain_private(tmp_path: Path) -> None:
@@ -931,3 +974,153 @@ def test_terra_failed_run_keeps_completed_calls_when_final_and_turn_are_absent(
     assert result.lifecycle_complete is False
     assert result.transport_passed is False
     assert "missing_final_answer" in result.failures
+
+
+@pytest.mark.parametrize("request_id", [None, True, [], {}])
+def test_terra_turn_request_requires_a_scalar_nonboolean_jsonrpc_id(
+    tmp_path: Path, request_id: object
+) -> None:
+    run = _terra_artifacts(tmp_path)
+    rows = [json.loads(line) for line in (run / "trace.jsonl").read_text().splitlines()]
+    if request_id is None:
+        rows[0]["message"].pop("id")
+        rows[1]["message"].pop("id")
+    else:
+        rows[0]["message"]["id"] = request_id
+        rows[1]["message"]["id"] = request_id
+    _rewrite_trace(run, "trace.jsonl", rows)
+
+    result = normalize_run(run, expected=_expectation(run, "terra"))
+
+    assert result.transport_passed is False
+    assert "turn_start_request_id_invalid" in result.failures
+
+
+def test_terra_out_of_order_response_cannot_overwrite_observed_turn_identity(
+    tmp_path: Path,
+) -> None:
+    run = _terra_artifacts(tmp_path)
+    rows = [json.loads(line) for line in (run / "trace.jsonl").read_text().splitlines()]
+    response = rows.pop(1)
+    response["elapsed_ms"] = 3
+    response["message"]["result"]["turn"]["id"] = "turn-B"
+    rows[1]["elapsed_ms"] = 2
+    rows[1]["message"]["params"]["turn"]["id"] = "turn-A"
+    rows.insert(2, response)
+    for row in rows[3:]:
+        params = row["message"].get("params")
+        if not isinstance(params, dict):
+            continue
+        if "turnId" in params:
+            params["turnId"] = "turn-B"
+        turn = params.get("turn")
+        if isinstance(turn, dict):
+            turn["id"] = "turn-B"
+    _rewrite_trace(run, "trace.jsonl", rows)
+
+    result = normalize_run(run, expected=_expectation(run, "terra"))
+
+    assert result.transport_passed is False
+    assert "turn_start_response_mismatch" in result.failures
+
+
+def test_terra_matching_out_of_order_response_preserves_valid_lifecycle(tmp_path: Path) -> None:
+    run = _terra_artifacts(tmp_path)
+    rows = [json.loads(line) for line in (run / "trace.jsonl").read_text().splitlines()]
+    response = rows.pop(1)
+    response["elapsed_ms"] = 3
+    rows[1]["elapsed_ms"] = 2
+    rows.insert(2, response)
+    _rewrite_trace(run, "trace.jsonl", rows)
+
+    result = normalize_run(run, expected=_expectation(run, "terra"))
+
+    assert result.transport_passed is True
+
+
+@pytest.mark.parametrize("response_id", [9, "8", None])
+def test_terra_response_id_must_match_request_type_and_value(
+    tmp_path: Path, response_id: object
+) -> None:
+    run = _terra_artifacts(tmp_path)
+    rows = [json.loads(line) for line in (run / "trace.jsonl").read_text().splitlines()]
+    if response_id is None:
+        rows[1]["message"].pop("id")
+    else:
+        rows[1]["message"]["id"] = response_id
+    _rewrite_trace(run, "trace.jsonl", rows)
+
+    result = normalize_run(run, expected=_expectation(run, "terra"))
+
+    assert result.transport_passed is False
+    assert "turn_start_response_mismatch" in result.failures
+
+
+@pytest.mark.parametrize("invalid_state", [None, "false", 0, 1])
+def test_claude_capture_requires_exact_false_truncation_state(
+    tmp_path: Path, invalid_state: object
+) -> None:
+    run = _claude_artifacts(tmp_path)
+    summary = _read_json(run / "summary.json")
+    summary["trace_truncated"] = invalid_state
+    _rewrite(run / "summary.json", summary)
+
+    result = normalize_run(run, expected=_expectation(run, "opus"))
+
+    assert result.capture_complete is False
+    assert result.transport_passed is False
+    assert "summary_trace_truncation_invalid" in result.failures
+
+
+def test_claude_capture_requires_present_truncation_state(tmp_path: Path) -> None:
+    run = _claude_artifacts(tmp_path)
+    summary = _read_json(run / "summary.json")
+    summary.pop("trace_truncated")
+    _rewrite(run / "summary.json", summary)
+
+    result = normalize_run(run, expected=_expectation(run, "opus"))
+
+    assert result.capture_complete is False
+    assert result.transport_passed is False
+    assert "summary_trace_truncation_invalid" in result.failures
+
+
+@pytest.mark.parametrize("consumer", ["opus", "terra"])
+@pytest.mark.parametrize("invalid_duration", [None, "0", True, -1])
+def test_required_runner_duration_rejects_missing_or_invalid_values(
+    tmp_path: Path, consumer: str, invalid_duration: object
+) -> None:
+    run = _claude_artifacts(tmp_path) if consumer == "opus" else _terra_artifacts(tmp_path)
+    summary = _read_json(run / "summary.json")
+    field = "duration_seconds" if consumer == "opus" else "client_run_duration_ms"
+    summary[field] = invalid_duration
+    _rewrite(run / "summary.json", summary)
+
+    with pytest.raises(AdapterInputError, match="malformed_artifact"):
+        normalize_run(run, expected=_expectation(run, consumer))
+
+
+@pytest.mark.parametrize("consumer", ["opus", "terra"])
+def test_observed_zero_runner_duration_remains_valid(tmp_path: Path, consumer: str) -> None:
+    run = _claude_artifacts(tmp_path) if consumer == "opus" else _terra_artifacts(tmp_path)
+    summary = _read_json(run / "summary.json")
+    field = "duration_seconds" if consumer == "opus" else "client_run_duration_ms"
+    summary[field] = 0
+    _rewrite(run / "summary.json", summary)
+
+    result = normalize_run(run, expected=_expectation(run, consumer))
+
+    assert result.duration_seconds == 0.0
+    assert result.transport_passed is True
+
+
+@pytest.mark.parametrize("consumer", ["opus", "terra"])
+def test_required_runner_duration_rejects_absent_field(tmp_path: Path, consumer: str) -> None:
+    run = _claude_artifacts(tmp_path) if consumer == "opus" else _terra_artifacts(tmp_path)
+    summary = _read_json(run / "summary.json")
+    field = "duration_seconds" if consumer == "opus" else "client_run_duration_ms"
+    summary.pop(field)
+    _rewrite(run / "summary.json", summary)
+
+    with pytest.raises(AdapterInputError, match="malformed_artifact"):
+        normalize_run(run, expected=_expectation(run, consumer))

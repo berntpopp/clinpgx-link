@@ -294,10 +294,21 @@ def normalize_claude_run(directory: Path, expected: RunExpectation) -> Normalize
     usage = raw_usage if isinstance(raw_usage, dict) else {}
     model_usage = terminal_value.get("modelUsage")
     model_usage = model_usage if isinstance(model_usage, dict) else {}
-    if not _same(summary.get("usage"), usage) or not _same(summary.get("model_usage"), model_usage):
+    projected_usage = {
+        key: usage.get(key)
+        for key in (
+            "input_tokens",
+            "output_tokens",
+            "cache_creation_input_tokens",
+            "cache_read_input_tokens",
+        )
+    }
+    if not _same(summary.get("usage"), projected_usage) or not _same(
+        summary.get("model_usage"), model_usage
+    ):
         add_failure(failures, "summary_usage_mismatch")
     derived_errors = [
-        {"call_id": call["call_id"], "code": call["error_code"]}
+        {"kind": "tool_result", "tool_use_id": call["call_id"]}
         for call in calls
         if call["outcome"] == "mcp_error"
     ]
@@ -313,9 +324,12 @@ def normalize_claude_run(directory: Path, expected: RunExpectation) -> Normalize
         add_failure(failures, "runner_transport_failed")
     if summary.get("result_received") is not (terminal is not None):
         add_failure(failures, "summary_result_presence_mismatch")
-    if summary.get("trace_truncated") is True:
+    trace_truncated = summary.get("trace_truncated")
+    if trace_truncated is not False:
         capture_complete = False
         add_failure(failures, "trace_incomplete")
+        if trace_truncated is not True:
+            add_failure(failures, "summary_trace_truncation_invalid")
 
     normalized_calls = tuple(
         NormalizedCall(
@@ -340,8 +354,7 @@ def normalize_claude_run(directory: Path, expected: RunExpectation) -> Normalize
     )
     duration = _number(summary.get("duration_seconds"))
     if duration is None:
-        add_failure(failures, "duration_unavailable")
-        duration = 0.0
+        raise AdapterInputError("malformed_artifact")
     measurements = Measurements(
         input_tokens=_count(usage.get("input_tokens")),
         output_tokens=_count(usage.get("output_tokens")),

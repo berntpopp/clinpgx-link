@@ -56,6 +56,10 @@ def _mapping(value: object) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
+def _valid_request_id(value: object) -> bool:
+    return type(value) is int or (isinstance(value, str) and bool(value))
+
+
 def _raw_completion(message: dict[str, Any]) -> tuple[str, dict[str, Any]] | None:
     if message.get("method") != "item/completed":
         return None
@@ -217,6 +221,8 @@ def normalize_codex_run(directory: Path, expected: RunExpectation) -> Normalized
                 continue
             start_request = message
             request_id = message.get("id")
+            if not _valid_request_id(request_id):
+                add_failure(failures, "turn_start_request_id_invalid")
             params = _mapping(message.get("params"))
             thread_id = params.get("threadId")
             if not isinstance(thread_id, str) or not thread_id:
@@ -253,14 +259,29 @@ def normalize_codex_run(directory: Path, expected: RunExpectation) -> Normalized
                 max_calls=expected.hard_call_limit,
             )
             continue
-        if method is None and message.get("id") == request_id and not turn_response_seen:
+        response_value = message.get("result")
+        if method is None and isinstance(response_value, dict) and not turn_response_seen:
+            response_id = message.get("id")
+            response_id_matches = (
+                _valid_request_id(response_id)
+                and type(response_id) is type(request_id)
+                and response_id == request_id
+            )
             response = message.get("result")
             turn = response.get("turn") if isinstance(response, dict) else None
             turn_id = turn.get("id") if isinstance(turn, dict) else None
-            if trace is None or not isinstance(turn_id, str) or not turn_id:
+            observed_turn_id = trace.turn_id if trace is not None else None
+            if (
+                not response_id_matches
+                or trace is None
+                or not isinstance(turn_id, str)
+                or not turn_id
+                or observed_turn_id not in {None, turn_id}
+            ):
                 add_failure(failures, "turn_start_response_mismatch")
             else:
-                trace.turn_id = turn_id
+                if observed_turn_id is None:
+                    trace.turn_id = turn_id
                 turn_response_seen = True
             continue
         if trace is None:
@@ -440,10 +461,8 @@ def normalize_codex_run(directory: Path, expected: RunExpectation) -> Normalized
     raw_usage = usage_value if isinstance(usage_value, dict) else None
     duration_ms = _elapsed(summary.get("client_run_duration_ms"))
     if duration_ms is None:
-        add_failure(failures, "duration_unavailable")
-        duration = 0.0
-    else:
-        duration = duration_ms / 1000.0
+        raise AdapterInputError("malformed_artifact")
+    duration = duration_ms / 1000.0
     lifecycle_complete = bool(
         trace is not None
         and turn_response_seen
