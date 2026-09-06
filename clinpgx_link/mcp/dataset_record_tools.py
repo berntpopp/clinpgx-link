@@ -291,6 +291,7 @@ def register_dataset_record_tools(
             ),
         ] = None,
     ) -> ToolResult:
+        """Get one indexed dataset row by record ID with optional pointer or parent context."""
         began = time.monotonic()
         try:
             selected_field_names = validate_include_fields(include_fields)

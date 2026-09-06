@@ -1,131 +1,121 @@
 # clinpgx-link
 
-Read-only ClinPGx source evidence over HTTP MCP, following the GeneFoundry fleet's
-Python/uv, FastAPI and FastMCP stack.
+[![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![CI](https://github.com/berntpopp/clinpgx-link/actions/workflows/ci.yml/badge.svg)](https://github.com/berntpopp/clinpgx-link/actions/workflows/ci.yml)
+[![Conformance](https://github.com/berntpopp/clinpgx-link/actions/workflows/conformance.yml/badge.svg)](https://github.com/berntpopp/clinpgx-link/actions/workflows/conformance.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-Research use only. Not clinical decision support: no patient-specific interpretation,
-genotype calling, phenotype inference, dose calculation or treatment recommendations.
+An MCP server over the [ClinPGx](https://clinpgx.org/) resource (aggregating CPIC,
+PharmGKB, and PharmCAT evidence), serving curated gene-drug interactions, clinical
+guidelines, dosing recommendations, and variant annotations to AI assistants over
+Streamable HTTP. It also serves REST health and diagnostics endpoints from the same process.
 
-## Implementation status
+> [!IMPORTANT]
+> Research use only. Not clinical decision support. Do not use for diagnosis,
+> treatment, triage, or patient management.
 
-This repository is under active development, **not an end-to-end production release**.
-The API/website adapters, local SQLite builder and repository, source-content reader,
-and 13-tool MCP runtime are implemented. Release manifest admission and stable release
-identities are being integrated. Verified packaging/install/upgrade/rollback, hardened
-deployment and the real-agent benchmark remain outstanding. No hosted endpoint or
-published data release is advertised.
+## Why
 
-## Why downloads plus live adapters
+ClinPGx aggregates vital pharmacogenomics knowledge, but its upstream data surfaces are
+split across a live REST API with specific query parameter requirements, curated bulk
+dataset downloads (~120 datasets across genes, drugs, variants, guidelines, and
+annotations) that are too large for an agent to re-fetch on every query, and web-only
+reference paths for CPIC guideline attachments and publications.
 
-Measured local indexes make repeated discovery and search inexpensive, while retaining
-exact archive/member bytes supports reproducible source inspection. Downloads are not
-field-equivalent to the API or website: richer records and export gaps need explicit
-live adapters. An unavailable source is reported as a limitation, not as complete
-coverage or evidence of absence.
+Worse, raw upstream responses contain deep nested records and unstructured text that
+consume model context, while unthrottled queries easily exceed upstream capacity.
 
-The recorded experiments and maintenance trade-offs are in the
-[API/download decision](docs/research/api-vs-download-decision.md),
-[representation comparisons](docs/research/representation-comparison.json) and
-[website gap audit](docs/research/website-gap-audit.md). These are dated observations,
-not guarantees of current upstream availability.
+`clinpgx-link` solves this in one unified service:
+- **Local SQLite snapshots** index dataset rows with fast, deterministic search so agents
+  discover gene-drug relationships without burning network bandwidth.
+- **A retained content store** caches complete source bodies under immutable references
+  (`content:<sha256>`), allowing models to inspect JSON pointers or slice large payloads
+  progressively without refetching.
+- **Live adapters** safely reach fresh ClinPGx and CPIC API records and verified website
+  routes when richer real-time details or guideline attachments are needed.
+- **Admission control and token-bucket rate limiting** protect upstream services (2 req/s)
+  and isolate local capacity from upstream latency.
+- **Model-oriented output** shapes responses in compact/minimal/standard/full modes, stamps
+  exact `_meta` timing, suggests next-step commands, and fences untrusted source text.
 
-## Local development
+## Quick start
 
-Use Python 3.12+ and uv with the committed lockfile:
+Hosted — nothing to install, no data to build:
 
 ```bash
-uv sync --frozen --group dev
-uv run --frozen pre-commit install
-make ci-local
-uv run --frozen clinpgx-link serve --host 127.0.0.1 --port 8000 --cache-root ./data/cache
+claude mcp add --transport http clinpgx-link https://clinpgx-link.genefoundry.org/mcp
 ```
 
-The server exposes HTTP MCP at `http://127.0.0.1:8000/mcp`, readiness at `/health`
-and liveness at `/api/live`. There is no stdio transport. In another terminal:
+Run it yourself (Python 3.12+, [uv](https://github.com/astral-sh/uv)):
 
 ```bash
-uv run --frozen clinpgx-link health --url http://127.0.0.1:8000
+uv sync --group dev
+make dev                                    # unified REST + MCP on 127.0.0.1:8000
+curl http://127.0.0.1:8000/health
 ```
 
-The development command does **not** download or install a snapshot. Without one,
-local dataset tools are unavailable and development health is degraded. An existing
-builder-produced database can be selected using `CLINPGX_SNAPSHOT_PATH`; the default
-is `/data/current/clinpgx.sqlite`. A running process pins its opened snapshot until
-restart. Production deployment is not ready for use while the verified installer and
-full release-identity startup checks are unfinished.
+The MCP endpoint is `http://127.0.0.1:8000/mcp`. Streamable HTTP is the only transport —
+there is no stdio transport. See [deployment.md](docs/deployment.md).
 
-The implemented operator commands are `serve`, `config`, `health` and `version`.
-The planned data commands are described in the release design, not yet available CLI
-commands. `clinpgx-link config` prints validated, non-secret configuration.
+## Tools
 
-## MCP tools
+| Tool | Purpose |
+|------|---------|
+| `get_server_capabilities` | Discover tools, source limits, detail identifier contracts, and relationship capabilities |
+| `get_diagnostics` | Inspect source configuration, snapshot status, worker admission, and cache telemetry |
+| `get_api_schema` | Discover allowlisted upstream API routes, parameters, and operation contracts |
+| `search_records` | Unified entity search across genes, drugs, guidelines, and variants (live API or local dataset) |
+| `get_record` | Retrieve a single exact entity by identifier with source-anchored provenance |
+| `get_related_records` | Query joined and related entities (e.g. gene-drug guidelines, variant annotations) |
+| `list_datasets` | List curated snapshot datasets available in the installed catalog |
+| `get_dataset` | Inspect an installed dataset's metadata, schema, and member files |
+| `search_dataset` | Search indexed rows within a snapshot dataset with structured filtering |
+| `get_dataset_record` | Retrieve a single indexed row by record ID with optional JSON pointer projection |
+| `get_api_data` | Direct bounded read of allowlisted ClinPGx and CPIC REST API operations |
+| `get_website_data` | Retrieve verified structured records from ClinPGx and CPIC web routes |
+| `get_source_content` | Retrieve retained raw or structured source bytes by immutable content reference |
 
-| Area | Tools |
+**Namespace.** Leaf tool names are unprefixed, per Tool-Naming Standard v1. Behind the
+[`genefoundry-router`](https://github.com/berntpopp/genefoundry-router) gateway, which
+mounts this server with `mount(namespace="clinpgx")`, they surface as `clinpgx_<tool>` —
+`search_records` becomes `clinpgx_search_records`. A leaf-level `clinpgx_` prefix
+would double-prefix to `clinpgx_clinpgx_…`, so do not add one.
+
+## Data & provenance
+
+| | |
 |---|---|
-| Discovery and status | `get_server_capabilities`, `get_diagnostics`, `get_api_schema` |
-| Entity evidence | `search_records`, `get_record`, `get_related_records` |
-| Installed datasets | `list_datasets`, `get_dataset`, `search_dataset`, `get_dataset_record` |
-| Live sources | `get_api_data`, `get_website_data` |
-| Retained source bytes/content | `get_source_content` |
+| **Source** | [ClinPGx](https://clinpgx.org/) and CPIC REST APIs (`https://api.clinpgx.org/v1`, `https://api.cpicpgx.org/v1`), website routes, and S3 bulk downloads (`https://s3.pgkb.org`). Public, no authentication required |
+| **Datasets** | 120 captured catalog entries across genes, drugs, guidelines, variants, and annotations indexed in an immutable SQLite repository with retained archive and member bytes |
+| **Provenance** | Every tool carries measured `_meta` timing (`_meta.elapsed_ms` at `_meta.timing_scope="tool_boundary"`), source URLs, SHA-256 digests, and snapshot identities. Source text is strictly fenced as untrusted data ([data.md](docs/data.md)) |
+| **Refresh** | Calls proxy the live API or local SQLite snapshot behind a wall-clock TTL content cache; freshness tracks upstream releases |
+| **Rate limit** | Outbound token bucket (2 req/s) with active admission pool (16 concurrent calls) to prevent overwhelming upstream servers |
+| **Data licence** | Public ClinPGx and CPIC source data. Research use only |
 
-Use discovery/schema tools for supported selectors and operations. Explicit source
-selection does not silently switch providers. Local literature joins return original
-citing evidence rows and PMIDs, not full bibliographic metadata; live API detail is
-the richer-data path. Source payloads remain untrusted evidence, never instructions.
+Required citation:
 
-Every HTTP MCP tool success and error now reports measured `_meta.elapsed_ms` and
-`_meta.timing_scope="tool_boundary"`, identically in text and structured content.
-Timing starts at tool-boundary receipt, includes validation, admission and result
-construction, and excludes HTTP serialization and network transit. A measured
-submillisecond duration can round to zero. Standalone envelope constructors have no
-boundary timer and report timing as unavailable unless a caller supplies a measured
-tool-body duration; constructor defaults must not be interpreted as execution time.
+> Whirl-Carrillo M, et al. Pharmacogenomics Knowledge for Personalized Medicine: 2021 Update. Clin Pharmacol Ther. 2021;110(4):883-891. doi:10.1002/cpt.2356
 
-`CLINPGX_MAX_ACTIVE_CALLS` defaults to 16 and accepts 2–128 per process. Half the
-capacity, rounded up, is reserved for local metadata, installed datasets and retained
-content; the remainder is reserved for upstream work. Pools never borrow. Validated
-source contracts determine the pool; uncertain automatic routes reserve upstream.
-`get_diagnostics(probe_upstream=true)` uses upstream capacity. Excess requests are
-rejected promptly with `rate_limited/admission_capacity` and a fixed one-second retry
-interval. Upstream HTTP throttling uses `rate_limited/upstream_throttle` with a fixed
-30-second retry interval. Normal outbound scheduler waiting is part of active
-upstream work and preserves the existing maximum of two outbound requests per second.
+More: [data.md](docs/data.md).
 
-Active tool work has a 60-second deadline, including outbound scheduler waiting.
-Expiry reports `upstream_unavailable/execution_deadline`, which describes execution
-expiry and does not establish an upstream outage. Configure clients to allow more
-than 60 seconds plus transport overhead if they need to receive this response.
-Cancelling a client await alone may not notify the server; closing the HTTP request
-is observed as a disconnect. Neither cancellation nor a deadline can forcibly kill
-an arbitrary Python worker thread. Its slot remains occupied until the worker
-finishes; repository lock waits and SQLite execution cooperate with the deadline.
-Diagnostics and health expose pending termination and degrade readiness while such
-work remains. A worker that cannot terminate requires completion or a supervised
-process restart. A cancelled call receives no cancellation-status envelope.
-Graceful shutdown drains admitted work before closing the repository or retained
-content store; it can therefore wait for a worker that has not terminated.
+## Documentation
 
-Local free-text `query` uses literal ANDed tokens: ASCII `*` is rejected in this
-field. Exact `gene` and `name` filters preserve star-allele spellings such as
-`CYP2C19*2`; other query punctuation still separates tokens. Exact zero-result
-diagnostics may be unavailable when their bounded work budget expires. Their
-observed examples are distinct stored values, never aliases or equivalence claims.
+- [Data & provenance](docs/data.md) — datasets, cache model, licence, citation, response modes, and timing contracts.
+- [Configuration](docs/configuration.md) — every `CLINPGX_*` variable and the Host/Origin request boundary.
+- [Deployment](docs/deployment.md) — transports, the CLI, Docker and Compose overlays, and health checks.
+- [Architecture](docs/architecture.md) — layering, domain services, content store, and untrusted text fencing.
+- [Conventions](docs/conventions.md) — code style, module line budget, error taxonomy, and testing gates.
+- [AGENTS.md](AGENTS.md) — engineering conventions for humans and coding agents.
+- [SECURITY.md](SECURITY.md) — the trust boundary and how to report a vulnerability.
+- [CHANGELOG.md](CHANGELOG.md) — release history.
 
-The agent benchmark records reported boundary duration and known local/cache/live
-source classification separately from success/error status. Claude completion traces
-do not establish precise monotonic send/result times or scheduler/execution spans;
-these remain `null` with an explicit reason, rather than reconstructed timestamps.
+## Contributing
 
-## Verification and contributor guide
+Read [AGENTS.md](AGENTS.md) first — it is the engineering guide. `make ci-local` is the
+definition-of-done gate: format, lint, line budget, README standard, type check, and
+tests. It must be green before handoff.
 
-`make ci-local` checks formatting, lint, module-size budgets, the pinned fleet schema,
-strict typing, non-integration unit tests and FastMCP imports. Tests use local fixtures;
-passing them does not establish current upstream completeness. The frozen
-[18-case agent benchmark](tests/eval/cases.json) still requires an actual agent run.
+## License
 
-Read [AGENTS.md](AGENTS.md), the binding
-[source-access contract](docs/superpowers/specs/2026-09-05-source-access-contract.md),
-[implementation plan](docs/superpowers/plans/2026-09-05-clinpgx-link.md),
-[release design](docs/research/data-release-design.md) and
-[hygiene status](docs/research/repo-hygiene.md) before extending the server.
-Release activation and publication are operator responsibilities, never MCP tools.
+Code: [MIT](LICENSE). Data: ClinPGx public data remain subject to upstream terms and
+carry the citation requirement above.
