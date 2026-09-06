@@ -48,7 +48,10 @@ def _same(left: object, right: object) -> bool:
 def _elapsed(value: object) -> float | None:
     if not isinstance(value, (int, float)) or isinstance(value, bool):
         return None
-    converted = float(value)
+    try:
+        converted = float(value)
+    except OverflowError:
+        return None
     return converted if math.isfinite(converted) and converted >= 0 else None
 
 

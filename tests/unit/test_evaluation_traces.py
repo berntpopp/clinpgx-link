@@ -1124,3 +1124,19 @@ def test_required_runner_duration_rejects_absent_field(tmp_path: Path, consumer:
 
     with pytest.raises(AdapterInputError, match="malformed_artifact"):
         normalize_run(run, expected=_expectation(run, consumer))
+
+
+@pytest.mark.parametrize("consumer", ["opus", "terra"])
+def test_oversized_runner_duration_raises_fixed_malformed_artifact(
+    tmp_path: Path, consumer: str
+) -> None:
+    run = _claude_artifacts(tmp_path) if consumer == "opus" else _terra_artifacts(tmp_path)
+    summary = _read_json(run / "summary.json")
+    field = "duration_seconds" if consumer == "opus" else "client_run_duration_ms"
+    summary[field] = 10**400
+    _rewrite(run / "summary.json", summary)
+
+    with pytest.raises(AdapterInputError) as caught:
+        normalize_run(run, expected=_expectation(run, consumer))
+
+    assert caught.value.reason == "malformed_artifact"
