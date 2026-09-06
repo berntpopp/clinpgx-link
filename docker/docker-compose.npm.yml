@@ -18,7 +18,7 @@ services:
       - 'CLINPGX_ALLOWED_ORIGINS=["https://clinpgx-link.genefoundry.org"]'
       - CLINPGX_LOG_LEVEL=${LOG_LEVEL_API:-INFO}
       - CLINPGX_LOG_FORMAT=json
-      - CLINPGX_RUNTIME_MODE=production
+      - CLINPGX_RUNTIME_MODE=${CLINPGX_RUNTIME_MODE:-development}
     healthcheck:
       test: ["CMD", "curl", "-fsS", "-H", "Host: localhost", "http://127.0.0.1:8000/health"]
       interval: 30s
