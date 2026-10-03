@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-10-03
+
+- Restore production fail-closed runtime mode in the deployed NPM Compose overlay.
+
 ## [0.1.1] - 2026-10-03
 
 - Update PyJWT to 2.15.0 and virtualenv to 21.7.13.
