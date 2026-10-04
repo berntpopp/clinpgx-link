@@ -35,6 +35,7 @@ _ANNOTATIONS = {
     "idempotentHint": True,
     "openWorldHint": False,
 }
+_MAX_COMPACT_MEMBER_LIMITATIONS = 16
 
 
 def _fence(value: Any, source: SourceInfo, record_id: str) -> Any:
@@ -148,14 +149,27 @@ def _is_member_limitation(item: str) -> bool:
     )
 
 
+def _compact_member_limitations(value: dict[str, Any]) -> dict[str, Any]:
+    """Summarize large per-member diagnostics while retaining archive-level notes."""
+    limitations = value.get("limitations", [])
+    member_count = sum(1 for item in limitations if _is_member_limitation(item))
+    if member_count <= _MAX_COMPACT_MEMBER_LIMITATIONS:
+        return value
+    result = dict(value)
+    result["limitations"] = [item for item in limitations if not _is_member_limitation(item)]
+    result["unparsed_member_count"] = member_count
+    result["member_limitations_paged"] = True
+    return result
+
+
 def _catalog_value(
     value: dict[str, Any], source: SourceInfo, *, response_mode: ResponseMode = "compact"
 ) -> dict[str, Any]:
-    result = dict(value)
+    result = _compact_member_limitations(value) if response_mode == "compact" else dict(value)
     if response_mode != "minimal":
         result["provenance"] = row_provenance(source)
-    limitations = value.get("limitations", [])
-    warnings = value.get("warnings", [])
+    limitations = result.get("limitations", [])
+    warnings = result.get("warnings", [])
     if response_mode == "minimal":
         archive_limitations = [item for item in limitations if not _is_member_limitation(item)]
         result["limitations"] = [
@@ -355,6 +369,8 @@ def register_dataset_tools(
                 raise InvalidInputError("Offset exceeds dataset members.", field="offset")
             page_description = dict(response.value)
             page_description["members"] = members[offset : offset + limit]
+            if response_mode == "compact":
+                page_description = _compact_member_limitations(page_description)
             projected, detail_omitted = project_dataset_description(page_description, response_mode)
             value = await run_sync(
                 _decorate_dataset,

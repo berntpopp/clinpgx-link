@@ -25,6 +25,13 @@ Tools accepting `response_mode` offer four levels of granularity:
 - `standard`: Expanded attributes and relationships.
 - `full`: Complete uncompressed record fields and nested structures.
 
+Compact dataset catalog and description responses retain archive-level limitations,
+warnings, and provenance. When more than 16 per-member parse limitations would repeat
+in one compact summary, the response reports `unparsed_member_count` and
+`member_limitations_paged`; `get_dataset` returns each member's limitation on its
+snapshot-bound cursor pages, with the exact member bytes available through its
+`content_ref`. The regular response and untrusted-text size limits still apply.
+
 ## Timing and Metadata
 
 Every tool result includes standard metadata:

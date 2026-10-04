@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+from pathlib import Path
 
 import pytest
 from fastmcp import Client, FastMCP
@@ -16,6 +17,8 @@ from tests.unit.test_repository import (
     FIXTURES,
     GENES_RETRIEVED_AT,
     PATHWAYS_RETRIEVED_AT,
+    RELEASE_TAG,
+    _archive,
     _mixed_repository,
     _repository,
 )
@@ -27,6 +30,37 @@ def _dataset_server(repository, store):
     server = FastMCP("dataset-test", mask_error_details=True, dereference_schemas=False)
     register_dataset_tools(server, repository, store)
     return server
+
+
+def _many_unparsed_member_repository(tmp_path: Path, count: int):
+    from clinpgx_link.data.catalog import SourceInput
+    from clinpgx_link.data.repository import DatasetRepository
+    from clinpgx_link.ingest.builder import build_snapshot
+
+    inputs = tmp_path / "inputs"
+    inputs.mkdir()
+    small_path = inputs / "genes.zip"
+    large_path = inputs / "pathways-biopax.zip"
+    _archive(small_path, {"genes.tsv": (FIXTURES / "genes.tsv").read_bytes()})
+    _archive(
+        large_path,
+        {f"biopax/member-{index:03}.owl": f"member {index}".encode() for index in range(count)},
+    )
+    sources = [
+        SourceInput.from_path(
+            dataset_id=f"data/{path.name}",
+            path=path,
+            source_url=f"https://api.clinpgx.org/v1/download/file/data/{path.name}",
+            retrieved_at=GENES_RETRIEVED_AT,
+            published_at="2026-09-05T00:37:36-07:00",
+            media_type="application/zip",
+            license_id="operator-local-only",
+            tier="approved_registry",
+        )
+        for path in (small_path, large_path)
+    ]
+    built = build_snapshot(sources, tmp_path / "candidates", RELEASE_TAG)
+    return DatasetRepository(built.database), built
 
 
 @pytest.mark.asyncio
@@ -588,6 +622,104 @@ async def test_list_datasets_minimal_mode_omits_unparsed_member_limitations(tmp_
                 item for item in payload_comp["results"] if item["dataset_id"] == "data/genes.zip"
             )
             assert len(genes_comp["limitations"]) == 4
+    finally:
+        repository.close()
+        store.close()
+
+
+@pytest.mark.asyncio
+async def test_compact_catalog_pages_large_member_limitations_without_hiding_details(
+    tmp_path, monkeypatch
+):
+    repository, _built = _many_unparsed_member_repository(tmp_path, 129)
+    store = ContentStore(tmp_path / "content.sqlite")
+    raw_list = repository.list_datasets
+    raw_describe = repository.describe
+    archive_limitation = "archive_scope_limitation"
+    archive_warning = "archive_scope_warning"
+
+    def _with_archive_metadata(response):
+        value = (
+            [dict(item) for item in response.value]
+            if isinstance(response.value, list)
+            else dict(response.value)
+        )
+        if isinstance(value, list):
+            item = next(row for row in value if row["dataset_id"] == "data/pathways-biopax.zip")
+            item["limitations"] = [*item["limitations"], archive_limitation]
+            item["warnings"] = [*item["warnings"], archive_warning]
+        else:
+            value["limitations"] = [*value["limitations"], archive_limitation]
+            value["warnings"] = [*value["warnings"], archive_warning]
+        return SourceResponse(value, response.source, response.details)
+
+    monkeypatch.setattr(repository, "list_datasets", lambda: _with_archive_metadata(raw_list()))
+    monkeypatch.setattr(
+        repository,
+        "describe",
+        lambda dataset_id: (
+            _with_archive_metadata(raw_describe(dataset_id))
+            if dataset_id == "data/pathways-biopax.zip"
+            else raw_describe(dataset_id)
+        ),
+    )
+    try:
+        async with Client(_dataset_server(repository, store)) as client:
+            first_catalog = await client.call_tool(
+                "list_datasets", {"response_mode": "compact", "limit": 1}
+            )
+            first_page = first_catalog.structured_content["_meta"]["pagination"]
+            assert first_catalog.structured_content["success"] is True
+            assert first_page["has_more"] is True
+
+            second_catalog = await client.call_tool(
+                "list_datasets",
+                {
+                    "response_mode": "compact",
+                    "limit": 1,
+                    "cursor": first_page["next_cursor"],
+                },
+                raise_on_error=False,
+            )
+            assert second_catalog.is_error is False
+            catalog_row = second_catalog.structured_content["results"][0]
+            assert catalog_row["dataset_id"] == "data/pathways-biopax.zip"
+            assert [item["text"] for item in catalog_row["limitations"]] == [archive_limitation]
+            assert catalog_row["unparsed_member_count"] == 129
+            assert catalog_row["member_limitations_paged"] is True
+            assert catalog_row["warnings"][0]["text"] == archive_warning
+            assert catalog_row["provenance"]["archive_sha256"]
+
+            member_cursor = None
+            member_paths = []
+            while True:
+                arguments = {
+                    "dataset_id": "data/pathways-biopax.zip",
+                    "limit": 20,
+                    "response_mode": "compact",
+                }
+                if member_cursor is not None:
+                    arguments["cursor"] = member_cursor
+                page = await client.call_tool("get_dataset", arguments, raise_on_error=False)
+                assert page.is_error is False
+                description = page.structured_content["result"]
+                assert description["unparsed_member_count"] == 129
+                assert description["member_limitations_paged"] is True
+                assert [item["text"] for item in description["limitations"]] == [archive_limitation]
+                assert description["warnings"][0]["text"] == archive_warning
+                assert description["metadata_ref"].startswith("content:")
+                for member in description["members"]:
+                    member_paths.append(member["path"]["text"])
+                    assert member["content_ref"].startswith("asset:")
+                    assert member["limitation"]["text"]
+                pagination = page.structured_content["_meta"]["pagination"]
+                member_cursor = pagination["next_cursor"]
+                if not pagination["has_more"]:
+                    assert pagination["total_count"] == 129
+                    break
+
+            assert len(member_paths) == 129
+            assert len(set(member_paths)) == 129
     finally:
         repository.close()
         store.close()
