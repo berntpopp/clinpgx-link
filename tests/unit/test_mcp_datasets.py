@@ -627,6 +627,33 @@ async def test_list_datasets_minimal_mode_omits_unparsed_member_limitations(tmp_
         store.close()
 
 
+def test_compact_catalog_projection_does_not_mutate_repository_row():
+    from copy import deepcopy
+
+    from clinpgx_link.mcp.dataset_tools import _catalog_value
+
+    source = SourceInfo(
+        source="test source",
+        url="https://api.clinpgx.org/v1/download/file/data/example.zip",
+        retrieved_at=GENES_RETRIEVED_AT,
+        sha256="a" * 64,
+        data_source="local_snapshot",
+    )
+    value = {
+        "dataset_id": "data/example.zip",
+        "limitations": ["archive_scope_limitation"],
+        "warnings": ["archive_scope_warning"],
+    }
+    original = deepcopy(value)
+
+    result = _catalog_value(value, source)
+
+    assert value == original
+    assert result is not value
+    assert result["limitations"][0]["text"] == "archive_scope_limitation"
+    assert result["warnings"][0]["text"] == "archive_scope_warning"
+
+
 @pytest.mark.asyncio
 async def test_compact_catalog_pages_large_member_limitations_without_hiding_details(
     tmp_path, monkeypatch

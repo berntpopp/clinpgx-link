@@ -153,9 +153,9 @@ def _compact_member_limitations(value: dict[str, Any]) -> dict[str, Any]:
     """Summarize large per-member diagnostics while retaining archive-level notes."""
     limitations = value.get("limitations", [])
     member_count = sum(1 for item in limitations if _is_member_limitation(item))
-    if member_count <= _MAX_COMPACT_MEMBER_LIMITATIONS:
-        return value
     result = dict(value)
+    if member_count <= _MAX_COMPACT_MEMBER_LIMITATIONS:
+        return result
     result["limitations"] = [item for item in limitations if not _is_member_limitation(item)]
     result["unparsed_member_count"] = member_count
     result["member_limitations_paged"] = True
