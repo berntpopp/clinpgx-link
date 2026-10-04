@@ -97,6 +97,8 @@ def test_smoke_prep_materializes_exact_bundle_and_emits_input_paths(
 
     assert (result / "data-release-manifest.json").read_bytes() == manifest
     assert (result / "clinpgx-core.tar.zst").read_bytes() == artifact
+    assert result.stat().st_mode & 0o777 == 0o555
+    assert (result / "data-release-manifest.json").stat().st_mode & 0o777 == 0o444
     assert (result / "clinpgx-core.tar.zst").stat().st_mode & 0o777 == 0o444
     assert env_file.read_text() == (
         "CLINPGX_EXPECTED_SNAPSHOT=sha256:cbc4bba16380e8badfb05eb402bfbd47e631aba74a83f83dc239d75b75113e3b\n"

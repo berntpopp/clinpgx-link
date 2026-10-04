@@ -124,7 +124,7 @@ def prepare(fixture_dir: Path, env_file: Path) -> Path:
             raise SmokePreparationError("release artifact size does not match the source pin")
         for path in temporary.iterdir():
             path.chmod(0o444)
-        temporary.chmod(0o755)
+        temporary.chmod(0o555)
         temporary.rename(final_dir)
         env_file.write_text(
             f"CLINPGX_EXPECTED_SNAPSHOT={EXPECTED_SNAPSHOT}\n"
