@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import time
+from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 
@@ -133,6 +134,7 @@ def create_mcp(
     website_client: WebsiteClient | None = None,
     repository: DatasetRepository | None = None,
     source_access_allowed: bool = True,
+    runtime_data_available: Callable[[], bool] | None = None,
     admission: Admission | None = None,
 ) -> FastMCP:
     """Create the MCP boundary with caller-owned source-content lifetime."""
@@ -149,7 +151,12 @@ def create_mcp(
     if website_client is not None:
         website_client.configure_worker(run_sync)
     server.add_middleware(
-        BoundaryGuard(server, source_access_allowed=source_access_allowed, admission=admission)
+        BoundaryGuard(
+            server,
+            source_access_allowed=source_access_allowed,
+            runtime_data_available=runtime_data_available,
+            admission=admission,
+        )
     )
     register_schema_tool(server, content_store)
     register_data_tools(server, content_store, api_service, website_client)
@@ -162,6 +169,7 @@ def create_mcp(
         website_client if source_access_allowed else None,
         repository,
         admission,
+        runtime_data_available,
     )
 
     @server.tool(annotations=_ANNOTATIONS, tags={"metadata"}, output_schema=None)

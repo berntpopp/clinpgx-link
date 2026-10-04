@@ -92,6 +92,7 @@ def _release(
     parser_status: str = "indexed",
     rights_artifact: str = "data/genes.zip",
     local_distribution_allowed: bool = True,
+    application_minimum: str = "1.0.0",
 ) -> FixtureRelease:
     from clinpgx_link.releases.bundle import BundleLimits, pack_bundle
     from clinpgx_link.releases.identity import release_identity
@@ -190,7 +191,7 @@ def _release(
                 "reviewer": "Fixture",
             },
             "previous_known_good_digest": previous or f"sha256:{receipt.sha256}",
-            "application_compatibility": {"minimum": "1.0.0", "maximum": "2.0.0"},
+            "application_compatibility": {"minimum": application_minimum, "maximum": "2.0.0"},
             "disclaimer": "Synthetic test-only release; never production evidence.",
         }
     )

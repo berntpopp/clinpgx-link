@@ -39,6 +39,8 @@ from clinpgx_link.mcp.admission import Admission
 from clinpgx_link.mcp.envelope import REQUEST_ID
 from clinpgx_link.mcp.facade import create_mcp
 from clinpgx_link.mcp.http_lifetime import serve_with_disconnect
+from clinpgx_link.runtime_data_guard import RuntimeDataGuard
+from clinpgx_link.runtime_release_contract import validate_runtime_release_contract
 from clinpgx_link.services.api import ApiService
 
 _SNAPSHOT_ID = re.compile(r"sha256:[0-9a-f]{64}\Z")
@@ -233,11 +235,13 @@ def _snapshot_status(repository: DatasetRepository | None) -> dict[str, Any] | N
         return None
 
 
-def _open_snapshot(runtime_settings: Settings) -> DatasetRepository | None:
+def _open_snapshot(
+    runtime_settings: Settings, database_path: Path | None = None
+) -> DatasetRepository | None:
     """Admit one handle; activation cannot replace an existing process's view."""
     repository: DatasetRepository | None = None
     try:
-        repository = DatasetRepository(runtime_settings.snapshot_path)
+        repository = DatasetRepository(database_path or runtime_settings.snapshot_path)
         status = _snapshot_status(repository)
         if status is not None and (
             runtime_settings.expected_snapshot is None
@@ -254,12 +258,19 @@ def _open_snapshot(runtime_settings: Settings) -> DatasetRepository | None:
 
 
 def _health(
-    runtime_settings: Settings, repository: DatasetRepository | None
+    runtime_settings: Settings,
+    repository: DatasetRepository | None,
+    runtime_guard: RuntimeDataGuard | None = None,
 ) -> tuple[dict[str, Any], int]:
-    snapshot = _snapshot_status(repository)
-    exact = snapshot is not None and (
-        runtime_settings.expected_snapshot is None
-        or snapshot["snapshot_id"] == runtime_settings.expected_snapshot
+    runtime_intact = runtime_guard is None or runtime_guard.is_intact()
+    snapshot = _snapshot_status(repository) if runtime_intact else None
+    exact = (
+        runtime_intact
+        and snapshot is not None
+        and (
+            runtime_settings.expected_snapshot is None
+            or snapshot["snapshot_id"] == runtime_settings.expected_snapshot
+        )
     )
     payload: dict[str, Any] = {
         "status": "healthy" if exact else "degraded",
@@ -272,6 +283,8 @@ def _health(
     }
     if exact and snapshot is not None:
         payload.update(snapshot)
+        if runtime_guard is not None:
+            payload["release_identity"] = runtime_guard.health_identity()
     status_code = 503 if runtime_settings.runtime_mode == "production" and not exact else 200
     return payload, status_code
 
@@ -306,16 +319,47 @@ def create_app(runtime_settings: Settings | None = None) -> FastAPI:
     api_service = ApiService(source_client)
     website_client = WebsiteClient(source_client)
     repository: DatasetRepository | None = None
+    runtime_guard: RuntimeDataGuard | None = None
     mcp_app: ASGIApp | None = None
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
-        nonlocal repository, mcp_app
+        nonlocal repository, runtime_guard, mcp_app
         logger = structlog.get_logger("clinpgx_link")
         admission: Admission | None = None
         try:
-            repository = _open_snapshot(selected)
+            snapshot_settings = selected
+            if selected.runtime_mode == "production":
+                assert selected.expected_release_tag is not None
+                assert selected.expected_runtime_digest is not None
+                runtime_guard = RuntimeDataGuard.start(
+                    selected.data_root,
+                    expected_release_tag=selected.expected_release_tag,
+                    expected_digest=selected.expected_runtime_digest,
+                )
+                assert selected.expected_snapshot is not None
+                validate_runtime_release_contract(
+                    runtime_guard.generation,
+                    expected_release_tag=selected.expected_release_tag,
+                    expected_snapshot=selected.expected_snapshot,
+                    application_version=__version__,
+                )
+                snapshot_settings = selected.model_copy(
+                    update={"snapshot_path": runtime_guard.database_path}
+                )
+            repository = _open_snapshot(snapshot_settings)
+            if selected.runtime_mode == "production" and repository is None:
+                raise RuntimeError("Pinned production snapshot could not be opened")
+            if runtime_guard is not None:
+                admitted = _snapshot_status(repository)
+                if admitted is None or admitted["release_tag"] != runtime_guard.release_tag:
+                    raise RuntimeError(
+                        "Pinned production data release does not match runtime identity"
+                    )
+            if runtime_guard is not None and not runtime_guard.is_intact():
+                raise RuntimeError("Pinned production runtime changed during startup")
             _app.state.repository = repository
+            _app.state.runtime_guard = runtime_guard
             admission = Admission(selected.max_active_calls)
             _app.state.admission = admission
             mcp = create_mcp(
@@ -324,6 +368,7 @@ def create_app(runtime_settings: Settings | None = None) -> FastAPI:
                 website_client=website_client,
                 repository=repository,
                 admission=admission,
+                runtime_data_available=lambda: runtime_guard is None or runtime_guard.is_intact(),
                 source_access_allowed=selected.runtime_mode != "production"
                 or repository is not None,
             )
@@ -378,11 +423,13 @@ def create_app(runtime_settings: Settings | None = None) -> FastAPI:
     async def health() -> JSONResponse:
         admission_status = app.state.admission.snapshot()
         if admission_status["ready"]:
-            payload, status_code = await asyncio.to_thread(_health, selected, repository)
+            payload, status_code = await asyncio.to_thread(
+                _health, selected, repository, runtime_guard
+            )
         else:
             # Pending workers may fill the shared executor. This bounded branch
             # consults no repository and must remain available without a worker.
-            payload, status_code = _health(selected, None)
+            payload, status_code = _health(selected, None, runtime_guard)
         payload["admission"] = admission_status
         if not admission_status["ready"]:
             payload.update(status="degraded", ready=False)

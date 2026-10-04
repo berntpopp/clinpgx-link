@@ -33,11 +33,13 @@ class BoundaryGuard(Middleware):
         server: FastMCP,
         *,
         source_access_allowed: bool = True,
+        runtime_data_available: Callable[[], bool] | None = None,
         admission: Admission | None = None,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self.server = server
         self.source_access_allowed = source_access_allowed
+        self.runtime_data_available = runtime_data_available or (lambda: True)
         self.validators: dict[str, Draft202012Validator] = {}
         self.admission = admission or Admission()
         self.clock = clock
@@ -76,6 +78,10 @@ class BoundaryGuard(Middleware):
         payload["_meta"].pop("timing_unavailable_reason", None)
         return wire_result(payload, is_error=result.is_error)
 
+    @staticmethod
+    def _data_tool(tool_name: str) -> bool:
+        return tool_name not in {"get_server_capabilities", "get_diagnostics", "get_api_schema"}
+
     async def _call(
         self, context: MiddlewareContext[Any], call_next: CallNext[Any, ToolResult]
     ) -> ToolResult:
@@ -83,14 +89,16 @@ class BoundaryGuard(Middleware):
             tool = await self.server.get_tool(context.message.name)
             if tool is None:
                 return error_result(NotFoundError("Tool unavailable."))
-            if not self.source_access_allowed and tool.name not in {
-                "get_server_capabilities",
-                "get_diagnostics",
-                "get_api_schema",
-            }:
+            if not self.source_access_allowed and self._data_tool(tool.name):
                 return error_result(
                     UpstreamUnavailableError(
                         "Production snapshot is not ready.", subtype="snapshot_not_ready"
+                    )
+                )
+            if not self.runtime_data_available() and self._data_tool(tool.name):
+                return error_result(
+                    UpstreamUnavailableError(
+                        "Production snapshot is not ready.", subtype="runtime_identity_changed"
                     )
                 )
             arguments = context.message.arguments
@@ -111,9 +119,16 @@ class BoundaryGuard(Middleware):
                     )
                 )
             try:
-                return await self.admission.run(
+                result = await self.admission.run(
                     route_pool(tool.name, arguments), lambda: call_next(context)
                 )
+                if self._data_tool(tool.name) and not self.runtime_data_available():
+                    return error_result(
+                        UpstreamUnavailableError(
+                            "Production snapshot is not ready.", subtype="runtime_identity_changed"
+                        )
+                    )
+                return result
             except (ValidationError, FastMCPValidationError):
                 return error_result(InvalidInputError("Invalid tool arguments.", field="arguments"))
             except ClinPGxError as exc:

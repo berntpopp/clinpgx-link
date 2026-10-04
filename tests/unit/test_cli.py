@@ -1,4 +1,4 @@
-"""HTTP-only operator CLI contract."""
+"""HTTP server and offline operator CLI contract."""
 
 from __future__ import annotations
 
@@ -15,10 +15,10 @@ def test_cli_exposes_only_current_http_spine_commands():
 
     result = runner.invoke(app, ["--help"])
     assert result.exit_code == 0
-    for command in ("serve", "version", "config", "health"):
+    for command in ("serve", "version", "config", "health", "data"):
         assert command in result.stdout
     for unsupported in ("stdio", "sse", "release", "refresh"):
-        assert unsupported not in result.stdout
+        assert runner.invoke(app, [unsupported]).exit_code == 2
 
 
 def test_version_uses_package_single_source():
