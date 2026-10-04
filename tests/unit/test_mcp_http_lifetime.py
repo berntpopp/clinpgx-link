@@ -142,8 +142,14 @@ async def test_health_responds_while_cancelled_work_saturates_executor(
 ):
     fixture, built = _repository(tmp_path)
     fixture.close()
-    app = create_app(
-        Settings(
+    if runtime_mode == "production":
+        from tests.unit.test_server_manager import _production_settings
+
+        configured = _production_settings(tmp_path, built.snapshot_id).model_copy(
+            update={"max_active_calls": 2, "cache_root": tmp_path}
+        )
+    else:
+        configured = Settings(
             _env_file=None,
             cache_root=tmp_path,
             snapshot_path=built.database,
@@ -151,7 +157,7 @@ async def test_health_responds_while_cancelled_work_saturates_executor(
             runtime_mode=runtime_mode,
             expected_snapshot="sha256:" + built.manifest["snapshot_id"].removeprefix("sha256:"),
         )
-    )
+    app = create_app(configured)
     sock = socket.socket()
     sock.bind(("127.0.0.1", 0))
     port = sock.getsockname()[1]

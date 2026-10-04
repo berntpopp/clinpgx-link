@@ -6,7 +6,7 @@ import asyncio
 import ipaddress
 import json
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit
 
 import httpx
@@ -15,7 +15,10 @@ from pydantic import ValidationError
 from rich.console import Console
 
 from clinpgx_link import __version__
-from clinpgx_link.config import Settings
+from clinpgx_link.exceptions import DataValidationError
+
+if TYPE_CHECKING:
+    from clinpgx_link.config import Settings
 
 app = typer.Typer(
     name="clinpgx-link",
@@ -24,6 +27,8 @@ app = typer.Typer(
     help="Read-only ClinPGx source evidence over stateless HTTP MCP.",
 )
 console = Console()
+data_app = typer.Typer(help="Offline operator-only release installation.")
+app.add_typer(data_app, name="data")
 
 
 def _runtime_settings(
@@ -33,6 +38,8 @@ def _runtime_settings(
     cache_root: Path | None = None,
     log_level: str | None = None,
 ) -> Settings:
+    from clinpgx_link.config import Settings
+
     current = Settings()
     values = current.model_dump()
     if host is not None:
@@ -54,6 +61,8 @@ def _safe_config(configured: Settings) -> dict[str, Any]:
         "mcp_path": configured.mcp_path,
         "runtime_mode": configured.runtime_mode,
         "expected_snapshot": configured.expected_snapshot,
+        "expected_release_tag": configured.expected_release_tag,
+        "expected_runtime_digest": configured.expected_runtime_digest,
         "snapshot_path": str(configured.snapshot_path),
         "cache_root": str(configured.cache_root),
         "allowed_hosts": list(configured.allowed_hosts),
@@ -61,6 +70,48 @@ def _safe_config(configured: Settings) -> dict[str, Any]:
         "log_level": configured.log_level,
         "log_format": configured.log_format,
     }
+
+
+@data_app.command("install")
+def data_install(
+    manifest: Path = typer.Option(..., "--manifest", help="Local immutable manifest file."),
+    manifest_sha256: str = typer.Option(
+        ..., "--manifest-sha256", help="Independently pinned manifest SHA-256."
+    ),
+    artifact: Path = typer.Option(..., "--artifact", help="Local bundle file."),
+    data_root: Path = typer.Option(..., "--data-root", help="Private installation volume root."),
+    previous_manifest: Path | None = typer.Option(None, "--previous-manifest"),
+    previous_manifest_sha256: str | None = typer.Option(None, "--previous-manifest-sha256"),
+    previous_artifact: Path | None = typer.Option(None, "--previous-artifact"),
+) -> None:
+    """Verify and select an offline immutable release (not callable over MCP)."""
+    from clinpgx_link.operator_install import install_offline
+
+    try:
+        receipt = install_offline(
+            manifest_path=manifest,
+            manifest_sha256=manifest_sha256,
+            artifact_path=artifact,
+            data_root=data_root,
+            previous_manifest_path=previous_manifest,
+            previous_manifest_sha256=previous_manifest_sha256,
+            previous_artifact_path=previous_artifact,
+        )
+    except (DataValidationError, ValueError, OSError):
+        console.print("[red]Offline release installation failed.[/red]")
+        raise typer.Exit(code=1) from None
+    typer.echo(
+        json.dumps(
+            {
+                "release_tag": receipt.release_tag,
+                "artifact_sha256": receipt.artifact_sha256,
+                "runtime_digest": receipt.runtime_identity_sha256,
+                "snapshot_id": receipt.snapshot_id,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+    )
 
 
 def _local_health_url(value: str) -> str | None:

@@ -29,6 +29,8 @@ uv run clinpgx-link config
 | `CLINPGX_DATA_ROOT` | `/data` | Root directory for installed releases and datasets. |
 | `CLINPGX_SNAPSHOT_PATH` | `/data/current/clinpgx.sqlite` | Path to the active immutable SQLite dataset snapshot. |
 | `CLINPGX_EXPECTED_SNAPSHOT` | `None` | Optional required SHA-256 digest (`sha256:...`) of the pinned snapshot. Required in production mode. |
+| `CLINPGX_EXPECTED_RELEASE_TAG` | `None` | Immutable selected data release tag; required in production mode. |
+| `CLINPGX_EXPECTED_RUNTIME_DIGEST` | `None` | Runtime-v1 identity digest (`sha256:...`) of the installed generation; required in production mode. Distinct from the SQLite snapshot ID. |
 | `CLINPGX_CACHE_MAX_BYTES` | `268435456` | Maximum cache capacity in bytes (default 256 MiB). |
 | `CLINPGX_CACHE_MAX_ENTRIES` | `10000` | Maximum number of stored content records. |
 | `CLINPGX_CACHE_TTL_SECONDS` | `86400` | Wall-clock time-to-live for cached upstream responses (default 24h). |

@@ -102,6 +102,8 @@ class Settings(BaseSettings):
 
     runtime_mode: Literal["development", "production"] = "development"
     expected_snapshot: str | None = None
+    expected_release_tag: str | None = None
+    expected_runtime_digest: str | None = None
     mcp_host: str = "127.0.0.1"
     mcp_port: int = Field(default=8000, ge=1, le=65_535)
     mcp_path: str = "/mcp"
@@ -221,8 +223,11 @@ class Settings(BaseSettings):
             raise ValueError("request deadline must be at least the per-request timeout")
         if self.max_archive_member_bytes > self.max_expanded_archive_bytes:
             raise ValueError("member limit must not exceed expanded archive limit")
-        if self.runtime_mode == "production" and not self.expected_snapshot:
-            raise ValueError("production mode requires expected_snapshot")
+        if self.runtime_mode == "production":
+            if not self.expected_snapshot:
+                raise ValueError("production mode requires expected_snapshot")
+            if not self.expected_release_tag or not self.expected_runtime_digest:
+                raise ValueError("production mode requires the pinned runtime data identity")
         return self
 
 

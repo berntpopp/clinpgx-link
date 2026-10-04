@@ -14,6 +14,8 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from clinpgx_link.exceptions import DataValidationError
+
 _INIT = {
     "jsonrpc": "2.0",
     "id": 1,
@@ -63,7 +65,7 @@ def _settings(tmp_path: Path, **overrides):
 
 
 def _snapshot(path: Path, identity: str) -> None:
-    path.parent.mkdir(parents=True)
+    path.parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(path) as connection:
         connection.execute("CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
         connection.executemany(
@@ -92,6 +94,92 @@ def _snapshot(path: Path, identity: str) -> None:
                 "2026-09-05T08:00:00Z",
             ),
         )
+
+
+def _production_settings(
+    tmp_path: Path,
+    actual_snapshot: str,
+    expected_snapshot: str | None = None,
+    *,
+    include_dataset: bool = True,
+    database_release_tag: str | None = None,
+):
+    from clinpgx_link.config import Settings
+    from clinpgx_link.releases.manifest import validate_manifest
+    from clinpgx_link.releases.materialization import Materialization, canonical_bytes
+    from clinpgx_link.releases.runtime_identity import (
+        build_runtime_identity,
+        canonical_runtime_json,
+    )
+    from clinpgx_link.releases.schema import build_database_schema
+    from clinpgx_link.releases.schema import canonical_bytes as schema_bytes
+    from tests.unit.test_materialize import _release
+
+    release = _release(tmp_path, "server-manager", application_minimum="0.1.0")
+    release_input = release.release_input
+    manifest = validate_manifest(
+        release_input.manifest_bytes, release_input.expected_manifest_sha256
+    )
+    data_root = tmp_path / "data"
+    generation = data_root / "versions" / ("a" * 64)
+    generation.mkdir(parents=True)
+    _snapshot(generation / "clinpgx.sqlite", actual_snapshot)
+    tag = release.tag
+    with sqlite3.connect(generation / "clinpgx.sqlite") as connection:
+        connection.execute(
+            "UPDATE metadata SET value=? WHERE key='release_tag'",
+            (database_release_tag or tag,),
+        )
+    if not include_dataset:
+        with sqlite3.connect(generation / "clinpgx.sqlite") as connection:
+            connection.execute("DROP TABLE dataset")
+    (generation / "licenses.json").write_bytes(b"{}")
+    (generation / "source-manifest.json").write_bytes(b"{}")
+    schema = build_database_schema(
+        manifest.schema_identity.actual,
+        manifest.record_counts,
+    )
+    (generation / "schema.json").write_bytes(schema_bytes(schema))
+    materialization = Materialization(
+        schema_version=1,
+        outer_manifest_text=release_input.manifest_bytes.decode("utf-8"),
+        outer_manifest_sha256=release_input.expected_manifest_sha256,
+        artifact_sha256=manifest.artifact.sha256,
+        expanded_tree_sha256=manifest.artifact.expanded_tree_sha256,
+        expanded_size=manifest.artifact.expanded_size,
+        member_count=manifest.artifact.member_count,
+        database_schema_version=manifest.schema_identity.actual,
+        schema_minimum=manifest.schema_identity.minimum,
+        schema_maximum=manifest.schema_identity.maximum,
+        release_tag=tag,
+        previous_known_good_digest=manifest.previous_known_good_digest,
+        source_set_identity="sha256:" + "c" * 64,
+        snapshot_id=actual_snapshot,
+    )
+    (generation / "materialization.json").write_bytes(canonical_bytes(materialization))
+    for path in generation.iterdir():
+        path.chmod(0o444)
+    generation.chmod(0o700)
+    identity = build_runtime_identity(generation, tag)
+    raw = canonical_runtime_json(identity)
+    digest = "sha256:" + hashlib.sha256(raw).hexdigest()
+    (generation / "data-identity-manifest.json").write_bytes(raw)
+    (generation / "data-identity-manifest.json").chmod(0o444)
+    generation.chmod(0o555)
+    data_root.mkdir(exist_ok=True)
+    (data_root / "current").symlink_to(f"versions/{generation.name}")
+    return Settings(
+        _env_file=None,
+        cache_root=tmp_path / "cache",
+        data_root=data_root,
+        snapshot_path=data_root / "current" / "clinpgx.sqlite",
+        runtime_mode="production",
+        expected_snapshot=expected_snapshot or actual_snapshot,
+        expected_release_tag=tag,
+        expected_runtime_digest=digest,
+        allowed_hosts=("testserver", "localhost", "127.0.0.1", "::1"),
+        allowed_origins=("https://client.example",),
+    )
 
 
 def _uuid4(value: str) -> bool:
@@ -123,8 +211,13 @@ def test_production_health_requires_exact_pinned_snapshot(tmp_path, matching):
 
     actual = "sha256:" + "a" * 64
     expected = actual if matching else "sha256:" + "b" * 64
-    settings = _settings(tmp_path, runtime_mode="production", expected_snapshot=expected)
-    _snapshot(settings.snapshot_path, actual)
+    settings = _production_settings(tmp_path, actual, expected)
+
+    if not matching:
+        with pytest.raises(DataValidationError, match="incompatible"):
+            with TestClient(create_app(settings)):
+                pass
+        return
 
     with TestClient(create_app(settings)) as client:
         response = client.get("/health", headers={"host": "testserver"})
@@ -135,6 +228,11 @@ def test_production_health_requires_exact_pinned_snapshot(tmp_path, matching):
     if matching:
         assert response.json()["snapshot_id"] == actual
         assert response.json()["dataset_count"] == 1
+        assert response.json()["release_identity"]["schema_version"] == 1
+        assert (
+            response.json()["release_identity"]["data_identity"]["expected"]
+            == (response.json()["release_identity"]["data_identity"]["actual"])
+        )
     else:
         assert actual not in response.text and expected not in response.text
 
@@ -143,22 +241,24 @@ def test_production_health_rejects_identity_only_database(tmp_path):
     from clinpgx_link.server_manager import create_app
 
     identity = "sha256:" + "a" * 64
-    settings = _settings(tmp_path, runtime_mode="production", expected_snapshot=identity)
-    settings.snapshot_path.parent.mkdir(parents=True)
-    with sqlite3.connect(settings.snapshot_path) as connection:
-        connection.execute("CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
-        connection.executemany(
-            "INSERT INTO metadata VALUES (?, ?)",
-            [("snapshot_id", identity), ("release_tag", "data-clinpgx-core-0123456789abcdef")],
-        )
+    settings = _production_settings(tmp_path, identity, include_dataset=False)
 
-    with TestClient(create_app(settings)) as client:
-        response = client.get("/health", headers={"host": "testserver"})
-        live = client.get("/api/live", headers={"host": "testserver"})
+    with pytest.raises(RuntimeError, match="Pinned production snapshot"):
+        with TestClient(create_app(settings)):
+            pass
 
-    assert response.status_code == 503
-    assert response.json()["ready"] is False
-    assert live.status_code == 200
+
+def test_production_startup_rejects_database_release_tag_outside_runtime_pin(tmp_path):
+    from clinpgx_link.server_manager import create_app
+
+    settings = _production_settings(
+        tmp_path,
+        "sha256:" + "a" * 64,
+        database_release_tag="data-clinpgx-core-fedcba9876543210",
+    )
+    with pytest.raises(RuntimeError, match="does not match runtime identity"):
+        with TestClient(create_app(settings)):
+            pass
 
 
 @pytest.mark.parametrize("path", ["/health", "/api/live", "/mcp"])
@@ -541,46 +641,13 @@ def test_mcp_startup_failure_closes_admitted_snapshot(tmp_path, monkeypatch):
 
 
 def test_mismatched_production_snapshot_is_unavailable_to_http_tools(tmp_path):
-    from clinpgx_link.models import SourceInfo
     from clinpgx_link.server_manager import create_app
 
-    settings = _settings(
-        tmp_path, runtime_mode="production", expected_snapshot="sha256:" + "b" * 64
-    )
-    _snapshot(settings.snapshot_path, "sha256:" + "a" * 64)
-    app = create_app(settings)
-    raw = b"retained source evidence"
-    reference = app.state.content_store.put(
-        raw,
-        SourceInfo(
-            "test",
-            "https://example.test/source",
-            "2026-09-05T00:00:00Z",
-            hashlib.sha256(raw).hexdigest(),
-            "api",
-        ),
-        "text/plain",
-    )
-    with TestClient(app) as client:
-        assert _diagnostics(client)["ready"] is False
-        assert client.get("/health").status_code == 503
-        response = client.post(
-            "/mcp",
-            headers=_HEADERS,
-            json={
-                "jsonrpc": "2.0",
-                "id": 9,
-                "method": "tools/call",
-                "params": {
-                    "name": "get_source_content",
-                    "arguments": {"content_ref": reference, "representation": "base64"},
-                },
-            },
-        )
-        result = response.json()["result"]
-        assert result["isError"] is True
-        assert result["structuredContent"]["error_code"] == "upstream_unavailable"
-        assert result["structuredContent"]["subtype"] == "snapshot_not_ready"
+    actual = "sha256:" + "a" * 64
+    settings = _production_settings(tmp_path, actual, "sha256:" + "b" * 64)
+    with pytest.raises(DataValidationError, match="incompatible"):
+        with TestClient(create_app(settings)):
+            pass
 
 
 def test_snapshot_handle_is_closed_with_http_application(tmp_path):
@@ -599,9 +666,8 @@ def test_snapshot_handle_is_closed_with_http_application(tmp_path):
 def test_unready_production_makes_no_source_requests(tmp_path, monkeypatch):
     from clinpgx_link.server_manager import create_app
 
-    settings = _settings(
-        tmp_path, runtime_mode="production", expected_snapshot="sha256:" + "b" * 64
-    )
+    settings = _production_settings(tmp_path, "sha256:" + "a" * 64)
+    (settings.data_root / "current").unlink()
     app = create_app(settings)
     sent = []
 
@@ -610,50 +676,88 @@ def test_unready_production_makes_no_source_requests(tmp_path, monkeypatch):
         raise AssertionError("Unready production must not contact upstream")
 
     monkeypatch.setattr(app.state.source_client._http, "send", unexpected_send)
+    with pytest.raises(FileNotFoundError):
+        with TestClient(app):
+            pass
+    assert sent == []
+
+
+def test_runtime_drift_fails_health_and_mcp_boundary(tmp_path, monkeypatch):
+    from clinpgx_link.data.repository import DatasetRepository
+    from clinpgx_link.server_manager import create_app
+
+    settings = _production_settings(tmp_path, "sha256:" + "a" * 64)
+    original = DatasetRepository.list_datasets
+    should_mutate = False
+
+    def mutate_during_tool(repository):
+        nonlocal should_mutate
+        result = original(repository)
+        if should_mutate:
+            schema = settings.data_root / "current" / "schema.json"
+            schema.chmod(0o644)
+            schema.write_text("changed during tool", encoding="utf-8")
+            schema.chmod(0o444)
+        return result
+
+    monkeypatch.setattr(DatasetRepository, "list_datasets", mutate_during_tool)
+    app = create_app(settings)
     with TestClient(app) as client:
-        for name, arguments in (
-            (
-                "get_api_data",
-                {"operation": "GET /data/gene/{id}", "path_parameters": {"id": "PA124"}},
-            ),
-            (
-                "get_website_data",
-                {
-                    "operation": "GET /site/alleleFunction/{geneId}",
-                    "path_parameters": {"geneId": "PA128"},
-                },
-            ),
-        ):
-            response = client.post(
-                "/mcp",
-                headers=_HEADERS,
-                json={
-                    "jsonrpc": "2.0",
-                    "id": 5,
-                    "method": "tools/call",
-                    "params": {"name": name, "arguments": arguments},
-                },
-            )
-            result = response.json()["result"]
-            assert result["isError"] is True
-            assert result["structuredContent"]["subtype"] == "snapshot_not_ready"
-        probe = client.post(
+        should_mutate = True
+        response = client.post(
             "/mcp",
             headers=_HEADERS,
             json={
                 "jsonrpc": "2.0",
-                "id": 6,
+                "id": 7,
                 "method": "tools/call",
-                "params": {"name": "get_diagnostics", "arguments": {"probe_upstream": True}},
+                "params": {"name": "list_datasets", "arguments": {}},
             },
         )
-        assert not probe.json()["result"]["isError"]
-        assert (
-            probe.json()["result"]["structuredContent"]["result"]["upstream_probe"]["status"]
-            == "not_configured"
+        should_mutate = False
+        health = client.get("/health")
+        diagnostics = client.post(
+            "/mcp",
+            headers=_HEADERS,
+            json={
+                "jsonrpc": "2.0",
+                "id": 8,
+                "method": "tools/call",
+                "params": {
+                    "name": "get_diagnostics",
+                    "arguments": {"probe_upstream": True},
+                },
+            },
         )
-        assert client.get("/api/live").status_code == 200
-    assert sent == []
+    assert health.status_code == 503
+    assert health.json()["data_available"] is False
+    assert "release_identity" not in health.json()
+    result = response.json()["result"]
+    assert result["isError"] is True
+    assert result["structuredContent"]["subtype"] == "runtime_identity_changed"
+    diagnostic_result = diagnostics.json()["result"]["structuredContent"]["result"]
+    assert diagnostic_result["local_snapshot"] == {"ready": False, "reason": "unavailable"}
+    assert diagnostic_result["upstream_probe"]["status"] == "unavailable"
+
+
+def test_startup_rechecks_generation_after_opening_database(tmp_path, monkeypatch):
+    from clinpgx_link import server_manager
+
+    settings = _production_settings(tmp_path, "sha256:" + "a" * 64)
+    open_snapshot = server_manager._open_snapshot
+
+    def replace_identity_file(runtime_settings, database_path=None):
+        repository = open_snapshot(runtime_settings, database_path)
+        schema = settings.data_root / "current" / "schema.json"
+        schema.chmod(0o644)
+        schema.write_text("replaced during open", encoding="utf-8")
+        schema.chmod(0o444)
+        return repository
+
+    monkeypatch.setattr(server_manager, "_open_snapshot", replace_identity_file)
+    with pytest.raises(RuntimeError, match="changed during startup"):
+        with TestClient(server_manager.create_app(settings)):
+            pass
 
 
 def test_http_dataset_discovery_reaches_exact_installed_bytes(tmp_path):

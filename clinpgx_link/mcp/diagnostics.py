@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 
@@ -51,6 +52,7 @@ def register_diagnostics(
     website: WebsiteClient | None,
     repository: DatasetRepository | None,
     admission: Admission | None = None,
+    runtime_data_available: Callable[[], bool] | None = None,
 ) -> None:
     @server.tool(
         annotations={
@@ -74,8 +76,11 @@ def register_diagnostics(
         """Inspect source configuration and pinned data without revealing local paths or secrets."""
         try:
             probe: dict[str, Any] = {"status": "not_requested"}
+            runtime_ready = runtime_data_available is None or runtime_data_available()
             if probe_upstream:
-                if api is None:
+                if not runtime_ready:
+                    probe = {"status": "unavailable"}
+                elif api is None:
                     probe = {"status": "not_configured"}
                 else:
                     try:
@@ -93,7 +98,11 @@ def register_diagnostics(
             result = {
                 "api_configured": api is not None,
                 "website_configured": website is not None,
-                "local_snapshot": await run_sync(_local_status, repository),
+                "local_snapshot": (
+                    await run_sync(_local_status, repository)
+                    if runtime_ready
+                    else {"ready": False, "reason": "unavailable"}
+                ),
                 "upstream_probe": probe,
                 "implementation_status": "in_progress",
                 "response_mode": response_mode,
