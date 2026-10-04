@@ -85,7 +85,7 @@ services:
         source: clinpgx_data
         target: /data
       - type: bind
-        source: ${CLINPGX_RELEASE_INPUT_DIR:?Prepare the exact published bundle for smoke}
+        source: ${CLINPGX_RELEASE_INPUT_DIR:-/__clinpgx_release_input_unprepared__}
         target: /release-input
         read_only: true
         bind:

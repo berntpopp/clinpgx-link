@@ -62,7 +62,6 @@ def test_deployed_stack_requires_every_immutable_runtime_and_asset_pin() -> None
     env.update(_pins())
     required_smoke_environment = {
         "CLINPGX_LINK_IMAGE",
-        "CLINPGX_RELEASE_INPUT_DIR",
         *_EXPECTED_ENV,
     }
     for missing in required_smoke_environment:
@@ -72,6 +71,22 @@ def test_deployed_stack_requires_every_immutable_runtime_and_asset_pin() -> None
         assert result.returncode != 0, missing
 
 
+def test_release_smoke_without_prepared_input_uses_missing_fail_closed_bind() -> None:
+    env = {**os.environ, **_pins()}
+    env.pop("CLINPGX_RELEASE_INPUT_DIR")
+    result = _render(env, _RELEASE_FILES)
+    assert result.returncode == 0, result.stderr
+    rendered = json.loads(result.stdout)
+    seed = next(
+        mount
+        for mount in rendered["services"]["clinpgx-data-init"]["volumes"]
+        if mount["target"] == "/release-input"
+    )
+    assert seed["source"] == "/__clinpgx_release_input_unprepared__"
+    assert not Path(seed["source"]).exists()
+    assert "create_host_path: false" in (_ROOT / "docker/docker-compose.release.yml").read_text()
+
+
 def test_release_smoke_compose_uses_same_image_and_offline_seeded_init() -> None:
     env = {**os.environ, **_pins()}
     result = _render(env, _RELEASE_FILES)
@@ -79,6 +94,7 @@ def test_release_smoke_compose_uses_same_image_and_offline_seeded_init() -> None
     rendered = json.loads(result.stdout)
     app = rendered["services"]["clinpgx-link"]
     initializer = rendered["services"]["clinpgx-data-init"]
+    seed = next(mount for mount in initializer["volumes"] if mount["target"] == "/release-input")
     assert app["image"] == initializer["image"] == env["CLINPGX_LINK_IMAGE"]
     assert app.get("ports") is None
     assert app["expose"] == ["8000"]
@@ -95,6 +111,7 @@ def test_release_smoke_compose_uses_same_image_and_offline_seeded_init() -> None
         "--data-root",
         "/data",
     ]
+    assert seed["source"] == env["CLINPGX_RELEASE_INPUT_DIR"]
     assert app["depends_on"]["clinpgx-data-init"]["condition"] == "service_completed_successfully"
     assert rendered["volumes"]["clinpgx_data"] == {"name": "clinpgx-link_clinpgx_data"}
 
