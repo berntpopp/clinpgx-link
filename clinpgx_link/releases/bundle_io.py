@@ -63,6 +63,43 @@ def open_private_directory(path: Path) -> int:
         raise DataValidationError("Bundle directory cannot be admitted") from exc
 
 
+def open_readonly_source_directory(path: Path) -> int:
+    """Open an immutable, externally staged source directory without owner coupling."""
+    if not isinstance(path, Path) or not path.is_absolute():
+        raise DataValidationError("Bundle source directory is not an absolute path")
+    descriptor = -1
+    try:
+        before = path.lstat()
+        if path.resolve(strict=True) != path:
+            raise DataValidationError("Bundle source directory is not a real directory")
+        if (
+            not stat.S_ISDIR(before.st_mode)
+            or stat.S_ISLNK(before.st_mode)
+            or before.st_mode & 0o222
+        ):
+            raise DataValidationError("Bundle source directory is not read-only")
+        descriptor = os.open(
+            path,
+            os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | getattr(os, "O_NOFOLLOW", 0),
+        )
+        after = os.fstat(descriptor)
+        if (before.st_dev, before.st_ino) != (after.st_dev, after.st_ino):
+            raise DataValidationError("Bundle source directory changed during admission")
+        if after.st_mode & 0o222:
+            raise DataValidationError("Bundle source directory is not read-only")
+        return descriptor
+    except DataValidationError:
+        if descriptor >= 0:
+            with suppress(OSError):
+                os.close(descriptor)
+        raise
+    except OSError as exc:
+        if descriptor >= 0:
+            with suppress(OSError):
+                os.close(descriptor)
+        raise DataValidationError("Bundle source directory cannot be admitted") from exc
+
+
 def entry_exists(directory_fd: int, name: str) -> bool:
     try:
         os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
@@ -226,6 +263,7 @@ __all__ = [
     "create_private_file",
     "entry_exists",
     "open_private_directory",
+    "open_readonly_source_directory",
     "open_regular",
     "remove_directory",
     "rename_noreplace",

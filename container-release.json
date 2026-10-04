@@ -5,8 +5,7 @@
   "platform": "linux/amd64",
   "service": {
     "compose_files": [
-      "docker/docker-compose.yml",
-      "docker/docker-compose.prod.yml"
+      "docker/docker-compose.release.yml"
     ],
     "name": "clinpgx-link",
     "container_port": 8000,
@@ -14,11 +13,30 @@
     "mcp_path": "/mcp",
     "startup_timeout_seconds": 90,
     "deployed_compose_files": [
-      "docker/docker-compose.npm.yml"
+      "docker/docker-compose.npm.yml",
+      "docker/docker-compose.npm.data.yml"
+    ],
+    "deployed_seed_binds": [
+      "/release-input"
+    ],
+    "deployed_sidecars": [],
+    "auxiliary": [
+      {
+        "name": "clinpgx-data-init",
+        "role": "init",
+        "egress": "denied",
+        "writable_targets": [
+          "/data",
+          "/tmp"
+        ],
+        "read_only_targets": [
+          "/release-input"
+        ]
+      }
     ]
   },
   "data": {
-    "mode": "none",
+    "mode": "external-reference",
     "image_allowlist": [
       "home/app/web/clinpgx_link/data/catalog.py",
       "home/app/web/clinpgx_link/data/coverage.json",
@@ -52,12 +70,26 @@
       "opt/venv/lib/python3.14/site-packages/clinpgx_link/data/repository_provenance.py",
       "opt/venv/lib/python3.14/site-packages/clinpgx_link/data/schema.sql",
       "opt/venv/lib/python3.14/site-packages/clinpgx_link/data/search_diagnostics.py"
+    ],
+    "release_tag": "data-clinpgx-core-cfde21bfec473b35",
+    "digest": "sha256:ef590d6eba25423eb562405edfa7ac41862172bc689f496c2ff5346ddd3958ca",
+    "schema_compatibility": [
+      "1.0.0"
     ]
   },
   "definitions": {
-    "contract": "data-independent"
+    "contract": "data-bound"
   },
   "smoke": {
-    "profile": "compose-two-context"
-  }
+    "profile": "immutable-bundle"
+  },
+  "data_identity_contract": "runtime-v1",
+  "smoke_environment": [
+    "CLINPGX_EXPECTED_SNAPSHOT=sha256:cbc4bba16380e8badfb05eb402bfbd47e631aba74a83f83dc239d75b75113e3b",
+    "CLINPGX_EXPECTED_RELEASE_TAG=data-clinpgx-core-cfde21bfec473b35",
+    "CLINPGX_EXPECTED_RUNTIME_DIGEST=sha256:ef590d6eba25423eb562405edfa7ac41862172bc689f496c2ff5346ddd3958ca",
+    "CLINPGX_RELEASE_MANIFEST_SHA256=80e22f9ace76ff136129c8eb5cc67fb1454c291ee2365d7e797e22d2da2845e7",
+    "CLINPGX_RELEASE_ARTIFACT_SHA256=481f30612a1711683d52faea535a29327a88374f12b907d4c942cbefd2c8246b"
+  ],
+  "preparation": "docker/ci-prepare-smoke.sh"
 }

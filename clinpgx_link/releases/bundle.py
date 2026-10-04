@@ -442,12 +442,22 @@ def _verify_artifact(
 ) -> tuple[int, int, os.stat_result]:
     if artifact_path.name != expected.filename:
         raise DataValidationError("Bundle filename does not match reviewed identity")
-    parent_fd = bundle_io.open_private_directory(artifact_path.parent)
+    try:
+        parent_mode = artifact_path.parent.lstat().st_mode
+    except OSError as exc:
+        raise DataValidationError("Bundle source directory cannot be admitted") from exc
+    immutable_source = not parent_mode & 0o222
+    parent_fd = (
+        bundle_io.open_readonly_source_directory(artifact_path.parent)
+        if immutable_source
+        else bundle_io.open_private_directory(artifact_path.parent)
+    )
     descriptor = -1
     try:
         descriptor, before = bundle_io.open_regular(
             parent_fd,
             artifact_path.name,
+            required_mode=0o444 if immutable_source else None,
             maximum_size=min(limits.max_compressed_bytes, expected.max_compressed_size),
         )
         digest = hashlib.sha256()

@@ -16,6 +16,27 @@ strict source attribution and integrity.
 - **Content Store**: SQLite-backed local cache retaining complete raw bodies, parsed representations, and member bytes. Stored content is addressed by opaque references (`content:<sha256>` or `asset:<sha256>`).
 - **Private Permissions**: Cache directories are strictly owned (`0o700`) to protect local data.
 
+## Immutable ClinPGx Core Release
+
+The production snapshot is distributed as the immutable GitHub release
+`data-clinpgx-core-cfde21bfec473b35`. It contains 15 ClinPGx datasets, 453,102 records,
+713 source members, and 2,513,400 memberships under database schema `1.0.0`. Its source
+manifest digest is `94d032c42d43bbc742f4278a5a524b3026515e749d9d169d45387b9d7721ddf1`;
+the published `clinpgx-core.tar.zst` digest is
+`481f30612a1711683d52faea535a29327a88374f12b907d4c942cbefd2c8246b`, and the published
+`data-release-manifest.json` digest is
+`80e22f9ace76ff136129c8eb5cc67fb1454c291ee2365d7e797e22d2da2845e7`. The release also
+publishes `validation-report.json`. The separate local `SHA256SUMS` file is build evidence;
+it is not a release asset or an installation prerequisite.
+
+The release preserves the source archives' notices and records the publisher-policy
+discrepancy. The human owner's authorization covers distribution of this exact bundle only;
+it does not change the underlying source-license classification. Use the native offline
+installer and independently pinned manifest/artifact digests described in
+[`deployment.md`](deployment.md#production-data-contract). The application and bundle
+versions remain independently immutable, and the application release declares the exact
+runtime-v1 identity and snapshot ID it can serve.
+
 ## Response Modes
 
 Tools accepting `response_mode` offer four levels of granularity:

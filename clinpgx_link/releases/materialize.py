@@ -80,7 +80,7 @@ def _private_root(path: Path) -> None:
         path.resolve(strict=True) != path
         or not stat.S_ISDIR(info.st_mode)
         or info.st_uid != os.geteuid()
-        or info.st_mode & 0o022
+        or stat.S_IMODE(info.st_mode) != 0o700
     ):
         raise DataValidationError("Data root must be a private same-owner real directory")
 

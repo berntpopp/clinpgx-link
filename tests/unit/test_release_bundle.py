@@ -47,6 +47,8 @@ def _source(path: Path, files: dict[str, bytes] | None = None) -> Path:
 
 
 def _expected(path: Path, receipt=None, **updates: object) -> ArtifactIdentity:
+    path.chmod(0o444)
+    path.parent.chmod(0o555)
     values: dict[str, object] = {
         "filename": path.name,
         "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
@@ -106,8 +108,67 @@ def _compress(raw: bytes) -> bytes:
 def _artifact(parent: Path, raw_tar: bytes) -> Path:
     path = parent / "bundle.tar.zst"
     path.write_bytes(_compress(raw_tar))
-    path.chmod(0o600)
+    path.chmod(0o444)
     return path
+
+
+def test_readonly_source_directory_allows_foreign_owner_but_rejects_mutable_or_linked(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = tmp_path / "source"
+    source.mkdir(mode=0o700)
+    source.chmod(0o555)
+
+    # The seed is mounted read-only and authenticated by exact file hashes; its
+    # owner need not match the unprivileged initializer UID.
+    actual_euid = os.geteuid()
+    monkeypatch.setattr(bundle_io.os, "geteuid", lambda: actual_euid + 1)
+    with pytest.raises(DataValidationError):
+        bundle_io.open_private_directory(source)
+    descriptor = bundle_io.open_readonly_source_directory(source)
+    try:
+        assert stat.S_IMODE(os.fstat(descriptor).st_mode) == 0o555
+    finally:
+        os.close(descriptor)
+
+    source.chmod(0o755)
+    with pytest.raises(DataValidationError):
+        bundle_io.open_readonly_source_directory(source)
+
+    source.chmod(0o555)
+    alias = tmp_path / "source-alias"
+    alias.symlink_to(source, target_is_directory=True)
+    with pytest.raises(DataValidationError):
+        bundle_io.open_readonly_source_directory(alias)
+
+
+def test_verifier_rejects_writable_pinned_source_file(tmp_path: Path) -> None:
+    source = _source(tmp_path / "source")
+    parent = _private(tmp_path / "artifacts")
+    artifact = parent / "bundle.tar.zst"
+    receipt = pack_bundle(source, artifact, source_date_epoch=1, limits=BundleLimits())
+    expected = _expected(artifact, receipt)
+    artifact.chmod(0o644)
+
+    with pytest.raises(DataValidationError):
+        verify_and_extract_bundle(
+            artifact,
+            _private(tmp_path / "output") / "staged",
+            expected,
+            limits=BundleLimits(),
+        )
+
+
+def test_artifact_parent_admission_maps_missing_directory_to_validation_error(
+    tmp_path: Path,
+) -> None:
+    parent = _private(tmp_path / "artifacts")
+    artifact = _artifact(parent, _raw_tar([(_info(name), raw) for name, raw in _FILES.items()]))
+    expected = _expected(artifact)
+    parent.rename(tmp_path / "moved-artifacts")
+
+    with pytest.raises(DataValidationError):
+        bundle._verify_artifact(artifact, expected, BundleLimits())
 
 
 def _rewrite_header(raw_tar: bytes, start: int, replacement: bytes) -> bytes:
@@ -392,6 +453,7 @@ def test_verifier_rejects_nonzero_decoded_tail_and_truncated_tar(tmp_path: Path)
     clean_tar = _raw_tar(entries)
     parent = _private(tmp_path / "artifacts")
     for index, raw in enumerate((clean_tar + b"nonzero", clean_tar[:2500])):
+        parent.chmod(0o700)
         artifact = _artifact(parent, raw)
         renamed = parent / f"bundle-{index}.zst"
         artifact.rename(renamed)
@@ -410,7 +472,7 @@ def test_verifier_rejects_truncated_zstd_frame(tmp_path: Path) -> None:
     parent = _private(tmp_path / "artifacts")
     artifact = parent / "bundle.zst"
     artifact.write_bytes(compressed)
-    artifact.chmod(0o600)
+    artifact.chmod(0o444)
     with pytest.raises(DataValidationError):
         verify_and_extract_bundle(
             artifact,
@@ -440,7 +502,7 @@ def test_verifier_rejects_checksum_failure_and_multiple_frames(
         compressed += _compress(b"")
     artifact = _private(tmp_path / "artifacts") / "bundle.zst"
     artifact.write_bytes(compressed)
-    artifact.chmod(0o600)
+    artifact.chmod(0o444)
     with pytest.raises(DataValidationError):
         verify_and_extract_bundle(
             artifact,
