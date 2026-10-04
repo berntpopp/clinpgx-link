@@ -50,7 +50,8 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-reco
 RUN groupadd --system --gid 999 app && \
     useradd --system --uid 999 --gid app --home /home/app --create-home app && \
     mkdir -p /cache/clinpgx-api /data && \
-    chown -R app:app /cache /data
+    chown -R app:app /cache /data && \
+    chmod 0700 /data
 
 COPY --from=builder /opt/venv /opt/venv
 

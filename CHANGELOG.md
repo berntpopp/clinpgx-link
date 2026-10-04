@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-10-04
+
+- Bind the production NPM service and offline initializer to the approved immutable ClinPGx snapshot.
+- Verify the runtime-v1 identity and exact release manifest/artifact hashes before production startup.
+- Initialize the private data volume from the same-image offline installer before the read-only app starts.
+
 ## [0.1.2] - 2026-10-03
 
 - Restore production fail-closed runtime mode in the deployed NPM Compose overlay.

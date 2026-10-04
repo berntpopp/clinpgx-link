@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "clinpgx-link"
-version = "0.1.2"
+version = "0.1.3"
 description = "A research-only MCP server for public ClinPGx data and source evidence."
 authors = [{ name = "Bernt Popp" }]
 license = { text = "MIT" }

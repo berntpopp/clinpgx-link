@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import sqlite3
+import stat
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
@@ -263,6 +264,21 @@ def test_bootstrap_refuses_nonempty_root_and_manifest_digest_is_independent(tmp_
     )  # type: ignore[union-attr]
     with pytest.raises(DataValidationError):
         install_release(bad, **_kwargs(_private(tmp_path / "other")))
+
+
+def test_install_requires_exact_private_root_mode_for_volume_copy_up(tmp_path: Path) -> None:
+    from clinpgx_link.exceptions import DataValidationError
+    from clinpgx_link.releases.materialize import install_release
+
+    release = _release(tmp_path, "private-root")
+    data_root = _private(tmp_path / "data")
+    data_root.chmod(0o755)
+
+    with pytest.raises(DataValidationError, match="private same-owner"):
+        install_release(release.release_input, **_kwargs(data_root))  # type: ignore[arg-type]
+
+    assert stat.S_IMODE(data_root.stat().st_mode) == 0o755
+    assert not (data_root / "versions").exists()
 
 
 def test_clean_install_b_stages_direct_a_and_skipped_upgrade_needs_only_b(tmp_path: Path) -> None:

@@ -1,0 +1,117 @@
+# Userless one-image release smoke stack. The immutable release input is prepared by
+# docker/ci-prepare-smoke.sh and installed offline before the data-bound app is started.
+name: clinpgx-link
+
+services:
+  clinpgx-link:
+    image: ${CLINPGX_LINK_IMAGE:?Pin the exact image under test}
+    pull_policy: missing
+    expose:
+      - "8000"
+    environment:
+      CLINPGX_MCP_HOST: 0.0.0.0
+      CLINPGX_MCP_PORT: "8000"
+      CLINPGX_MCP_PATH: /mcp
+      CLINPGX_ALLOWED_HOSTS: '["localhost","127.0.0.1","::1"]'
+      CLINPGX_ALLOWED_ORIGINS: "[]"
+      CLINPGX_LOG_LEVEL: INFO
+      CLINPGX_LOG_FORMAT: json
+      CLINPGX_RUNTIME_MODE: production
+      CLINPGX_DATA_ROOT: /data
+      CLINPGX_SNAPSHOT_PATH: /data/current/clinpgx.sqlite
+      CLINPGX_EXPECTED_SNAPSHOT: ${CLINPGX_EXPECTED_SNAPSHOT:?Pin the SQLite snapshot identity}
+      CLINPGX_EXPECTED_RELEASE_TAG: ${CLINPGX_EXPECTED_RELEASE_TAG:?Pin the immutable data release tag}
+      CLINPGX_EXPECTED_RUNTIME_DIGEST: ${CLINPGX_EXPECTED_RUNTIME_DIGEST:?Pin the runtime-v1 identity digest}
+      CLINPGX_CACHE_ROOT: /tmp/clinpgx-cache
+      GF_HEALTHCHECK_HOST: localhost
+    volumes:
+      - type: volume
+        source: clinpgx_data
+        target: /data
+        read_only: true
+    depends_on:
+      clinpgx-data-init:
+        condition: service_completed_successfully
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    init: true
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "sh", "-c", 'curl -f -H "Host: $${GF_HEALTHCHECK_HOST}" http://localhost:8000/health']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - default
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: "0.5"
+          pids: 256
+
+  clinpgx-data-init:
+    image: ${CLINPGX_LINK_IMAGE:?Pin the exact image under test}
+    pull_policy: missing
+    entrypoint: ["clinpgx-link", "data", "install"]
+    command:
+      - --manifest
+      - /release-input/data-release-manifest.json
+      - --manifest-sha256
+      - ${CLINPGX_RELEASE_MANIFEST_SHA256:?Pin the immutable data manifest bytes}
+      - --artifact
+      - /release-input/clinpgx-core.tar.zst
+      - --data-root
+      - /data
+    environment:
+      CLINPGX_EXPECTED_SNAPSHOT: ${CLINPGX_EXPECTED_SNAPSHOT:?Pin the SQLite snapshot identity}
+      CLINPGX_EXPECTED_RELEASE_TAG: ${CLINPGX_EXPECTED_RELEASE_TAG:?Pin the immutable data release tag}
+      CLINPGX_EXPECTED_RUNTIME_DIGEST: ${CLINPGX_EXPECTED_RUNTIME_DIGEST:?Pin the runtime-v1 identity digest}
+      CLINPGX_RELEASE_MANIFEST_SHA256: ${CLINPGX_RELEASE_MANIFEST_SHA256:?Pin the immutable data manifest bytes}
+      CLINPGX_RELEASE_ARTIFACT_SHA256: ${CLINPGX_RELEASE_ARTIFACT_SHA256:?Pin the compressed artifact bytes}
+    volumes:
+      - type: volume
+        source: clinpgx_data
+        target: /data
+      - type: bind
+        source: ${CLINPGX_RELEASE_INPUT_DIR:?Prepare the exact published bundle for smoke}
+        target: /release-input
+        read_only: true
+        bind:
+          create_host_path: false
+    network_mode: none
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: "no"
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+          cpus: "1.0"
+          pids: 256
+
+volumes:
+  clinpgx_data:
+networks:
+  default:
