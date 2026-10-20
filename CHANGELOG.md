@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-10-20
+
+- Security: update mcp to 2.3.0 (resolves the open Dependabot alert for mcp, fixed in 2.2.0) and raise the mcp floor to 2.2.0.
+- Changed: consolidate Dependabot PR #11 (mcp 2.1.1 to 2.2.0) into this release.
+
 ## [0.1.3] - 2026-10-04
 
 - Bind the production NPM service and offline initializer to the approved immutable ClinPGx snapshot.
