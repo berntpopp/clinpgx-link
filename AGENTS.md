@@ -48,3 +48,4 @@ and evidence-backed implementation fixes remain required.
 - Every one of the captured 120 download registry entries remains accounted for even when unavailable, corrupt, unparsed, or catalog-only.
 - Candidate builders never activate data. The release installer alone verifies and atomically activates immutable snapshots.
 - Preserve exact source and member bytes for installed releases; parser output never substitutes for retained provenance.
+- Data-release `application_compatibility` is patch-tolerant (`>= minimum`, `major.minor <= maximum`'s); patch releases must never change the data contract — a data-contract change requires a minor bump. Schema-version checks stay exact.

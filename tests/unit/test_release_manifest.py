@@ -168,3 +168,30 @@ def test_release_manifest_rejects_duplicate_keys_and_negative_public_rights():
     with pytest.raises(DataValidationError) as failure:
         _validate(manifest_value(), public=True)
     assert failure.value.subtype == "publication_not_allowed"
+
+
+@pytest.mark.parametrize(
+    ("version", "admitted"),
+    [
+        ("0.1.3", True),
+        ("0.1.4", True),
+        ("0.1.99", True),
+        ("0.1.2", False),
+        ("0.2.0", False),
+        ("1.0.0", False),
+    ],
+)
+def test_application_compatibility_is_patch_tolerant(version, admitted):
+    from clinpgx_link.releases.manifest import CompatibilityRange
+
+    assert (
+        CompatibilityRange(minimum="0.1.3", maximum="0.1.3").admits_application(version) is admitted
+    )
+
+
+def test_schema_compatibility_stays_exact():
+    from clinpgx_link.releases.manifest import CompatibilityRange, SchemaIdentity
+
+    assert not CompatibilityRange(minimum="1.0.0", maximum="1.0.0").contains("1.0.1")
+    with pytest.raises(ValueError):
+        SchemaIdentity(minimum="1.0.0", maximum="1.0.0", actual="1.0.1")

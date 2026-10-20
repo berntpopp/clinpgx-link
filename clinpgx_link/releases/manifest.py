@@ -149,6 +149,11 @@ class CompatibilityRange(StrictModel):
     def contains(self, version: str) -> bool:
         return _version(self.minimum) <= _version(version) <= _version(self.maximum)
 
+    def admits_application(self, version: str) -> bool:
+        # Patch releases must not change the data contract; a data-contract change needs a minor bump.
+        parsed = _version(version)
+        return _version(self.minimum) <= parsed and parsed[:2] <= _version(self.maximum)[:2]
+
 
 class SchemaIdentity(CompatibilityRange):
     actual: SemanticVersion
