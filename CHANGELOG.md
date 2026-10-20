@@ -7,9 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-10-20
+
 - Security: update mcp to 2.3.0 (resolves the open Dependabot alert for mcp, fixed in 2.2.0) and raise the mcp floor to 2.2.0.
 - Changed: consolidate Dependabot PR #11 (mcp 2.1.1 to 2.2.0) into this release.
-- Note: the next application release needs a new data release whose `application_compatibility` covers it.
+- Changed: data-release `application_compatibility` is evaluated patch-tolerantly — an application version is admitted when it is `>= minimum` and its `major.minor` does not exceed the maximum's, so 0.1.4 serves the existing `data-clinpgx-core-cfde21bfec473b35` bundle (maximum 0.1.3) without a new data release. Patch releases must never change the data contract; a data-contract change requires a minor bump. Database schema checks remain exact.
+- Added: generated `CITATION.cff`.
 
 ## [0.1.3] - 2026-10-04
 

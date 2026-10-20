@@ -42,7 +42,7 @@ def validate_runtime_release_contract(
             or manifest.dataset.release != expected_release_tag
             or manifest.schema_identity.actual != schema_version
             or schema_version != _SUPPORTED_DATABASE_SCHEMA
-            or not manifest.application_compatibility.contains(application_version)
+            or not manifest.application_compatibility.admits_application(application_version)
         ):
             raise ValueError("retained release is incompatible")
     except Exception as exc:

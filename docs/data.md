@@ -37,6 +37,13 @@ installer and independently pinned manifest/artifact digests described in
 versions remain independently immutable, and the application release declares the exact
 runtime-v1 identity and snapshot ID it can serve.
 
+A manifest's `application_compatibility` is evaluated at patch-tolerant semantic-version
+granularity: an application version is admitted when it is `>= minimum` and its
+`major.minor` is `<=` the maximum's `major.minor` (a maximum of `0.1.3` admits every
+`0.1.x >= minimum`, never `0.2.0`). Patch releases must therefore never change the data
+contract; any data-contract change requires a minor bump. The database schema version
+(`schema.minimum`/`maximum`/`actual`) remains an exact, strict check.
+
 ## Response Modes
 
 Tools accepting `response_mode` offer four levels of granularity:

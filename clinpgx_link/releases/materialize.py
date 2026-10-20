@@ -166,7 +166,7 @@ def _authenticate(
         raise DataValidationError("Release input is invalid")
     manifest = validate_manifest(item.manifest_bytes, item.expected_manifest_sha256)
     try:
-        application_ok = manifest.application_compatibility.contains(application)
+        application_ok = manifest.application_compatibility.admits_application(application)
         schema_ok = supported.contains(manifest.schema_identity.actual)
     except (TypeError, ValueError) as exc:
         raise DataValidationError("Deployment compatibility input is invalid") from exc
