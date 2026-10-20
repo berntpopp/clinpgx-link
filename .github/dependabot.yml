@@ -4,13 +4,13 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+      day: "monday"
+      time: "04:00"
+      timezone: "Europe/Berlin"
     groups:
       uv:
         patterns:
           - "*"
-      day: "monday"
-      time: "04:00"
-      timezone: "Europe/Berlin"
     open-pull-requests-limit: 5
     commit-message:
       prefix: "deps"
@@ -19,13 +19,13 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+      day: "monday"
+      time: "04:15"
+      timezone: "Europe/Berlin"
     groups:
       actions:
         patterns:
           - "*"
-      day: "monday"
-      time: "04:15"
-      timezone: "Europe/Berlin"
     open-pull-requests-limit: 5
     commit-message:
       prefix: "ci"
