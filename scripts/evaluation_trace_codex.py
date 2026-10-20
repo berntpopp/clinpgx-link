@@ -41,7 +41,7 @@ _ERROR_CODES = {
 def _same(left: object, right: object) -> bool:
     try:
         return canonical_bytes(left) == canonical_bytes(right)
-    except (TypeError, ValueError, RecursionError):
+    except TypeError, ValueError, RecursionError:
         return False
 
 
@@ -149,7 +149,7 @@ def normalize_codex_run(directory: Path, expected: RunExpectation) -> Normalized
             continue
         try:
             Draft202012Validator.check_schema(schema)
-        except (SchemaError, RecursionError):
+        except SchemaError, RecursionError:
             add_failure(failures, "invalid_preflight_tool_schema")
             continue
         if evidence.get("sha256") != canonical_sha256(schema):

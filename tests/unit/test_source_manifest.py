@@ -259,7 +259,7 @@ def test_source_manifest_rejects_noncanonical_duplicate_nonfinite_and_bounded_in
     from clinpgx_link.releases.source_manifest import parse_source_manifest
 
     valid = manifest_value()
-    nested = b"[" * 10_000 + b"0" + b"]" * 10_000 + b"\n"
+    nested = b"[" * 1_000_000 + b"0" + b"]" * 1_000_000 + b"\n"  # 3.14 C limit is ~1e4-1e5
     with pytest.raises(RecursionError):
         json.loads(nested)
 

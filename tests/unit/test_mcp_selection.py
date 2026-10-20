@@ -209,13 +209,12 @@ def test_finite_json_bytes_does_not_apply_the_pointer_segment_limit_to_json_dept
 
 
 def test_finite_json_bytes_normalizes_actual_serializer_recursion_errors():
-    import sys
-
     from clinpgx_link.exceptions import DataValidationError
     from clinpgx_link.mcp.selection import finite_json_bytes
 
     too_deep = None
-    for _ in range(sys.getrecursionlimit() * 10):
+    # 3.14's C recursion limit is far above 10x sys.getrecursionlimit(); use a depth that exceeds it.
+    for _ in range(1_000_000):
         too_deep = [too_deep]
 
     with pytest.raises(DataValidationError) as caught:

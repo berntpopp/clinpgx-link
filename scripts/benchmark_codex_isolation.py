@@ -391,7 +391,7 @@ def validate_preflight(
             continue
         try:
             Draft202012Validator.check_schema(schema)
-        except (SchemaError, RecursionError):
+        except SchemaError, RecursionError:
             fail("invalid_tool_schema")
             continue
         if schema.get("type") != "object":
@@ -493,7 +493,7 @@ def _parse_proc_stat(raw: object) -> tuple[int, int, str, int] | None:
         pid = int(raw[:first_space])
         parent = int(fields[1])
         starttime = int(fields[19])
-    except (IndexError, ValueError):
+    except IndexError, ValueError:
         return None
     if pid <= 0 or parent < 0 or starttime < 0:
         return None
@@ -527,9 +527,9 @@ def process_snapshot(
             if path_pid in known and stat_path.parent.exists():
                 unreadable[path_pid] = "stat_permission_denied"
             continue
-        except (FileNotFoundError, ProcessLookupError):
+        except FileNotFoundError, ProcessLookupError:
             continue
-        except (OSError, UnicodeError, ValueError):
+        except OSError, UnicodeError, ValueError:
             if path_pid in known and stat_path.parent.exists():
                 unreadable[path_pid] = "stat_unavailable"
             continue
@@ -572,11 +572,11 @@ def process_snapshot(
                     }
                 )
             continue
-        except (FileNotFoundError, ProcessLookupError):
+        except FileNotFoundError, ProcessLookupError:
             if proc_dir.exists() and state != "Z":
                 try:
                     fresh = _parse_proc_stat(stat_reader(proc_dir / "stat"))
-                except (OSError, UnicodeError, ValueError):
+                except OSError, UnicodeError, ValueError:
                     fresh = None
                 if proc_dir.exists() and (
                     fresh is None

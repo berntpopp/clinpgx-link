@@ -97,7 +97,7 @@ def data_install(
             previous_manifest_sha256=previous_manifest_sha256,
             previous_artifact_path=previous_artifact,
         )
-    except (DataValidationError, ValueError, OSError):
+    except DataValidationError, ValueError, OSError:
         console.print("[red]Offline release installation failed.[/red]")
         raise typer.Exit(code=1) from None
     typer.echo(
@@ -160,7 +160,7 @@ def serve(
             cache_root=cache_root,
             log_level=log_level,
         )
-    except (ValidationError, ValueError):
+    except ValidationError, ValueError:
         console.print("[red]Invalid server configuration.[/red]")
         raise typer.Exit(code=2) from None
 
@@ -180,7 +180,7 @@ def show_config() -> None:
     """Print validated, non-secret configuration as JSON."""
     try:
         configured = _runtime_settings()
-    except (ValidationError, ValueError):
+    except ValidationError, ValueError:
         console.print("[red]Invalid server configuration.[/red]")
         raise typer.Exit(code=1) from None
     typer.echo(json.dumps(_safe_config(configured), sort_keys=True, separators=(",", ":")))
@@ -208,7 +208,7 @@ def health(
             or not isinstance(ready, bool)
         ):
             raise ValueError("invalid health response")
-    except (httpx.HTTPError, ValueError, json.JSONDecodeError):
+    except httpx.HTTPError, ValueError, json.JSONDecodeError:
         console.print("[red]Health check failed.[/red]")
         raise typer.Exit(code=1) from None
     typer.echo(json.dumps({"ready": ready, "status": status}, sort_keys=True))

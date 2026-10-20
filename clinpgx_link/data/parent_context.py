@@ -140,7 +140,7 @@ class RepositoryParentContextSupport:
         ).fetchone()
         try:
             fields = json.loads(body[0]) if body is not None else None
-        except (json.JSONDecodeError, TypeError, UnicodeError, RecursionError):
+        except json.JSONDecodeError, TypeError, UnicodeError, RecursionError:
             fields = None
         if not isinstance(fields, dict):
             return {"status": "unavailable", "reason": "parent_record_malformed"}

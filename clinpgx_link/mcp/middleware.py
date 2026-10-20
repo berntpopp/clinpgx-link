@@ -129,7 +129,7 @@ class BoundaryGuard(Middleware):
                         )
                     )
                 return result
-            except (ValidationError, FastMCPValidationError):
+            except ValidationError, FastMCPValidationError:
                 return error_result(InvalidInputError("Invalid tool arguments.", field="arguments"))
             except ClinPGxError as exc:
                 return error_result(exc)

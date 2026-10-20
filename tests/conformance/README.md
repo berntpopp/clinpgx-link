@@ -2,7 +2,9 @@
 
 These five Python files are byte-identical copies of `docs/conformance/` from
 `berntpopp/genefoundry-router` commit
-`6568a0ad7d68925440aba550a2a678282ea5bb6b`. Their immutable source/destination
+`e8931f0114bba3568517d1c7b1f990bea2be31af` (`conformance.py` is from this commit;
+`behaviour.py` is still the `6568a0ad7d68925440aba550a2a678282ea5bb6b` copy, deliberately
+not re-vendored). Their immutable source/destination
 inventory and SHA-256 digests are recorded in
 `vendor/genefoundry/CONFORMANCE_SHA256`. The upstream MIT license is retained at
 `vendor/genefoundry/LICENSE`.

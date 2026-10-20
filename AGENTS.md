@@ -30,7 +30,7 @@ and evidence-backed implementation fixes remain required.
 
 ## Development workflow
 
-- Use Python 3.12+, `uv`, and the committed `uv.lock`; do not use direct `pip` installs.
+- Use Python 3.14+, `uv`, and the committed `uv.lock`; do not use direct `pip` installs.
 - Follow test-driven development: add a focused failing test, confirm the expected RED failure, implement minimally, and rerun GREEN.
 - Use `make` targets for routine checks. `make ci-local` is the required local foundation gate.
 - Use Ruff formatting/lint and strict mypy. Unit tests must not contact live services; mark bounded live drift tests `integration`.

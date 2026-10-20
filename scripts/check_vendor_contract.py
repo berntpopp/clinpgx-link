@@ -58,7 +58,7 @@ def main() -> int:
     args = parser.parse_args()
     try:
         verify(args.vendor_dir, args.router_dir)
-    except (OSError, ValueError, subprocess.SubprocessError):
+    except OSError, ValueError, subprocess.SubprocessError:
         sys.stderr.write("vendor-check: contract verification failed\n")
         return 1
     sys.stdout.write(

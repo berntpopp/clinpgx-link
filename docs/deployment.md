@@ -5,7 +5,7 @@ The only supported client transport is **Streamable HTTP** (`/mcp`); there is no
 
 ## Quick Local Run
 
-Run locally with Python 3.12+ and uv:
+Run locally with Python 3.14+ and uv:
 
 ```bash
 uv sync --group dev
