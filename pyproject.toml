@@ -8,7 +8,7 @@ version = "0.1.4"
 description = "A research-only MCP server for public ClinPGx data and source evidence."
 authors = [{ name = "Bernt Popp" }]
 license = { text = "MIT" }
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -16,7 +16,7 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering :: Bio-Informatics",
 ]
 dependencies = [
@@ -69,7 +69,7 @@ packages = ["clinpgx_link"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py312"
+target-version = "py314"
 force-exclude = true
 exclude = [
     "tests/conformance/__init__.py",
@@ -92,7 +92,7 @@ line-ending = "lf"
 "tests/**/*" = ["S101", "S105", "S106", "T20"]
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.14"
 strict = true
 warn_unused_configs = true
 files = ["clinpgx_link"]

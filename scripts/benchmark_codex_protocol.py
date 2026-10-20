@@ -325,7 +325,7 @@ class ProtocolTrace:
         try:
             mirrored = json.loads(text, parse_constant=_reject_json_constant)
             mirror_matches = _canonical_finite_json(mirrored) == _canonical_finite_json(structured)
-        except (ValueError, TypeError, RecursionError):
+        except ValueError, TypeError, RecursionError:
             self._add_failure("mcp_mirror_mismatch")
             return None
         if not mirror_matches:
@@ -338,7 +338,7 @@ class ProtocolTrace:
             return False
         try:
             Draft202012Validator(self.advertised_tools[tool]).validate(arguments)
-        except (SchemaError, ValidationError, RecursionError):
+        except SchemaError, ValidationError, RecursionError:
             return False
         return True
 

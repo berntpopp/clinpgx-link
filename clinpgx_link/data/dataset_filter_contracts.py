@@ -11,7 +11,7 @@ from clinpgx_link.data.coverage import known_filter_contracts
 def _registered_dataset_ids() -> frozenset[str]:
     try:
         payload = json.loads(Path(__file__).with_name("coverage.json").read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+    except OSError, json.JSONDecodeError:
         return frozenset()
     rows = payload.get("datasets") if isinstance(payload, dict) else None
     if not isinstance(rows, list):

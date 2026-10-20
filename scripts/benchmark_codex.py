@@ -101,7 +101,7 @@ def _endpoint_ready(url: str) -> bool:
             status = int(response.status)
     except urllib.error.HTTPError as error:
         status = int(error.code)
-    except (OSError, urllib.error.URLError):
+    except OSError, urllib.error.URLError:
         return False
     return status == 405
 

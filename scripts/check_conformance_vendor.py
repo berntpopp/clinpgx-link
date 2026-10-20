@@ -116,7 +116,7 @@ def main() -> int:
     args = parser.parse_args()
     try:
         verify(args.project_root, args.router_dir)
-    except (OSError, ValueError, subprocess.SubprocessError):
+    except OSError, ValueError, subprocess.SubprocessError:
         sys.stderr.write("vendor-check: conformance verification failed\n")
         return 1
     sys.stdout.write(

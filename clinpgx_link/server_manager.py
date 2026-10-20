@@ -59,7 +59,7 @@ _MCP_CORS_HEADERS = [
 def _canonical_uuid4(value: str) -> str | None:
     try:
         parsed = uuid.UUID(value)
-    except (AttributeError, ValueError):
+    except AttributeError, ValueError:
         return None
     canonical = str(parsed)
     return canonical if parsed.version == 4 and value == canonical else None

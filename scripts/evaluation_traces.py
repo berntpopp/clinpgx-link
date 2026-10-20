@@ -80,7 +80,7 @@ class NormalizedCall(StrictModel):
     wire_mirror: WireMirror
 
     @model_validator(mode="after")
-    def finite_json_fields(self) -> "NormalizedCall":
+    def finite_json_fields(self) -> NormalizedCall:
         _finite_json(self.arguments)
         if self.envelope is not None:
             _finite_json(self.envelope)
@@ -120,7 +120,7 @@ class NormalizedRun(StrictModel):
     raw_usage: JsonDict | None = None
 
     @model_validator(mode="after")
-    def finite_raw_usage(self) -> "NormalizedRun":
+    def finite_raw_usage(self) -> NormalizedRun:
         if self.raw_usage is not None:
             _finite_json(self.raw_usage)
         effort_unavailable = self.requested_effort is None or self.observed_effort is None

@@ -94,7 +94,7 @@ def load_gene_alias_membership(
         if len(raw.encode("utf-8")) > _MAX_RECEIPT_BYTES:
             return LoadedGeneAliasMembership("mismatched")
         value = json.loads(raw, object_pairs_hook=_reject_duplicate_keys)
-    except (json.JSONDecodeError, TypeError, UnicodeError, ValueError):
+    except json.JSONDecodeError, TypeError, UnicodeError, ValueError:
         return LoadedGeneAliasMembership("mismatched")
     if not isinstance(value, dict) or frozenset(value) != _RECEIPT_KEYS:
         return LoadedGeneAliasMembership("mismatched")

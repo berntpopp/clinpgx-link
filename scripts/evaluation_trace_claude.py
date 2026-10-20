@@ -35,7 +35,7 @@ _ERROR_CODES = {
 def _same(left: object, right: object) -> bool:
     try:
         return canonical_bytes(left) == canonical_bytes(right)
-    except (TypeError, ValueError, RecursionError):
+    except TypeError, ValueError, RecursionError:
         return False
 
 

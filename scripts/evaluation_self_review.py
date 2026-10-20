@@ -149,7 +149,7 @@ def _validated_run(run: NormalizedRun) -> NormalizedRun:
         _fail("invalid_run")
     try:
         return NormalizedRun.model_validate(run.model_dump(mode="python"), strict=True)
-    except (AttributeError, TypeError, ValueError, ValidationError):
+    except AttributeError, TypeError, ValueError, ValidationError:
         _fail("invalid_run")
 
 
@@ -247,7 +247,7 @@ def _has_top_level_review_key(text: str) -> bool:
                     try:
                         if json.loads(text[index:end]) == "experience_review":
                             return True
-                    except (UnicodeError, ValueError, TypeError):
+                    except UnicodeError, ValueError, TypeError:
                         pass
             index = end
             continue
@@ -369,7 +369,7 @@ def _validated_review(candidate: _Candidate) -> SelfReview:
         _fail("invalid_review")
     try:
         return SelfReview.model_validate(candidate.parsed["experience_review"], strict=True)
-    except (TypeError, ValueError, ValidationError):
+    except TypeError, ValueError, ValidationError:
         _fail("invalid_review")
 
 

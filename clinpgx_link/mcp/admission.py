@@ -41,7 +41,7 @@ def route_pool(name: str, arguments: dict[str, Any]) -> Pool:
                 arguments.get("query"),
                 arguments.get("filters") or {},
             )
-        except (InvalidInputError, KeyError):
+        except InvalidInputError, KeyError:
             return "upstream"
         return "local" if route.selected_source == "download" else "upstream"
     return "local" if arguments.get("source") == "download" else "upstream"

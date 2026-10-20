@@ -147,7 +147,7 @@ def _registry_operations() -> frozenset[str]:
             for entry in operations
             if isinstance(entry, dict) and isinstance(entry.get("operation"), str)
         )
-    except (OSError, KeyError, TypeError, json.JSONDecodeError):
+    except OSError, KeyError, TypeError, json.JSONDecodeError:
         return frozenset()
 
 
@@ -159,7 +159,7 @@ def _canonical_request_id(value: object) -> str | None:
         return None
     try:
         parsed = uuid.UUID(value)
-    except (ValueError, AttributeError):
+    except ValueError, AttributeError:
         return None
     canonical = str(parsed)
     return canonical if value == canonical else None

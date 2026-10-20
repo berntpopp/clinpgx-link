@@ -4,7 +4,7 @@ All code in `clinpgx-link` conforms to the standards of the GeneFoundry fleet.
 
 ## Code Standards & Style
 
-- **Python Version**: Python 3.12+ managed with `uv`.
+- **Python Version**: Python 3.14+ managed with `uv`.
 - **Formatting & Linting**: Ruff handles both code formatting and linting.
   ```bash
   make format

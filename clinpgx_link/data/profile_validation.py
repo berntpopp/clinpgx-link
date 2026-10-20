@@ -113,7 +113,7 @@ def _profile_assessment(
     if profile.selector.kind == "tabular":
         try:
             headers = json.loads(headers_json) if headers_json is not None else None
-        except (json.JSONDecodeError, TypeError):
+        except json.JSONDecodeError, TypeError:
             headers = None
         present = (
             set(headers)
@@ -137,7 +137,7 @@ def _profile_assessment(
             matched += 1
             try:
                 fields = json.loads(fields_json)
-            except (json.JSONDecodeError, TypeError):
+            except json.JSONDecodeError, TypeError:
                 fields = None
             keys = set(fields) if isinstance(fields, dict) else set()
             missing_set.update(name for name in profile.required_fields if name not in keys)
@@ -237,7 +237,7 @@ def load_profile_validation(
         return fallback
     try:
         receipt = json.loads(raw)
-    except (json.JSONDecodeError, TypeError, UnicodeError):
+    except json.JSONDecodeError, TypeError, UnicodeError:
         return fallback
     if not isinstance(receipt, dict) or frozenset(receipt) != _RECEIPT_KEYS:
         return fallback

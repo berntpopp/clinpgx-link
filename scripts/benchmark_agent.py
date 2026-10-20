@@ -48,7 +48,7 @@ def _reported_envelope(content: object) -> dict[str, Any] | None:
             continue
         try:
             value = json.loads(text)
-        except (ValueError, RecursionError):
+        except ValueError, RecursionError:
             continue
         if isinstance(value, dict) and isinstance(value.get("success"), bool):
             return value
@@ -203,7 +203,7 @@ class EventState:
     def _event(self, line: bytes) -> None:
         try:
             value = json.loads(line)
-        except (UnicodeError, json.JSONDecodeError, RecursionError):
+        except UnicodeError, json.JSONDecodeError, RecursionError:
             self.parse_errors += 1
             return
         if not isinstance(value, dict):
@@ -639,7 +639,7 @@ def main() -> int:
     args = parser.parse_args()
     try:
         return 0 if run(args) else 1
-    except (OSError, RunInputError, subprocess.SubprocessError):
+    except OSError, RunInputError, subprocess.SubprocessError:
         sys.stderr.write("benchmark-agent: launch or artifact validation failed\n")
         return 2
 
