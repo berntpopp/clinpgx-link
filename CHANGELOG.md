@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-11-11
+
+### Security
+
+- fastmcp / fastmcp-slim 4.1.8 (floor raised to >=4.1.2), Authlib 1.9.5 (critical/high), dnspython 2.9.2 (high), joserfc 1.8.0, opentelemetry-api 1.45.2, filelock 4.2.10, virtualenv 21.15.6.
+
+### Changed
+
+- GitHub Actions pins (setup-python, setup-uv, codeql-action) and python:3.14-slim base digest refreshed.
+
 ## [0.1.5] - 2026-10-20
 
 ### Security
