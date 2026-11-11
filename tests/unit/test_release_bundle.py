@@ -625,9 +625,10 @@ def test_admission_closes_descriptor_when_fstat_fails(
     original_fstat = os.fstat
     original_close = os.close
     closed: list[int] = []
+    armed = False  # pytest>=9.2 capture fstat()s its own fds while the patch is live
 
     def fail_fstat(descriptor: int) -> os.stat_result:
-        if descriptor != parent_fd:
+        if armed and descriptor != parent_fd:
             raise OSError("injected fstat failure")
         return original_fstat(descriptor)
 
@@ -638,11 +639,13 @@ def test_admission_closes_descriptor_when_fstat_fails(
     monkeypatch.setattr(os, "fstat", fail_fstat)
     monkeypatch.setattr(os, "close", record_close)
     try:
+        armed = True
         with pytest.raises(DataValidationError):
             if operation == "directory":
                 bundle_io.open_private_directory(parent)
             else:
                 bundle_io.open_regular(parent_fd, "member")
+        armed = False
         assert len(closed) == 1
     finally:
         original_close(parent_fd)
