@@ -13,6 +13,7 @@ import httpx
 import typer
 from pydantic import ValidationError
 from rich.console import Console
+from rich.markup import escape
 
 from clinpgx_link import __version__
 from clinpgx_link.exceptions import DataValidationError
@@ -97,7 +98,11 @@ def data_install(
             previous_manifest_sha256=previous_manifest_sha256,
             previous_artifact_path=previous_artifact,
         )
-    except DataValidationError, ValueError, OSError:
+    except DataValidationError as exc:
+        # Domain messages are developer-authored and path-free; name the reason.
+        console.print(f"[red]Offline release installation failed:[/red] {escape(str(exc))}")
+        raise typer.Exit(code=1) from None
+    except ValueError, OSError:
         console.print("[red]Offline release installation failed.[/red]")
         raise typer.Exit(code=1) from None
     typer.echo(

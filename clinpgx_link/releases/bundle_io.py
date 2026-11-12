@@ -36,13 +36,12 @@ def open_private_directory(path: Path) -> int:
         before = path.lstat()
         if path.resolve(strict=True) != path:
             raise DataValidationError("Bundle directory is not a real private directory")
-        if (
-            not stat.S_ISDIR(before.st_mode)
-            or stat.S_ISLNK(before.st_mode)
-            or before.st_uid != os.geteuid()
-            or before.st_mode & 0o022
-        ):
+        if not stat.S_ISDIR(before.st_mode) or stat.S_ISLNK(before.st_mode):
             raise DataValidationError("Bundle directory is not a real private directory")
+        if before.st_mode & 0o022:
+            raise DataValidationError("Bundle directory is group- or world-writable; use 0700")
+        if before.st_uid != os.geteuid():
+            raise DataValidationError("Bundle directory is not owned by this user")
         descriptor = os.open(
             path,
             os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | getattr(os, "O_NOFOLLOW", 0),
