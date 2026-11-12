@@ -112,10 +112,12 @@ class BoundaryGuard(Middleware):
             validator = self.validators.setdefault(tool.name, Draft202012Validator(tool.parameters))
             validation_error = next(validator.iter_errors(arguments), None)
             if validation_error is not None:
+                field = self._validation_field(validation_error, properties)
                 return error_result(
                     InvalidInputError(
                         "Invalid tool arguments.",
-                        field=self._validation_field(validation_error, properties),
+                        field=field,
+                        subtype="shape_invalid" if field == "shape" else None,
                     )
                 )
             try:

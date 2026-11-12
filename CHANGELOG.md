@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.9] - 2026-11-12
+
+### Added
+
+- Opt-in result shaping on `search_records` and `get_related_records` (#2): one optional `shape` argument with `filter` (AND across keys, OR within; dict values compare by `term`/`name`, lists by any element, case-insensitive), stable `sort` + `order` (missing values last), `fields` projection and `facet` counts. It applies only when sent, over the whole retained live API row list (not one page), and every row keeps its original `row_index`/`source_pointer`. `_meta.shaping` reports the applied ops, `rows_before`/`rows_after`, per-key `filter_matches` and `absent_fields`; `pagination.total_scope` becomes `shaped_retained_response`. Keys are a closed, schema-enumerated set; the shape is cursor-bound; installed-snapshot reads reject it (`shape_requires_api_rows`) and an out-of-contract shape returns `shape_invalid` with the rules spelled out. Without `shape` the output is byte-identical to 0.1.8. This is a patch release because the data contract is unchanged (installed data releases admit `0.1.x`).
+
 ## [0.1.8] - 2026-11-12
 
 ### Fixed

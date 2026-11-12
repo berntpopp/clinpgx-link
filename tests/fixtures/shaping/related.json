@@ -1,0 +1,130 @@
+{
+ "_meta": {
+  "acquired_at": null,
+  "admitted_at": null,
+  "content_ref": "<content_ref>",
+  "coverage": "unknown",
+  "data_source": "api",
+  "elapsed_ms": 0,
+  "next_commands": [
+   {
+    "arguments": {
+     "content_ref": "<content_ref>",
+     "representation": "structure"
+    },
+    "tool": "get_source_content"
+   }
+  ],
+  "pagination": {
+   "has_more": false,
+   "next_cursor": null,
+   "offset": 0,
+   "returned": 3,
+   "total": 3,
+   "total_scope": "retained_response",
+   "upstream_completeness": "unknown"
+  },
+  "published_at": null,
+  "release_tag": null,
+  "request_id": "<id>",
+  "retrieval_time_kind": "unknown",
+  "retrieval_time_scope": "source_recorded",
+  "retrieved_at": "<retrieved_at>",
+  "source": "ClinPGx REST API",
+  "source_scope": "response",
+  "source_sha256": "b457cd53e1861f906b69a612b96fa5281db6e630f7da770c26d54acff4cfd48b",
+  "source_url": "https://api.clinpgx.org/v1/report/connectedObjects/PA124/Chemical",
+  "timing_scope": "tool_boundary",
+  "unsafe_for_clinical_use": true,
+  "warnings": []
+ },
+ "recommended_citation": "ClinPGx source evidence. https://api.clinpgx.org/v1/report/connectedObjects/PA124/Chemical Recorded source timestamp <retrieved_at>.",
+ "results": [
+  {
+   "content_ref": "<content_ref>",
+   "data": {
+    "kind": "untrusted_text",
+    "provenance": {
+     "record_id": "<content_ref>",
+     "retrieved_at": "<retrieved_at>",
+     "source": "ClinPGx REST API"
+    },
+    "raw_sha256": "89ab426c96b9277dcfd5a029cd6e7c60ae23a85b4af3c41e61b158cd0653a6e9",
+    "text": "{\"connectedObject\":{\"id\":\"PA1\",\"name\":\"atorvastatin\"},\"connectionTypes\":[\"Label\"]}"
+   },
+   "derived": true,
+   "representation": "adapter_value_json",
+   "response_mode": "compact",
+   "row_index": 0,
+   "source_pointer": {
+    "kind": "untrusted_text",
+    "provenance": {
+     "record_id": "<content_ref>",
+     "retrieved_at": "<retrieved_at>",
+     "source": "ClinPGx REST API"
+    },
+    "raw_sha256": "06c901ba18e7c2418ebcfc5e2ed24023e8e711547233e135641597d9738e3ee1",
+    "text": "/0"
+   },
+   "source_profile": "connected_object"
+  },
+  {
+   "content_ref": "<content_ref>",
+   "data": {
+    "kind": "untrusted_text",
+    "provenance": {
+     "record_id": "<content_ref>",
+     "retrieved_at": "<retrieved_at>",
+     "source": "ClinPGx REST API"
+    },
+    "raw_sha256": "2bf16b7f8e37e0a5d1cbc1aae307198005dce05fb3e2320bc3f5d7952cf1e8f1",
+    "text": "{\"connectedObject\":{\"id\":\"PA2\",\"name\":\"simvastatin\"},\"connectionTypes\":[\"GuidelineAnnotation\",\"Label\"]}"
+   },
+   "derived": true,
+   "representation": "adapter_value_json",
+   "response_mode": "compact",
+   "row_index": 1,
+   "source_pointer": {
+    "kind": "untrusted_text",
+    "provenance": {
+     "record_id": "<content_ref>",
+     "retrieved_at": "<retrieved_at>",
+     "source": "ClinPGx REST API"
+    },
+    "raw_sha256": "3f294bcadec5ab2debdd599b239604122fa1fba47d8a1502397752ac2d4b5198",
+    "text": "/1"
+   },
+   "source_profile": "connected_object"
+  },
+  {
+   "content_ref": "<content_ref>",
+   "data": {
+    "kind": "untrusted_text",
+    "provenance": {
+     "record_id": "<content_ref>",
+     "retrieved_at": "<retrieved_at>",
+     "source": "ClinPGx REST API"
+    },
+    "raw_sha256": "1b326ce0da3d0747307061279baf9cd34f8cf5dc9c2179644c9ce4ed6a20b34c",
+    "text": "{\"connectedObject\":{\"id\":\"PA3\",\"name\":\"pravastatin\"},\"connectionTypes\":[\"Label\"]}"
+   },
+   "derived": true,
+   "representation": "adapter_value_json",
+   "response_mode": "compact",
+   "row_index": 2,
+   "source_pointer": {
+    "kind": "untrusted_text",
+    "provenance": {
+     "record_id": "<content_ref>",
+     "retrieved_at": "<retrieved_at>",
+     "source": "ClinPGx REST API"
+    },
+    "raw_sha256": "677a27aa8e0e23e0d46e150a1d42e75a7c2cf4bc44da7bcd7641bf05bc0655d6",
+    "text": "/2"
+   },
+   "source_profile": "connected_object"
+  }
+ ],
+ "success": true,
+ "unsafe_for_clinical_use": true
+}
