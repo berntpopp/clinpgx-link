@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.11] - 2026-11-12
+
+### Fixed
+
+- `search_records` and `get_related_records` advertised `shape` with `default: null` on a non-nullable `$ref Shape`, so any proxy that fills advertised defaults (genefoundry-router v0.10.13) sent `"shape": null` and every call without shaping failed with `shape_invalid`. `shape` is now `anyOf [Shape, null]`, and an explicit null returns output byte-identical to omitting it. A guard test walks every tool's input schema and fails if any `default: null` property rejects null.
+
 ## [0.1.10] - 2026-11-12
 
 ### Changed
