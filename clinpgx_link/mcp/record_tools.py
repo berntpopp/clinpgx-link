@@ -10,7 +10,6 @@ from fastmcp.tools.base import ToolResult
 from pydantic import Field
 
 from clinpgx_link.api.website import WebsiteClient
-from clinpgx_link.content.reader import select_value
 from clinpgx_link.content.store import ContentStore
 from clinpgx_link.data.repository import DatasetRepository
 from clinpgx_link.exceptions import (
@@ -50,9 +49,10 @@ from clinpgx_link.mcp.relationship_contracts import (
     relationship_next_commands,
     resolve_api_relationship_route,
 )
+from clinpgx_link.mcp.result_shaping import ShapeArg, require_api_rows
 from clinpgx_link.mcp.search_contracts import FILTER_DESCRIPTION, resolve_search_route
 from clinpgx_link.mcp.selection import validate_pointers
-from clinpgx_link.mcp.shaping import SourcePresenter, source_pointer
+from clinpgx_link.mcp.shaping import SourcePresenter, select_response
 from clinpgx_link.models import SourceResponse
 from clinpgx_link.services.api import ApiService
 
@@ -159,22 +159,6 @@ _ANNOTATIONS = {
 }
 
 
-def _select(response: SourceResponse, pointer: str) -> SourceResponse:
-    base = response.details.get("source_pointer")
-    target = (
-        pointer.removeprefix(base)
-        if isinstance(base, str) and base and pointer.startswith(base + "/")
-        else ("" if isinstance(base, str) and base and pointer == base else pointer)
-    )
-    selected = SourceResponse(
-        select_value(response.value, target), response.source, dict(response.details)
-    )
-    selected.details["source_pointer"] = source_pointer(
-        selected.details.get("source_pointer"), target
-    )
-    return selected
-
-
 def register_record_tools(
     server: FastMCP,
     repository: DatasetRepository | None,
@@ -203,6 +187,7 @@ def register_record_tools(
         offset: OffsetArg = 0,
         cursor: CursorArg = None,
         response_mode: ModeArg = "compact",
+        shape: ShapeArg = None,
     ) -> ToolResult:
         """Find ClinPGx genes, chemicals, variants, labels, guideline/summary/variant annotations by exact live filters or installed dataset memberships; returns PA accessions to reuse in get_record/get_related_records. Filter keys are per entity_type (see filters); summary_annotation accepts level_of_evidence. Star alleles: get_record(entity_type='haplotype', source='website')."""
         began = time.monotonic()
@@ -236,6 +221,7 @@ def register_record_tools(
                 "source": source,
                 "selected_source": selected_source,
                 "view": view,
+                **({"shape": shape.selector()} if shape and shape.applied() else {}),
             }
             if selected_source == "api":
                 assert translated is not None
@@ -258,9 +244,11 @@ def register_record_tools(
                     state_ref=state_ref,
                     response_mode=response_mode,
                     profile=adapter_profile("", family=entity_type),
+                    shape=shape,
                 )
             if repository is None and recovery_help.supports_api_search(entity_type):
                 recovery = recovery_help.unsupported_api_filters_plan(entity_type, source, view)
+            require_api_rows(shape)
             local_snapshot = await run_sync(snapshot_id, repository)
             if entity_type not in recovery_help.LOCAL_ENTITIES:
                 recovery = recovery_help.unsupported_search_plan(entity_type, source, view)
@@ -385,7 +373,7 @@ def register_record_tools(
                     )
                 return await run_sync(
                     presenter.present,
-                    _select(response, pointer),
+                    select_response(response, pointer),
                     selectors={
                         "tool": "get_record",
                         "entity_type": entity_type,
@@ -510,6 +498,7 @@ def register_record_tools(
         offset: OffsetArg = 0,
         cursor: CursorArg = None,
         response_mode: ModeArg = "compact",
+        shape: ShapeArg = None,
     ) -> ToolResult:
         """Records linked to known ClinPGx IDs: gene+drug guideline, label, summary or variant annotations (pair mode, other_id), or all objects connected to one ID (relationship). See result_type for modes. For gene+drug guidelines prefer search_records(entity_type='guideline_annotation', filters={gene, chemical: PA accessions}); the live pair report can omit CPIC/DPWG. Guideline URLs: get_record(source='website')."""
         began = time.monotonic()
@@ -527,6 +516,7 @@ def register_record_tools(
                 "other_type": other_type,
                 "source": source,
                 "view": view,
+                **({"shape": shape.selector()} if shape and shape.applied() else {}),
             }
             if source == "api":
                 try:
@@ -569,7 +559,9 @@ def register_record_tools(
                         record_id, other_id, result_type, (entity_type, other_type)
                     )
                     + (relationship_next_commands(response.value, result_type) or []),
+                    shape=shape,
                 )
+            require_api_rows(shape)
             local_snapshot = await run_sync(snapshot_id, repository)
             if cursor is not None:
                 position = cursors.decode(cursor, selectors)

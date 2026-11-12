@@ -72,6 +72,7 @@ PUBLIC_ERROR_SUBTYPES: frozenset[str] = frozenset(
         "runtime_inventory",
         "runtime_manifest_invalid",
         "scalar_selection_required",
+        "shape_requires_api_rows",
         "selection_commit_failed",
         "selection_recovery_failed",
         "snapshot_invalid",

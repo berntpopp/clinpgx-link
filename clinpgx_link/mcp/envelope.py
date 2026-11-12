@@ -76,6 +76,7 @@ def success_result(
     snapshot_id: str | None = None,
     search_diagnostics: dict[str, Any] | None = None,
     next_commands: list[dict[str, Any]] | None = None,
+    shaping: dict[str, Any] | None = None,
 ) -> ToolResult:
     """Build provenance without confusing source time with the time of a cache hit."""
     request_id = REQUEST_ID.get() or str(uuid.uuid4())
@@ -133,6 +134,7 @@ def success_result(
                 "next_commands": commands,
                 **({"content_ref": content_ref} if content_ref is not None else {}),
                 **({"pagination": pagination} if pagination is not None else {}),
+                **({"shaping": shaping} if shaping is not None else {}),
                 **({"snapshot_id": snapshot_id} if snapshot_id is not None else {}),
                 **(
                     {"search_diagnostics": search_diagnostics}
@@ -258,6 +260,12 @@ def error_result(
         "accession_required": (
             "This argument takes a ClinPGx PA accession, not a name or symbol; resolve it first "
             "(search_records, or an accession inside a returned record) and pass the PA id.",
+            None,
+        ),
+        "shape_requires_api_rows": (
+            "Result shaping applies to a whole retained live API row list; installed-snapshot "
+            "reads are paged before shaping could see them. Retry with source='api', or omit "
+            "shape and use filters.",
             None,
         ),
         "unsupported_related_mode": (
