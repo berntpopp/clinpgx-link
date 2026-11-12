@@ -44,6 +44,26 @@ granularity: an application version is admitted when it is `>= minimum` and its
 contract; any data-contract change requires a minor bump. The database schema version
 (`schema.minimum`/`maximum`/`actual`) remains an exact, strict check.
 
+## Building a Data Release
+
+Data releases are produced only by the in-repository builder, `clinpgx-link data build`
+(`make data-release` locally; the manually dispatched `.github/workflows/data-release.yml`
+publishes). It downloads the 15 official core archives into a frozen acquisition receipt, or
+rebuilds offline from one with `--acquisition`, then builds, packs, installs into a fresh
+volume, and verifies the bundle before writing the four release assets. Identical archives,
+receipt, authorization, transformation code and SQLite toolchain reproduce the same release
+tag, snapshot ID and inner contract files.
+
+The owner's distribution authorization is the reviewed input file
+[`release/data-authorization.json`](../release/data-authorization.json): reviewer, date,
+quoted decision, and the SHA-256 of the exact upstream `LICENSE.txt` it covers. A changed
+upstream notice stops the build until a new authorization is reviewed. Authorization record:
+
+| Date | Reviewer | Scope |
+|---|---|---|
+| 2026-10-04 | Human user (Codex thread `01a101a5-1039-7ac3-9724-36bfcdbe21be`) | Exact bundle `data-clinpgx-core-cfde21bfec473b35` |
+| 2026-11-12 | Repository owner (operator decision) | A new core bundle built from the archives current on 2026-11-12 (notice `7156ee5b…`) |
+
 ## Response Modes
 
 Tools accepting `response_mode` offer four levels of granularity:

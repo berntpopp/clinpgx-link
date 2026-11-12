@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `clinpgx-link data build`: a reproducible, offline data-release builder in the repository, replacing the out-of-repo scripts that produced `data-clinpgx-core-cfde21bfec473b35`. It downloads the 15 core archives (or reuses a frozen acquisition), binds the owner authorization from `release/data-authorization.json` to the exact upstream `LICENSE.txt` digest, and fails loudly on header drift in a profiled member, an exceeded size ceiling, tampered archive bytes, or a credential-shaped value. It emits the four assets (`clinpgx-core.tar.zst`, `data-release-manifest.json`, `validation-report.json`, `SHA256SUMS`). `make data-release` runs it locally; the manually dispatched `data-release.yml` workflow publishes the assets behind the `release` environment with build-provenance attestations.
+
 ## [0.1.9] - 2026-11-12
 
 ### Added

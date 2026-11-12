@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "reviewer": "Repository owner (explicit operator decision recorded 2026-11-12)",
+  "reviewed_at": "2026-11-12T00:00:00Z",
+  "quote": "The repository owner has explicitly authorized redistributing a NEW ClinPGx data bundle built from the current upstream archives.",
+  "reference": "Operator decision for the 2026-11-12 ClinPGx core data refresh (archives created 2026-11-05)",
+  "notice_sha256": "7156ee5b3c97870160e13ab5adde94c2e45ea965f6f5339a09be3d0ed0169b38",
+  "interpretation": "Public-mode authorization only; no independent legal conclusion or license classification change.",
+  "public_rationale": "The repository owner explicitly authorized a public GitHub data release of a new ClinPGx core bundle built from the official archives current on 2026-11-12. This records owner-level publication authorization, not a legal conclusion or a change to the underlying license classification. Preserve the exact embedded archive notice and the differing current publisher notice.",
+  "operator_local_rationale": "Technical operator-local build and validation remain authorized; public-mode authorization for this bundle is recorded by the 2026-11-12 owner decision. Controlled distribution remains denied. This is not a legal conclusion.",
+  "policy_obligation": "The embedded archive notice states CC BY-SA 4.0; current ClinPGx publisher pages describe NC-SA terms. The repository owner authorized public GitHub distribution of a new bundle built from the current upstream archives on 2026-11-12. This records authorization, not a legal conclusion; the differing notices are retained and remain unresolved.",
+  "license_name": "ClinPGx source terms; original archive notice and current publisher-policy discrepancy retained",
+  "disclaimer": "Research use only; not clinical decision support. Public GitHub distribution is authorized for this release by the repository owner. This records authorization, not a legal conclusion or a change to the underlying source license classification. Original notices and their discrepancy remain disclosed."
+}

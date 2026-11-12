@@ -1,7 +1,9 @@
 DOCKER_COMPOSE := $(shell if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then echo "docker compose"; elif command -v docker-compose >/dev/null 2>&1; then echo "docker-compose"; else echo "docker compose"; fi)
 COMPOSE := $(DOCKER_COMPOSE) -f docker/docker-compose.yml $(shell [ -f docker/.env ] && echo "--env-file docker/.env")
 
-.PHONY: install lock format format-check lint check-file-size typecheck test test-fast test-foundation check-fastmcp vendor-check ci-local dev docker-build docker-up docker-down docker-logs docker-url
+.PHONY: install lock format format-check lint check-file-size typecheck test test-fast test-foundation check-fastmcp vendor-check ci-local dev docker-build docker-up docker-down docker-logs docker-url data-release
+
+DATA_RELEASE_DIR ?= dist/data-release
 
 install:
 	uv sync --group dev
@@ -68,3 +70,9 @@ docker-url:
 	else \
 	  echo "clinpgx-link container is not running. Start it with: make docker-up"; \
 	fi
+
+# Acquire the 15 core archives and build the four data-release assets reproducibly.
+# Publishing is CI-only: dispatch .github/workflows/data-release.yml.
+data-release:
+	uv run --frozen clinpgx-link data build --authorization release/data-authorization.json \
+	  --output "$(DATA_RELEASE_DIR)" --revision "$$(git rev-parse HEAD)"

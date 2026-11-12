@@ -1,0 +1,125 @@
+name: Data release
+
+# Builds the ClinPGx core data bundle from the official archives with the in-repo
+# reproducible builder (`clinpgx-link data build`) and publishes the four assets as an
+# immutable, attested GitHub release. Publication waits on the `release` environment.
+# The owner's distribution authorization is read from release/data-authorization.json,
+# so a new authorization lands through a reviewed pull request before any dispatch.
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: clinpgx-data-release
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build data release
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+      exists: ${{ steps.meta.outputs.exists }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: false
+          version: "0.11.28"
+      - run: uv sync --frozen --no-dev
+      - name: Acquire and build without publish credentials
+        run: |
+          set -euo pipefail
+          uv run --frozen clinpgx-link data build \
+            --authorization release/data-authorization.json \
+            --output "$RUNNER_TEMP/release" \
+            --revision "$GITHUB_SHA" | tee "$RUNNER_TEMP/build-summary.json"
+      - name: Verify assets and resolve the content-addressed tag
+        id: meta
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/release"
+          test "$(ls -A | sort | paste -sd,)" = "SHA256SUMS,clinpgx-core.tar.zst,data-release-manifest.json,validation-report.json"
+          sha256sum --check SHA256SUMS
+          tag="$(jq -er '.dataset.release | select(test("^data-clinpgx-core-[0-9a-f]{16}$"))' data-release-manifest.json)"
+          jq -er --arg rev "$GITHUB_SHA" '.transformation.revision == $rev' data-release-manifest.json >/dev/null
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          # Only a published release counts; a leftover draft is re-verified by publish.
+          if gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::$tag is already published; identical inputs need no new release."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+          jq -r '"ClinPGx core snapshot `\(.dataset.release)`.\n\n- \(.record_counts.record) records across \(.record_counts.source_archive) source archives; schema \(.schema.actual).\n- Built by `clinpgx-link data build` from source commit `\(.transformation.revision)` for application \(.application_compatibility.minimum) (patch-compatible 0.1.x).\n- Assets: the immutable core bundle, its release manifest, the native validation report, and `SHA256SUMS`; every asset carries a build-provenance attestation.\n- Research use only; not clinical decision support.\n- License: \(.license.name). Distribution authorized by \(.license.reviewer) on \(.license.reviewed_at). This records authorization, not a legal conclusion or a change to the source license classification."' \
+            data-release-manifest.json > "$RUNNER_TEMP/release-notes.md"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: clinpgx-data-${{ steps.meta.outputs.tag }}
+          path: |
+            ${{ runner.temp }}/release
+            ${{ runner.temp }}/release-notes.md
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish data release
+    needs: build
+    if: github.ref == 'refs/heads/main' && needs.build.outputs.exists == 'false'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: release
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ needs.build.outputs.tag }}
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: clinpgx-data-${{ needs.build.outputs.tag }}
+          path: dist
+      - name: Verify transferred bytes
+        working-directory: dist/release
+        run: sha256sum --check SHA256SUMS
+      - name: Attest release assets
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist/release/*
+      - name: Create a draft, upload and verify every asset, then publish
+        run: |
+          set -euo pipefail
+          cd dist/release
+          assets=(clinpgx-core.tar.zst data-release-manifest.json validation-report.json SHA256SUMS)
+          gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            --jq ".[] | select(.tag_name == \"$TAG\" and .draft == true) | .id" \
+            | while read -r stale; do gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/$stale"; done
+          gh release create "$TAG" "${assets[@]}" --repo "$GITHUB_REPOSITORY" \
+            --draft --target "$GITHUB_SHA" --title "$TAG" --notes-file ../release-notes.md
+          remote="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            --jq "[.[] | select(.tag_name == \"$TAG\" and .draft == true)] | first")"
+          for asset in "${assets[@]}"; do
+            digest="sha256:$(sha256sum "$asset" | cut -d' ' -f1)"
+            jq -e --arg n "$asset" --arg d "$digest" --argjson s "$(stat -c %s "$asset")" \
+              '[.assets[] | select(.name == $n and .size == $s and .digest == $d)] | length == 1' \
+              <<<"$remote" >/dev/null
+          done
+          jq -e '.assets | length == 4' <<<"$remote" >/dev/null
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false
+          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" \
+            | jq -e --arg sha "$GITHUB_SHA" '.draft == false and .target_commitish == $sha and (.assets | length) == 4' >/dev/null
