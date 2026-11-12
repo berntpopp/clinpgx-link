@@ -27,7 +27,7 @@ app = typer.Typer(
     help="Read-only ClinPGx source evidence over stateless HTTP MCP.",
 )
 console = Console()
-data_app = typer.Typer(help="Offline operator-only release installation.")
+data_app = typer.Typer(help="Offline operator-only release build and installation.")
 app.add_typer(data_app, name="data")
 
 
@@ -110,6 +110,53 @@ def data_install(
             },
             sort_keys=True,
             separators=(",", ":"),
+        )
+    )
+
+
+@data_app.command("build")
+def data_build(
+    authorization: Path = typer.Option(
+        ..., "--authorization", help="Reviewed owner distribution authorization JSON."
+    ),
+    output: Path = typer.Option(..., "--output", help="Empty directory for the release assets."),
+    revision: str = typer.Option(..., "--revision", help="Exact 40-character source Git SHA."),
+    acquisition: Path | None = typer.Option(
+        None,
+        "--acquisition",
+        help="Frozen acquisition directory to rebuild offline; omitted means download now.",
+    ),
+    application_version: str = typer.Option(
+        __version__, "--application-version", help="Application version the data targets."
+    ),
+) -> None:
+    """Build the four public data-release assets reproducibly (not callable over MCP)."""
+    from clinpgx_link.config import Settings
+    from clinpgx_link.releases.acquisition import acquire_core
+    from clinpgx_link.releases.build_release import build_release
+
+    output = output.resolve()
+    if acquisition is None:
+        acquisition = output.parent / f"{output.name}-acquisition"
+        asyncio.run(acquire_core(acquisition, Settings()))
+    built = build_release(
+        acquisition_dir=acquisition,
+        authorization_path=authorization,
+        output_dir=output,
+        revision=revision,
+        application_version=application_version,
+    )
+    typer.echo(
+        json.dumps(
+            {
+                "release_tag": built.release_tag,
+                "snapshot_id": built.snapshot_id,
+                "runtime_identity_sha256": built.runtime_identity_sha256,
+                "record_counts": built.record_counts,
+                "assets": built.assets,
+            },
+            sort_keys=True,
+            indent=2,
         )
     )
 

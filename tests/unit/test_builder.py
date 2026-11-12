@@ -161,11 +161,11 @@ def test_transform_identity_binds_source_admission_modules(
         builder_module, "__file__", str(temporary_package / "ingest" / "builder.py")
     )
 
-    before = builder_module._transform_identity()
+    before = builder_module.transform_identity_contract()
     target = temporary_package / relative_path
     target.write_bytes(target.read_bytes() + b"\n# admission contract change\n")
 
-    assert builder_module._transform_identity() != before
+    assert builder_module.transform_identity_contract() != before
 
 
 def test_builder_returns_frozen_per_source_manifest_without_a_global_date(tmp_path: Path) -> None:

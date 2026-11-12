@@ -119,7 +119,7 @@ def _build_config() -> dict[str, int]:
     }
 
 
-def _transform_identity() -> str:
+def transform_identity_contract() -> str:
     package = Path(__file__).parents[1]
     digest = hashlib.sha256()
     for relative in _TRANSFORM_FILES:
@@ -583,7 +583,7 @@ def build_snapshot(
     if len({source.dataset_id for source in ordered}) != len(ordered):
         raise InvalidInputError("Build source dataset IDs must be unique", field="sources")
     acquired = tuple(read_local_source(source) for source in ordered)
-    transform_identity = _transform_identity()
+    transform_identity = transform_identity_contract()
     build_config = _build_config()
     identity = _snapshot_id(ordered, transform_identity, build_config)
     destination.mkdir(parents=True, exist_ok=True)
