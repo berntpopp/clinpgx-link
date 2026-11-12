@@ -1,0 +1,154 @@
+{
+ "_meta": {
+  "acquired_at": null,
+  "admitted_at": null,
+  "content_ref": "<content_ref>",
+  "coverage": "unknown",
+  "data_source": "api",
+  "elapsed_ms": 0,
+  "next_commands": [
+   {
+    "arguments": {
+     "content_ref": "<content_ref>",
+     "representation": "structure"
+    },
+    "tool": "get_source_content"
+   }
+  ],
+  "pagination": {
+   "has_more": false,
+   "next_cursor": null,
+   "offset": 0,
+   "returned": 4,
+   "total": 4,
+   "total_scope": "retained_response",
+   "upstream_completeness": "unknown"
+  },
+  "published_at": null,
+  "release_tag": null,
+  "request_id": "<id>",
+  "retrieval_time_kind": "unknown",
+  "retrieval_time_scope": "source_recorded",
+  "retrieved_at": "<retrieved_at>",
+  "source": "ClinPGx REST API",
+  "source_scope": "response",
+  "source_sha256": "6ef672207b164a9cdffb42e02e7c8c62fcb5166c8330299982018b18be03a5c9",
+  "source_url": "https://api.clinpgx.org/v1/data/summaryAnnotation?relatedChemicals.accessionId=PA449053&view=base",
+  "timing_scope": "tool_boundary",
+  "unsafe_for_clinical_use": true,
+  "warnings": []
+ },
+ "recommended_citation": "ClinPGx source evidence. https://api.clinpgx.org/v1/data/summaryAnnotation?relatedChemicals.accessionId=PA449053&view=base Recorded source timestamp <retrieved_at>.",
+ "results": [
+  {
+   "content_ref": "<content_ref>",
+   "deferred_content": true,
+   "derived": true,
+   "fallback_args": {
+    "content_ref": "<content_ref>",
+    "pointer": "/data/0",
+    "representation": "structure"
+   },
+   "fallback_tool": "get_source_content",
+   "id": "1",
+   "record_profile_status": "unprofiled",
+   "recovery_action": "retry_with_response_mode_full",
+   "representation": "adapter_value_json",
+   "response_mode": "compact",
+   "row_index": 0,
+   "source_pointer": {
+    "kind": "untrusted_text",
+    "provenance": {
+     "record_id": "<content_ref>",
+     "retrieved_at": "<retrieved_at>",
+     "source": "ClinPGx REST API"
+    },
+    "raw_sha256": "15642871b36b3e36cd578e970411689e1dfbbc213e250f41a6057c171b1724c8",
+    "text": "/data/0"
+   }
+  },
+  {
+   "content_ref": "<content_ref>",
+   "deferred_content": true,
+   "derived": true,
+   "fallback_args": {
+    "content_ref": "<content_ref>",
+    "pointer": "/data/1",
+    "representation": "structure"
+   },
+   "fallback_tool": "get_source_content",
+   "id": "2",
+   "record_profile_status": "unprofiled",
+   "recovery_action": "retry_with_response_mode_full",
+   "representation": "adapter_value_json",
+   "response_mode": "compact",
+   "row_index": 1,
+   "source_pointer": {
+    "kind": "untrusted_text",
+    "provenance": {
+     "record_id": "<content_ref>",
+     "retrieved_at": "<retrieved_at>",
+     "source": "ClinPGx REST API"
+    },
+    "raw_sha256": "ce8e2f763b7f2726a29d00b76f149b6c79d08ffd167f47d12715ccd5c16dff6b",
+    "text": "/data/1"
+   }
+  },
+  {
+   "content_ref": "<content_ref>",
+   "deferred_content": true,
+   "derived": true,
+   "fallback_args": {
+    "content_ref": "<content_ref>",
+    "pointer": "/data/2",
+    "representation": "structure"
+   },
+   "fallback_tool": "get_source_content",
+   "id": "3",
+   "record_profile_status": "unprofiled",
+   "recovery_action": "retry_with_response_mode_full",
+   "representation": "adapter_value_json",
+   "response_mode": "compact",
+   "row_index": 2,
+   "source_pointer": {
+    "kind": "untrusted_text",
+    "provenance": {
+     "record_id": "<content_ref>",
+     "retrieved_at": "<retrieved_at>",
+     "source": "ClinPGx REST API"
+    },
+    "raw_sha256": "996e92fed6e81aad6f35c12ff4298f093c4cf111d4c8ca9b2a6b93dfac8e5795",
+    "text": "/data/2"
+   }
+  },
+  {
+   "content_ref": "<content_ref>",
+   "deferred_content": true,
+   "derived": true,
+   "fallback_args": {
+    "content_ref": "<content_ref>",
+    "pointer": "/data/3",
+    "representation": "structure"
+   },
+   "fallback_tool": "get_source_content",
+   "id": "4",
+   "record_profile_status": "unprofiled",
+   "recovery_action": "retry_with_response_mode_full",
+   "representation": "adapter_value_json",
+   "response_mode": "compact",
+   "row_index": 3,
+   "source_pointer": {
+    "kind": "untrusted_text",
+    "provenance": {
+     "record_id": "<content_ref>",
+     "retrieved_at": "<retrieved_at>",
+     "source": "ClinPGx REST API"
+    },
+    "raw_sha256": "90188fbec598ee4b6f890346d077b3532fe795e84c380c96e37c5214dd5a0178",
+    "text": "/data/3"
+   }
+  }
+ ],
+ "success": true,
+ "unsafe_for_clinical_use": true
+}
