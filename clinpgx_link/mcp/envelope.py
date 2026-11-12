@@ -19,6 +19,7 @@ from clinpgx_link.exceptions import (
     ResponseTooLargeError,
 )
 from clinpgx_link.mcp.recovery import RecoveryPlan, recovery_payload
+from clinpgx_link.mcp.search_contracts import api_filter_choices
 from clinpgx_link.mcp.untrusted_content import UntrustedText, enforce_limits, fence_text
 from clinpgx_link.models import SourceInfo
 
@@ -285,6 +286,15 @@ def error_result(
         result["message"] = message
         if retry_after_seconds is not None:
             result["retry_after_seconds"] = retry_after_seconds
+    if public_subtype == "query_unsupported" and recovery is not None:
+        # entity_type is enum-validated by RecoveryPlan; filter keys are code-owned.
+        keys = ", ".join(api_filter_choices(str(recovery.entity_type)))
+        reason = f"entity_type '{recovery.entity_type}' does not support a free-text query"
+        result["message"] = (
+            f"{reason}. Omit query and pass filters instead; supported filter keys: {keys}. "
+            "The first next_commands entry is a valid filters example."
+        )
+        result["field_errors"] = [{"field": "query", "reason": reason}]
     recoverable_ref = bool(content_ref and re.fullmatch(r"content:[0-9a-f]{64}", content_ref))
     if content_ref and not recoverable_ref:
         try:

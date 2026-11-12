@@ -57,6 +57,7 @@ PUBLIC_ERROR_SUBTYPES: frozenset[str] = frozenset(
         "operation_unavailable",
         "pointer_selection_invalid",
         "pointer_syntax_invalid",
+        "query_unsupported",
         "profile_drift",
         "publication_not_allowed",
         "release_collision",

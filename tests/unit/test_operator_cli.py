@@ -178,3 +178,20 @@ def test_offline_replacement_can_stage_predecessor_in_new_volume(
     assert json.loads(result.stdout)["release_tag"] == second.tag
     assert (new_root / "versions" / first.artifact_digest).is_dir()
     assert (new_root / "versions" / second.artifact_digest).is_dir()
+
+
+def test_offline_install_names_a_writable_seed_directory(tmp_path: Path, monkeypatch) -> None:
+    """Acceptance 2026-11-12 E3: a group-writable seed failed with no reason at all."""
+    from clinpgx_link.cli import app
+
+    release = _release(tmp_path, "first")
+    root = _private(tmp_path / "installed")
+    args = _input_args(release, root, tmp_path)
+    release.release_input.artifact_path.parent.chmod(0o775)  # type: ignore[attr-defined]
+    monkeypatch.setattr("clinpgx_link.operator_install.application_version", lambda: "1.0.0")
+    result = runner.invoke(app, args)
+    assert result.exit_code == 1
+    assert "writable" in result.output
+    assert "0555" in result.output and "0444" in result.output
+    assert str(tmp_path) not in result.output
+    assert not (root / "current").exists()

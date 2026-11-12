@@ -50,7 +50,11 @@ from clinpgx_link.mcp.relationship_contracts import (
     resolve_api_relationship_route,
 )
 from clinpgx_link.mcp.result_shaping import ShapeArg, require_api_rows
-from clinpgx_link.mcp.search_contracts import FILTER_DESCRIPTION, resolve_search_route
+from clinpgx_link.mcp.search_contracts import (
+    FILTER_DESCRIPTION,
+    QUERY_DESCRIPTION,
+    resolve_search_route,
+)
 from clinpgx_link.mcp.selection import validate_pointers
 from clinpgx_link.mcp.shaping import SourcePresenter, select_response
 from clinpgx_link.models import SourceResponse
@@ -93,7 +97,7 @@ QueryArg = Annotated[
     str | None,
     Field(
         max_length=512,
-        description="Literal AND-token local text query; unavailable for API searches.",
+        description=QUERY_DESCRIPTION,
         examples=["CYP2C19 clopidogrel"],
     ),
 ]

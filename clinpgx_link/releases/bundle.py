@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import stat
 import tarfile
 from contextlib import suppress
 from dataclasses import dataclass, field
@@ -446,6 +447,11 @@ def _verify_artifact(
         parent_mode = artifact_path.parent.lstat().st_mode
     except OSError as exc:
         raise DataValidationError("Bundle source directory cannot be admitted") from exc
+    if stat.S_ISDIR(parent_mode) and parent_mode & 0o022:
+        raise DataValidationError(
+            "Bundle seed directory is group- or world-writable; stage it immutable "
+            "(directory 0555, files 0444) or private to this user (0700)"
+        )
     immutable_source = not parent_mode & 0o222
     parent_fd = (
         bundle_io.open_readonly_source_directory(artifact_path.parent)
