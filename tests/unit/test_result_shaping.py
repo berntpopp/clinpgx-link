@@ -98,14 +98,30 @@ def _normalized(payload):
         ("search", "search_records", SEARCH),
     ],
 )
-async def test_no_shape_output_is_byte_identical_to_v0_1_8(client, name, tool, args):
+@pytest.mark.parametrize("explicit_null", [False, True])
+async def test_no_shape_output_is_byte_identical_to_v0_1_8(client, name, tool, args, explicit_null):
+    """An explicit ``shape: null`` (what a default-filling proxy sends) equals omitting it."""
     golden = GOLDEN / f"{name}.json"
-    payload = _normalized(await _call(client, tool, args))
+    call_args = {**args, "shape": None} if explicit_null else args
+    payload = _normalized(await _call(client, tool, call_args))
     rendered = json.dumps(payload, indent=1, sort_keys=True) + "\n"
     if os.environ.get("CLINPGX_WRITE_SHAPING_GOLDEN"):
         golden.write_text(rendered)
     assert rendered == golden.read_text()
     assert "shaping" not in payload["_meta"]
+
+
+@pytest.mark.asyncio
+async def test_acceptance_repro_null_shape_is_not_shape_invalid(client):
+    """D1 exactly as the router acceptance run sent it: gene search with ``shape: null``."""
+    args = {"entity_type": "gene", "filters": {"gene": "CYP2C19"}}
+    explicit = await _call(client, "search_records", {**args, "shape": None})
+    assert explicit.get("subtype") != "shape_invalid", explicit
+    omitted = await _call(client, "search_records", args)
+    # The omitted call is served from the explicit-null call's cache entry: same request key.
+    assert omitted["_meta"].pop("data_source") == "cache"
+    assert explicit["_meta"].pop("data_source") == "api"
+    assert _normalized(explicit) == _normalized(omitted)
 
 
 @pytest.mark.asyncio

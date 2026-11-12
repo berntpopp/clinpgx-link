@@ -87,8 +87,9 @@ class Shape(BaseModel):
         return [op for op in ("filter", "sort", "fields", "facet") if getattr(self, op)]
 
 
+# Nullable on the wire: proxies fill the advertised `default: null` and send it explicitly.
 ShapeArg = Annotated[
-    Shape | SkipJsonSchema[None],
+    Shape | None,
     Field(
         description=(
             "Opt-in, API only: shapes the whole row list fetched with filters, not just this "

@@ -90,3 +90,23 @@ async def test_known_broken_vip_route_exposes_working_fallback_contract(server):
         assert result["callable"] is False
         assert result["availability"] == "documented_broken"
         assert result["fallback_operation"] == "GET /site/vip/{id}"
+
+
+@pytest.mark.asyncio
+async def test_every_null_default_is_accepted_by_its_advertised_schema(server):
+    """Contract-Truth: proxies fill advertised defaults, so `default: null` must validate null."""
+    from jsonschema import Draft202012Validator
+
+    async with Client(server) as client:
+        tools = await client.list_tools()
+    checked, broken = 0, []
+    for tool in tools:
+        schema = tool.input_schema
+        for name, prop in schema.get("properties", {}).items():
+            if "default" in prop and prop["default"] is None:
+                checked += 1
+                sub = {"$defs": schema.get("$defs", {}), **prop}
+                if not Draft202012Validator(sub).is_valid(None):
+                    broken.append(f"{tool.name}.{name}")
+    assert checked, "no null defaults found: the guard is walking nothing"
+    assert broken == []
