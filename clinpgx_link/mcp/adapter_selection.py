@@ -99,7 +99,7 @@ _FAMILY_PROFILES = {
     "chemical": "chemical",
     "guideline": "guideline",
     "guideline_annotation": "guideline_annotation",
-    "haplotype": "identity",
+    "haplotype": "haplotype",
     "allele": "identity",
     "annotation_id": "identity",
     "connection": "identity",
@@ -108,7 +108,6 @@ _FAMILY_PROFILES = {
     "evidence": "identity",
     "label": "identity",
     "literature": "literature",
-    "literature_annotation": "identity",
     "multilink_annotation": "identity",
     "ontology_term": "identity",
     "pathway": "identity",
@@ -117,7 +116,6 @@ _FAMILY_PROFILES = {
     "variant": "identity",
     "variant_annotation": "variant_annotation",
     "vip": "identity",
-    "vip_variant": "identity",
 }
 _ROUTE_PROFILES = {
     "pathway": "identity",
@@ -172,6 +170,12 @@ def adapter_profile_status(value: Any, profile_name: str | None) -> str | None:
             for item in value.values()
         )
         return "active" if stat_name_shape or count_shape else "unprofiled"
+    if profile_name == "haplotype":
+        allele = value.get("allele") if isinstance(value, dict) else None
+        valid = isinstance(allele, dict) and all(
+            isinstance(allele.get(name), str) for name in ("id", "symbol")
+        )
+        return "active" if valid else "unprofiled"
     profile = _PROFILES.get(profile_name)
     if not isinstance(value, dict) or profile is None:
         return "unprofiled"
@@ -212,6 +216,8 @@ def project_adapter_value(value: Any, profile_name: str | None, mode: ResponseMo
     if profile_name == "stats":
         # This scalar aggregate endpoint has no optional row payload to tier.
         return value
+    if profile_name == "haplotype":
+        return _project_haplotype(value, mode)
     profile = _PROFILES.get(profile_name or "")
     if profile is None:
         return _UNPROFILED
@@ -235,6 +241,29 @@ def project_adapter_value(value: Any, profile_name: str | None, mode: ResponseMo
             return projected
     names = getattr(profile, mode)
     return {name: value[name] for name in names if name in value}
+
+
+def _project_haplotype(value: dict[str, Any], mode: ResponseMode) -> dict[str, Any]:
+    """Star-allele definition from /site/haplotype: identity, function and defining variants."""
+    allele = value["allele"]
+    projected: dict[str, Any] = {"id": allele["id"], "symbol": allele["symbol"]}
+    if mode == "minimal":
+        return projected
+    function = allele.get("functionTerm")
+    projected.update(
+        name=allele.get("name"),
+        function=function.get("term") if isinstance(function, dict) else None,
+        alleleFunctionSource=value.get("alleleFunctionSource"),
+        isCpic=value.get("isCpic"),
+        defining_variants=[
+            {"variant": item["variant"].get("symbol"), "allele": item.get("allele")}
+            for item in allele.get("alleles") or []
+            if isinstance(item, dict) and isinstance(item.get("variant"), dict)
+        ],
+    )
+    if mode == "standard":
+        projected["hgvs"] = allele.get("hgvs")
+    return projected
 
 
 def adapter_projection_is_unprofiled(value: Any) -> bool:

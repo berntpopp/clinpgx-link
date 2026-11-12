@@ -124,14 +124,25 @@ _ROWS = (
         "summary_annotation",
         "GET /data/summaryAnnotation/{id}",
         ("id",),
-        ("id", "levelOfEvidence", "relatedChemicals"),
-        ("id", "levelOfEvidence", "location", "relatedChemicals", "allelePhenotypes"),
+        ("id", "accessionId", "name", "levelOfEvidence", "relatedChemicals"),
+        (
+            "id",
+            "accessionId",
+            "name",
+            "levelOfEvidence",
+            "location",
+            "relatedChemicals",
+            "allelePhenotypes",
+        ),
         (("id", "integer"),),
         (
+            ("accessionId", "string"),
+            ("name", "string"),
             ("levelOfEvidence", "object"),
             ("location", "object"),
             ("relatedChemicals", "array"),
-            ("allelePhenotypes", "object"),
+            # Live rows carry a list; the earlier "object" typing deferred every row.
+            ("allelePhenotypes", "array"),
         ),
     ),
     NumericIdentityContract(

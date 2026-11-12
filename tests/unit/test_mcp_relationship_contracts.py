@@ -14,16 +14,15 @@ from clinpgx_link.content.store import ContentStore
 from clinpgx_link.mcp.facade import create_mcp
 from clinpgx_link.services.api import ApiService
 
+# literatureAnnotation, vip and vipVariant are in the captured OpenAPI enum, but the live
+# pair route rejects them for every pair ("invalid ObjectType enum value", probed 2026-11-12).
 PAIR_RESULT_TYPES = [
     "guideline_annotation",
     "label",
-    "literature_annotation",
     "multilink_annotation",
     "pathway",
     "summary_annotation",
     "variant_annotation",
-    "vip",
-    "vip_variant",
 ]
 
 
@@ -171,10 +170,62 @@ async def test_invalid_relationship_modes_use_closed_nonreflecting_guidance(
         )
         assert payload["recovery"]["valid_choices"] == {
             "connected_object_result_type": ["relationship"],
+            "download_result_type": ["allele", "evidence", "literature", "relationship"],
             "mode": ["connected_object", "pair"],
             "pair_result_type": PAIR_RESULT_TYPES,
         }
         assert hostile not in json.dumps(payload)
         assert calls == []
+    finally:
+        await upstream.close()
+
+
+@pytest.mark.asyncio
+async def test_result_type_enum_advertises_only_values_some_mode_accepts(tmp_path):
+    store = ContentStore(tmp_path / "content.sqlite")
+    try:
+        tools = {tool.name: tool for tool in await create_mcp(content_store=store).list_tools()}
+        schema = tools["get_related_records"].parameters["properties"]["result_type"]
+        enum = set(schema.get("enum") or schema["anyOf"][0]["enum"])
+        accepted = {"relationship", "allele", "evidence", "literature", *PAIR_RESULT_TYPES}
+        assert enum == accepted
+        for value in PAIR_RESULT_TYPES:
+            assert value in schema["description"]
+    finally:
+        store.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("arguments", "gene", "chemical"),
+    [
+        ({"record_id": "PA124", "other_id": "PA449053"}, "PA124", "PA449053"),
+        (
+            {
+                "record_id": "PA449053",
+                "other_id": "PA124",
+                "entity_type": "Chemical",
+                "other_type": "Gene",
+            },
+            "PA124",
+            "PA449053",
+        ),
+    ],
+)
+async def test_pair_guideline_points_at_complete_accession_search(
+    tmp_path, arguments, gene, chemical
+):
+    def handle(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"status": "success", "data": []})
+
+    store, upstream, service = _api(tmp_path, handle)
+    try:
+        async with Client(create_mcp(content_store=store, api_service=service)) as client:
+            result = await client.call_tool(
+                "get_related_records", {**arguments, "result_type": "guideline_annotation"}
+            )
+        (command,) = result.structured_content["_meta"]["next_commands"][:1]
+        assert command["tool"] == "search_records"
+        assert command["arguments"]["filters"] == {"gene": gene, "chemical": chemical}
     finally:
         await upstream.close()

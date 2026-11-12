@@ -27,6 +27,8 @@ ERROR_CODES: frozenset[str] = frozenset(
 # Only code-owned values in this registry may cross the public MCP boundary.
 PUBLIC_ERROR_SUBTYPES: frozenset[str] = frozenset(
     {
+        "accession_in_name_filter",
+        "accession_required",
         "admission_capacity",
         "array_index_invalid",
         "asset_invalid",

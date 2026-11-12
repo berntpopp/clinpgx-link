@@ -42,14 +42,11 @@ ResultType = Literal[
     "guideline_annotation",
     "label",
     "literature",
-    "literature_annotation",
     "multilink_annotation",
     "pathway",
     "relationship",
     "summary_annotation",
     "variant_annotation",
-    "vip",
-    "vip_variant",
 ]
 ObjectType = Literal["Gene", "Chemical", "Disease", "Variant"]
 View = Literal["min", "base", "max"]

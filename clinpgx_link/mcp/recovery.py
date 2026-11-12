@@ -12,7 +12,6 @@ from clinpgx_link.identity_contracts import numeric_identity_contract
 from clinpgx_link.mcp.relationship_contracts import (
     RELATIONSHIP_OBJECT_TYPES,
     connected_object_arguments,
-    pair_arguments,
     relationship_recovery_choices,
 )
 from clinpgx_link.mcp.search_contracts import (
@@ -86,14 +85,11 @@ _RESULT_TYPES = frozenset(
         "guideline_annotation",
         "label",
         "literature",
-        "literature_annotation",
         "multilink_annotation",
         "pathway",
         "relationship",
         "summary_annotation",
         "variant_annotation",
-        "vip",
-        "vip_variant",
     }
 )
 _OBJECT_TYPES = RELATIONSHIP_OBJECT_TYPES
@@ -201,6 +197,16 @@ class RecoveryPlan:
             raise ValueError("variant recovery context is invalid")
 
 
+def require_website_accession(record_id: str) -> None:
+    """A symbol such as CYP2C19*2 otherwise fails as an opaque upstream path error."""
+    if re.fullmatch(r"PA[0-9]+", record_id) is None:
+        raise InvalidInputError(
+            "Website detail routes take a ClinPGx PA accession.",
+            field="record_id",
+            subtype="accession_required",
+        )
+
+
 def safe_identifier(value: str) -> bool:
     return isinstance(value, str) and len(value) <= 512 and _SAFE_ID.fullmatch(value) is not None
 
@@ -286,7 +292,12 @@ def unsupported_api_filters_plan(entity_type: str, source: str, view: str) -> Re
 def search_contract_plan(
     entity_type: str, source: str, view: str, subtype: str | None
 ) -> RecoveryPlan | None:
-    if subtype in {"unsupported_api_filters", "unsupported_api_filter_value"}:
+    if subtype in {
+        "unsupported_api_filters",
+        "unsupported_api_filter_value",
+        "accession_in_name_filter",
+        "accession_required",
+    }:
         return unsupported_api_filters_plan(entity_type, source, view)
     if subtype == "unsupported_search_source":
         return unsupported_search_plan(entity_type, source, view)
@@ -458,6 +469,7 @@ def recovery_payload(plan: RecoveryPlan) -> dict[str, Any]:
     elif plan.kind == "invalid_search_filters":
         limitation = "One or more filter names are outside the canonical entity-search contract."
         choices["filters"] = list(CANONICAL_FILTERS)
+        choices["api_filters"] = api_filter_choices(str(entity))
         commands.append(_command("get_server_capabilities", {}))
     elif plan.kind == "unsupported_api_filters":
         limitation = (
@@ -522,13 +534,13 @@ def recovery_payload(plan: RecoveryPlan) -> dict[str, Any]:
                 },
             },
             {
-                "tool": "get_related_records",
-                "arguments_template": pair_arguments(
-                    "{returned_gene_id}",
-                    "{returned_chemical_id}",
-                    "guideline_annotation",
-                    view=plan.view,
-                ),
+                "tool": "search_records",
+                "arguments_template": {
+                    "entity_type": "guideline_annotation",
+                    "filters": {"gene": "{returned_gene_id}", "chemical": "{returned_chemical_id}"},
+                    "source": "api",
+                    "view": plan.view,
+                },
             },
         ]
     return payload
@@ -548,8 +560,10 @@ __all__ = [
     "numeric_detail_plan",
     "recovery_payload",
     "related_mode_plan",
+    "require_website_accession",
     "safe_identifier",
     "search_contract_plan",
+    "supports_api_search",
     "unsupported_api_filters_plan",
     "unsupported_detail_plan",
     "unsupported_search_plan",

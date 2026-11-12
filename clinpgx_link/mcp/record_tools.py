@@ -43,7 +43,10 @@ from clinpgx_link.mcp.record_types import (
     View,
 )
 from clinpgx_link.mcp.relationship_contracts import (
+    DOWNLOAD_RESULT_TYPES,
+    PAIR_RESULT_TYPE_MAPPING,
     guideline_website_recommendation,
+    pair_guideline_commands,
     relationship_next_commands,
     resolve_api_relationship_route,
 )
@@ -65,8 +68,11 @@ ResultTypeArg = Annotated[
     ResultType,
     Field(
         description=(
-            "Use relationship without other_id for API connected-object mode; API pair mode "
-            "requires other_id and a mapped result type published by capabilities."
+            "Mode is chosen by arguments. API connected-object (omit other_id): relationship, "
+            "lists objects of other_type linked to record_id. API pair (other_id required): "
+            + "|".join(PAIR_RESULT_TYPE_MAPPING)
+            + ", records linking both IDs (e.g. gene PA124 + chemical PA449053). "
+            "source='download' (installed snapshot only): " + "|".join(DOWNLOAD_RESULT_TYPES) + "."
         ),
         examples=["relationship"],
     ),
@@ -95,7 +101,7 @@ FilterArg = Annotated[
     dict[str, str] | None,
     Field(
         description=FILTER_DESCRIPTION,
-        examples=[{"gene": "CYP2C19", "chemical": "clopidogrel"}],
+        examples=[{"chemical": "clopidogrel"}, {"gene": "CYP2C19", "chemical": "PA449053"}],
     ),
 ]
 LimitArg = Annotated[
@@ -131,7 +137,13 @@ PointersArg = Annotated[
 ModeArg = Annotated[
     ResponseMode,
     Field(
-        description="Response detail preference; does not change source identity.",
+        description=(
+            "Detail tier; never changes source identity. minimal|compact|standard project "
+            "verified fields per family. Rows of families without a verified profile return "
+            "deferred_content=true (retrieved but withheld, not missing); "
+            "recovery_action=retry_with_response_mode_full means full inlines them, otherwise "
+            "read them with get_source_content."
+        ),
         examples=["compact"],
     ),
 ]
@@ -192,7 +204,7 @@ def register_record_tools(
         cursor: CursorArg = None,
         response_mode: ModeArg = "compact",
     ) -> ToolResult:
-        """Search exact live fields or installed dataset memberships."""
+        """Find ClinPGx genes, chemicals, variants, labels, guideline/summary/variant annotations by exact live filters or installed dataset memberships; returns PA accessions to reuse in get_record/get_related_records. Filter keys are per entity_type (see filters); summary_annotation accepts level_of_evidence. Star alleles: get_record(entity_type='haplotype', source='website')."""
         began = time.monotonic()
         response: SourceResponse | None = None
         recovery: recovery_help.RecoveryPlan | None = None
@@ -247,6 +259,8 @@ def register_record_tools(
                     response_mode=response_mode,
                     profile=adapter_profile("", family=entity_type),
                 )
+            if repository is None and recovery_help.supports_api_search(entity_type):
+                recovery = recovery_help.unsupported_api_filters_plan(entity_type, source, view)
             local_snapshot = await run_sync(snapshot_id, repository)
             if entity_type not in recovery_help.LOCAL_ENTITIES:
                 recovery = recovery_help.unsupported_search_plan(entity_type, source, view)
@@ -307,7 +321,7 @@ def register_record_tools(
         pointers: PointersArg = None,
         response_mode: ModeArg = "compact",
     ) -> ToolResult:
-        """Get one exact entity without changing source; use source='website' for guideline URLs."""
+        """Get one exact ClinPGx entity without changing source. source='website' serves guideline URLs and haplotype star-allele definitions (function, defining rsIDs); numeric-id families (summary/variant annotation, literature) take the decimal id from search."""
         began = time.monotonic()
         response: SourceResponse | None = None
         recovery: recovery_help.RecoveryPlan | None = None
@@ -350,6 +364,7 @@ def register_record_tools(
                         "No verified website detail route exists for this entity.",
                         field="entity_type",
                     )
+                recovery_help.require_website_accession(record_id)
                 if website is None:
                     raise UpstreamUnavailableError("Website service is not configured.")
                 response = await website.call(
@@ -496,7 +511,7 @@ def register_record_tools(
         cursor: CursorArg = None,
         response_mode: ModeArg = "compact",
     ) -> ToolResult:
-        """Use known IDs for live reports or joins. Guideline URLs live under source='website'."""
+        """Records linked to known ClinPGx IDs: gene+drug guideline, label, summary or variant annotations (pair mode, other_id), or all objects connected to one ID (relationship). See result_type for modes. For gene+drug guidelines prefer search_records(entity_type='guideline_annotation', filters={gene, chemical: PA accessions}); the live pair report can omit CPIC/DPWG. Guideline URLs: get_record(source='website')."""
         began = time.monotonic()
         response: SourceResponse | None = None
         recovery: recovery_help.RecoveryPlan | None = None
@@ -550,7 +565,10 @@ def register_record_tools(
                         if route.mode == "connected_object"
                         else adapter_profile("", family=result_type)
                     ),
-                    next_commands=relationship_next_commands(response.value, result_type),
+                    next_commands=pair_guideline_commands(
+                        record_id, other_id, result_type, (entity_type, other_type)
+                    )
+                    + (relationship_next_commands(response.value, result_type) or []),
                 )
             local_snapshot = await run_sync(snapshot_id, repository)
             if cursor is not None:
