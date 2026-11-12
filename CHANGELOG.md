@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.12] - 2026-11-12
+
+### Fixed
+
+- `search_records` with a free-text `query` on an entity type that has no text index (`guideline_annotation`, `label`, `pathway`, `summary_annotation`, `variant_annotation`) returned a generic "outside the supported input contract" (`unsupported_search_source`) that named neither the field nor the fix. It now returns `invalid_input` with subtype `query_unsupported`, `field_errors` naming `query`, a message listing the entity's supported filter keys, and a runnable `filters` example as the first next command, for every `source`. The `query` parameter description names these entity types, since JSON Schema cannot express a per-`entity_type` exclusion that clients honour.
+- `clinpgx-link data install` printed a reason-less "installation failed" for every validation error. It now prints the path-free reason, and a group- or world-writable seed directory (or data root) gets its own message with the required modes.
+
 ## [0.1.11] - 2026-11-12
 
 ### Fixed
