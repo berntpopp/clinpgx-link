@@ -11,18 +11,18 @@ from pathlib import Path
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
-RELEASE_TAG = "data-clinpgx-core-cfde21bfec473b35"
+RELEASE_TAG = "data-clinpgx-core-d91c0c4082f14706"
 BASE_URL = f"https://github.com/berntpopp/clinpgx-link/releases/download/{RELEASE_TAG}"
-EXPECTED_SNAPSHOT = "sha256:cbc4bba16380e8badfb05eb402bfbd47e631aba74a83f83dc239d75b75113e3b"
-EXPECTED_RUNTIME_DIGEST = "sha256:ef590d6eba25423eb562405edfa7ac41862172bc689f496c2ff5346ddd3958ca"
-MANIFEST_SHA256 = "80e22f9ace76ff136129c8eb5cc67fb1454c291ee2365d7e797e22d2da2845e7"
-ARTIFACT_SHA256 = "481f30612a1711683d52faea535a29327a88374f12b907d4c942cbefd2c8246b"
-ARTIFACT_SIZE = 198_532_972
+EXPECTED_SNAPSHOT = "sha256:1567392b98f425e8442fa1cef244f544107b76c166c9e6a29538b1bf4e7d56ac"
+EXPECTED_RUNTIME_DIGEST = "sha256:f04d50edcd7c8d0310c5b87c3a177fc1a44da249ae677707d5c77e7275ff8fc4"
+MANIFEST_SHA256 = "2db0287d6edf47368fd5833670026cd1264e80f5d23ce82c5dfc262406e5a351"
+ARTIFACT_SHA256 = "6b2fdb4a6b4a975de8c7cd58c17a99c5e96c8bc42c088c2393c5b037a6431446"
+ARTIFACT_SIZE = 244_176_059
 MAX_ARTIFACT_SIZE = 268_435_456
-SOURCE_MANIFEST_SHA256 = "94d032c42d43bbc742f4278a5a524b3026515e749d9d169d45387b9d7721ddf1"
-EXPANDED_TREE_SHA256 = "9a15a4fb30d54301472576b11aca9eb874dfdb2cf309c5c049b90c321533a186"
-EXPANDED_SIZE = 1_045_391_338
-RECORD_COUNT = 453_102
+SOURCE_MANIFEST_SHA256 = "88d6d19c4acd88689139b35a09959a154ccca0e4eabf01bc94aabd2260980e4a"
+EXPANDED_TREE_SHA256 = "5f025c0c17f2854e74370c3bffb5eacefe95c96e645a70f33e511de113c4a607"
+EXPANDED_SIZE = 1_315_932_270
+RECORD_COUNT = 624_516
 _ALLOWED_REDIRECT_HOSTS = {
     "github.com",
     "release-assets.githubusercontent.com",
@@ -89,7 +89,7 @@ def _validate_manifest(path: Path) -> None:
         or schema.get("actual") != "1.0.0"
         or schema.get("minimum") != "1.0.0"
         or schema.get("maximum") != "1.0.0"
-        or not (compatibility.get("minimum") == compatibility.get("maximum") == "0.1.3")
+        or not (compatibility.get("minimum") == compatibility.get("maximum") == "0.1.9")
         or manifest.get("record_counts", {}).get("record") != RECORD_COUNT
         or manifest.get("license", {}).get("redistribution_allowed") is not True
     ):

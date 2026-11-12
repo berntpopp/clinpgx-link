@@ -55,7 +55,7 @@ def _fixture_manifest(artifact: bytes) -> bytes:
             "max_members": 4,
         },
         "schema": {"actual": "1.0.0", "minimum": "1.0.0", "maximum": "1.0.0"},
-        "application_compatibility": {"minimum": "0.1.3", "maximum": "0.1.3"},
+        "application_compatibility": {"minimum": "0.1.9", "maximum": "0.1.9"},
         "record_counts": {"record": 7},
         "license": {"redistribution_allowed": True},
     }
@@ -101,9 +101,9 @@ def test_smoke_prep_materializes_exact_bundle_and_emits_input_paths(
     assert (result / "data-release-manifest.json").stat().st_mode & 0o777 == 0o444
     assert (result / "clinpgx-core.tar.zst").stat().st_mode & 0o777 == 0o444
     assert env_file.read_text() == (
-        "CLINPGX_EXPECTED_SNAPSHOT=sha256:cbc4bba16380e8badfb05eb402bfbd47e631aba74a83f83dc239d75b75113e3b\n"
+        "CLINPGX_EXPECTED_SNAPSHOT=sha256:1567392b98f425e8442fa1cef244f544107b76c166c9e6a29538b1bf4e7d56ac\n"
         "CLINPGX_EXPECTED_RELEASE_TAG=test-clinpgx-data\n"
-        "CLINPGX_EXPECTED_RUNTIME_DIGEST=sha256:ef590d6eba25423eb562405edfa7ac41862172bc689f496c2ff5346ddd3958ca\n"
+        "CLINPGX_EXPECTED_RUNTIME_DIGEST=sha256:f04d50edcd7c8d0310c5b87c3a177fc1a44da249ae677707d5c77e7275ff8fc4\n"
         f"CLINPGX_RELEASE_MANIFEST_SHA256={hashlib.sha256(manifest).hexdigest()}\n"
         f"CLINPGX_RELEASE_ARTIFACT_SHA256={hashlib.sha256(artifact).hexdigest()}\n"
         f"CLINPGX_RELEASE_INPUT_DIR={result}\n"

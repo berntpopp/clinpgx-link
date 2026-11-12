@@ -75,8 +75,8 @@
       "opt/venv/lib/python3.14/site-packages/clinpgx_link/data/schema.sql",
       "opt/venv/lib/python3.14/site-packages/clinpgx_link/data/search_diagnostics.py"
     ],
-    "release_tag": "data-clinpgx-core-cfde21bfec473b35",
-    "digest": "sha256:ef590d6eba25423eb562405edfa7ac41862172bc689f496c2ff5346ddd3958ca",
+    "release_tag": "data-clinpgx-core-d91c0c4082f14706",
+    "digest": "sha256:f04d50edcd7c8d0310c5b87c3a177fc1a44da249ae677707d5c77e7275ff8fc4",
     "schema_compatibility": [
       "1.0.0"
     ]
@@ -89,11 +89,11 @@
   },
   "data_identity_contract": "runtime-v1",
   "smoke_environment": [
-    "CLINPGX_EXPECTED_SNAPSHOT=sha256:cbc4bba16380e8badfb05eb402bfbd47e631aba74a83f83dc239d75b75113e3b",
-    "CLINPGX_EXPECTED_RELEASE_TAG=data-clinpgx-core-cfde21bfec473b35",
-    "CLINPGX_EXPECTED_RUNTIME_DIGEST=sha256:ef590d6eba25423eb562405edfa7ac41862172bc689f496c2ff5346ddd3958ca",
-    "CLINPGX_RELEASE_MANIFEST_SHA256=80e22f9ace76ff136129c8eb5cc67fb1454c291ee2365d7e797e22d2da2845e7",
-    "CLINPGX_RELEASE_ARTIFACT_SHA256=481f30612a1711683d52faea535a29327a88374f12b907d4c942cbefd2c8246b"
+    "CLINPGX_EXPECTED_SNAPSHOT=sha256:1567392b98f425e8442fa1cef244f544107b76c166c9e6a29538b1bf4e7d56ac",
+    "CLINPGX_EXPECTED_RELEASE_TAG=data-clinpgx-core-d91c0c4082f14706",
+    "CLINPGX_EXPECTED_RUNTIME_DIGEST=sha256:f04d50edcd7c8d0310c5b87c3a177fc1a44da249ae677707d5c77e7275ff8fc4",
+    "CLINPGX_RELEASE_MANIFEST_SHA256=2db0287d6edf47368fd5833670026cd1264e80f5d23ce82c5dfc262406e5a351",
+    "CLINPGX_RELEASE_ARTIFACT_SHA256=6b2fdb4a6b4a975de8c7cd58c17a99c5e96c8bc42c088c2393c5b037a6431446"
   ],
   "preparation": "docker/ci-prepare-smoke.sh"
 }
