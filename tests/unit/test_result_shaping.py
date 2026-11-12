@@ -234,6 +234,8 @@ async def test_unknown_or_oversized_shape_is_named_invalid_input(client, shape):
     assert payload["success"] is False
     assert payload["error_code"] == "invalid_input"
     assert payload["field"] == "shape"
+    assert payload["subtype"] == "shape_invalid"
+    assert "ShapeKey" in payload["message"]
 
 
 @pytest.mark.asyncio

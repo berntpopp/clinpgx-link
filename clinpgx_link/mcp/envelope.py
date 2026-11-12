@@ -262,6 +262,13 @@ def error_result(
             "(search_records, or an accession inside a returned record) and pass the PA id.",
             None,
         ),
+        "shape_invalid": (
+            "shape is outside its contract: every key (filter keys, sort, fields, facet) must be "
+            "one of the ShapeKey values enumerated in this tool's input schema; filter takes 1-4 "
+            "keys with 1-20 values each; fields takes 1-12 keys; order is asc or desc; no other "
+            "properties. Use facet to discover a key's upstream values.",
+            None,
+        ),
         "shape_requires_api_rows": (
             "Result shaping applies to a whole retained live API row list; installed-snapshot "
             "reads are paged before shaping could see them. Retry with source='api', or omit "
