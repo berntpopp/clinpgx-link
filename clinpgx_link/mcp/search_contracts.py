@@ -162,6 +162,11 @@ API_SEARCH_CONTRACTS: Mapping[str, SearchContract] = MappingProxyType(
 LOCAL_SEARCH_ENTITIES = frozenset(
     {"allele", "annotation_id", "chemical", "disease", "gene", "literature", "variant"}
 )
+QUERY_UNSUPPORTED_ENTITIES = frozenset(API_SEARCH_CONTRACTS) - LOCAL_SEARCH_ENTITIES
+QUERY_DESCRIPTION = (
+    "Literal AND-token local text query; unavailable for API searches. Rejected "
+    f"(invalid_input) for {', '.join(sorted(QUERY_UNSUPPORTED_ENTITIES))}: use filters."
+)
 DOWNLOAD_FILTERS = tuple(sorted(CANONICAL_FILTER_PRIORITY))
 CANONICAL_FILTERS = tuple(
     sorted(
@@ -284,6 +289,13 @@ def resolve_search_route(
     filters: dict[str, str],
 ) -> SearchRoute:
     """Choose a source only when the complete predicate has declared semantics."""
+    if query is not None and entity_type in QUERY_UNSUPPORTED_ENTITIES:
+        # Indexed nowhere for text: the API takes exact filters only and the snapshot lacks it.
+        raise InvalidInputError(
+            "This entity type does not support free-text query.",
+            field="query",
+            subtype="query_unsupported",
+        )
     translated = None if query is not None else api_filters(entity_type, filters)
     contract = api_contract(entity_type)
     if source == "auto":
@@ -399,6 +411,8 @@ __all__ = [
     "DOWNLOAD_SEMANTICS",
     "FILTER_DESCRIPTION",
     "LOCAL_SEARCH_ENTITIES",
+    "QUERY_DESCRIPTION",
+    "QUERY_UNSUPPORTED_ENTITIES",
     "SearchContract",
     "SearchRoute",
     "api_contract",

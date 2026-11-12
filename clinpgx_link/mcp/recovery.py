@@ -17,6 +17,7 @@ from clinpgx_link.mcp.relationship_contracts import (
 from clinpgx_link.mcp.search_contracts import (
     CANONICAL_FILTERS,
     LOCAL_SEARCH_ENTITIES,
+    api_contract,
     api_filter_choices,
     api_filter_value_choices,
     api_filters,
@@ -32,6 +33,7 @@ RecoveryKind = Literal[
     "unsupported_api_filters",
     "unsupported_related_mode",
     "unsupported_search_source",
+    "query_unsupported",
     "variant_symbol_requires_search",
     "use_exact_gene_or_name_filter",
     "restart_dataset_search",
@@ -46,6 +48,7 @@ _KINDS = frozenset(
         "unsupported_api_filters",
         "unsupported_related_mode",
         "unsupported_search_source",
+        "query_unsupported",
         "variant_symbol_requires_search",
         "use_exact_gene_or_name_filter",
         "restart_dataset_search",
@@ -178,6 +181,7 @@ class RecoveryPlan:
                 self.source,
             ),
             "unsupported_search_source": (self.entity_type, self.source),
+            "query_unsupported": (self.entity_type, self.source),
             "variant_symbol_requires_search": (self.entity_type, self.record_id, self.source),
             "use_exact_gene_or_name_filter": (),
             "restart_dataset_search": (),
@@ -301,6 +305,8 @@ def search_contract_plan(
         return unsupported_api_filters_plan(entity_type, source, view)
     if subtype == "unsupported_search_source":
         return unsupported_search_plan(entity_type, source, view)
+    if subtype == "query_unsupported":
+        return RecoveryPlan("query_unsupported", entity_type=entity_type, source=source, view=view)
     return None
 
 
@@ -479,6 +485,16 @@ def recovery_payload(plan: RecoveryPlan) -> dict[str, Any]:
         choices["filters"] = api_filter_choices(str(entity))
         choices.update(api_filter_value_choices(str(entity)))
         commands.append(_command("get_server_capabilities", {}))
+    elif plan.kind == "query_unsupported":
+        limitation = (
+            "This entity type has no free-text query in any source; omit query and pass "
+            "exact filters (keys in valid_choices.filters). Not an absence claim."
+        )
+        choices["filters"] = api_filter_choices(str(entity))
+        choices.update(api_filter_value_choices(str(entity)))
+        search_contract = api_contract(str(entity))
+        assert search_contract is not None
+        commands.append(search_contract.example())
     elif plan.kind == "unsupported_search_source":
         limitation = "This entity and source do not have a compatible search contract."
         choices["source"] = [

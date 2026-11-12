@@ -637,3 +637,50 @@ def test_filter_description_publishes_per_entity_api_keys():
     description = search_contracts.FILTER_DESCRIPTION
     for entity, contract in search_contracts.API_SEARCH_CONTRACTS.items():
         assert f"{entity}: {'|'.join(contract.filters)}" in description
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("entity_type", ["summary_annotation", "guideline_annotation"])
+@pytest.mark.parametrize("source", [None, "auto", "api", "download"])
+async def test_free_text_query_on_api_only_entity_names_query_and_filters(
+    tmp_path, entity_type, source
+):
+    """Acceptance 2026-11-12 E3: query on an API-only entity named neither field nor fix."""
+    store = ContentStore(tmp_path / "content.sqlite")
+    arguments = {"entity_type": entity_type, "query": "clopidogrel"}
+    if source is not None:
+        arguments["source"] = source
+    try:
+        async with Client(create_mcp(content_store=store)) as client:
+            rejected = await client.call_tool("search_records", arguments, raise_on_error=False)
+    finally:
+        store.close()
+    envelope = rejected.structured_content
+    keys = search_contracts.api_filter_choices(entity_type)
+    assert rejected.is_error
+    assert envelope["error_code"] == "invalid_input"
+    assert envelope["retryable"] is False
+    assert envelope["field"] == "query"
+    assert envelope["subtype"] == "query_unsupported"
+    assert [item["field"] for item in envelope["field_errors"]] == ["query"]
+    assert f"'{entity_type}'" in envelope["message"]
+    assert "free-text query" in envelope["message"]
+    assert all(key in envelope["message"] for key in keys)
+    assert envelope["recovery"]["valid_choices"]["filters"] == keys
+    command = envelope["_meta"]["next_commands"][0]
+    assert command == capabilities_payload()["api"][entity_type]["example"]
+    assert "query" not in command["arguments"] and command["arguments"]["filters"]
+
+
+@pytest.mark.asyncio
+async def test_query_description_names_entities_that_reject_free_text(tmp_path):
+    store = ContentStore(tmp_path / "content.sqlite")
+    try:
+        tools = {tool.name: tool for tool in await create_mcp(content_store=store).list_tools()}
+    finally:
+        store.close()
+    description = tools["search_records"].parameters["properties"]["query"]["description"]
+    for entity in sorted(
+        set(search_contracts.API_SEARCH_CONTRACTS) - search_contracts.LOCAL_SEARCH_ENTITIES
+    ):
+        assert entity in description
