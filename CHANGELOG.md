@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.10] - 2026-11-12
+
+### Changed
+
+- Production data is pinned to `data-clinpgx-core-d91c0c4082f14706`, the first release built and published by `data-release.yml` (github-actions[bot], attested). It is built from the 15 ClinPGx core archives created upstream on 2026-11-05, under the owner authorization of 2026-11-12. It has 624,516 records (previously 453,102): `relationships` +130,287 rows, `occurrences` +37,415, `guidelineAnnotations` +3,353 nested documents, smaller increases elsewhere, and one new `pathways-tsv` member. Schema 1.0.0 is unchanged, so this is a patch release. The upstream `LICENSE.txt` changed only in line wrapping; its wording is identical. New pins: snapshot `sha256:1567392b…`, runtime-v1 `sha256:f04d50ed…`, manifest `2db0287d…`, artifact `6b2fdb4a…` (244,176,059 bytes, under the 256 MiB ceiling).
+
 ### Added
 
 - `clinpgx-link data build`: a reproducible, offline data-release builder in the repository, replacing the out-of-repo scripts that produced `data-clinpgx-core-cfde21bfec473b35`. It downloads the 15 core archives (or reuses a frozen acquisition), binds the owner authorization from `release/data-authorization.json` to the exact upstream `LICENSE.txt` digest, and fails loudly on header drift in a profiled member, an exceeded size ceiling, tampered archive bytes, or a credential-shaped value. It emits the four assets (`clinpgx-core.tar.zst`, `data-release-manifest.json`, `validation-report.json`, `SHA256SUMS`). `make data-release` runs it locally; the manually dispatched `data-release.yml` workflow publishes the assets behind the `release` environment with build-provenance attestations.

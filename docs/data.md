@@ -19,18 +19,20 @@ strict source attribution and integrity.
 ## Immutable ClinPGx Core Release
 
 The production snapshot is distributed as the immutable GitHub release
-`data-clinpgx-core-cfde21bfec473b35`. It contains 15 ClinPGx datasets, 453,102 records,
-713 source members, and 2,513,400 memberships under database schema `1.0.0`. Its source
-manifest digest is `94d032c42d43bbc742f4278a5a524b3026515e749d9d169d45387b9d7721ddf1`;
+`data-clinpgx-core-d91c0c4082f14706`. It contains 15 ClinPGx datasets, 624,516 records,
+714 source members, and 3,179,953 memberships under database schema `1.0.0`. Its source
+manifest digest is `88d6d19c4acd88689139b35a09959a154ccca0e4eabf01bc94aabd2260980e4a`;
 the published `clinpgx-core.tar.zst` digest is
-`481f30612a1711683d52faea535a29327a88374f12b907d4c942cbefd2c8246b`, and the published
+`6b2fdb4a6b4a975de8c7cd58c17a99c5e96c8bc42c088c2393c5b037a6431446`, and the published
 `data-release-manifest.json` digest is
-`80e22f9ace76ff136129c8eb5cc67fb1454c291ee2365d7e797e22d2da2845e7`. The release also
-publishes `validation-report.json`. The separate local `SHA256SUMS` file is build evidence;
-it is not a release asset or an installation prerequisite.
+`2db0287d6edf47368fd5833670026cd1264e80f5d23ce82c5dfc262406e5a351`. The release also
+publishes `validation-report.json` and `SHA256SUMS`; every asset carries a GitHub
+build-provenance attestation from `data-release.yml`. `SHA256SUMS` is a convenience, not an
+installation prerequisite: installation trusts only the independently pinned digests.
+It supersedes `data-clinpgx-core-cfde21bfec473b35` (453,102 records, archives of 2026-09-05).
 
 The release preserves the source archives' notices and records the publisher-policy
-discrepancy. The human owner's authorization covers distribution of this exact bundle only;
+discrepancy. The owner's 2026-11-12 authorization covers distribution of this new bundle;
 it does not change the underlying source-license classification. Use the native offline
 installer and independently pinned manifest/artifact digests described in
 [`deployment.md`](deployment.md#production-data-contract). The application and bundle
@@ -62,7 +64,7 @@ upstream notice stops the build until a new authorization is reviewed. Authoriza
 | Date | Reviewer | Scope |
 |---|---|---|
 | 2026-10-04 | Human user (Codex thread `01a101a5-1039-7ac3-9724-36bfcdbe21be`) | Exact bundle `data-clinpgx-core-cfde21bfec473b35` |
-| 2026-11-12 | Repository owner (operator decision) | A new core bundle built from the archives current on 2026-11-12 (notice `7156ee5b…`) |
+| 2026-11-12 | Repository owner (operator decision) | A new core bundle built from the archives current on 2026-11-12 (notice `7156ee5b…`), published as `data-clinpgx-core-d91c0c4082f14706` |
 
 ## Response Modes
 
