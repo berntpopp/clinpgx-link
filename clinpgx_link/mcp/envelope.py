@@ -162,7 +162,8 @@ def error_result(
         "success": False,
         "error_code": code,
         "message": _MESSAGES[code],
-        "retryable": error.retryable,
+        # A missing local snapshot is deployment state; retrying the same call cannot succeed.
+        "retryable": error.retryable and error.subtype != "dataset_unavailable",
         "recovery_action": "inspect_capabilities",
         "fallback_tool": "get_server_capabilities",
         "fallback_args": {},
@@ -238,6 +239,25 @@ def error_result(
         ),
         "numeric_detail_id_required": (
             "This detail route requires the internal numeric id returned by supported discovery.",
+            None,
+        ),
+        "dataset_unavailable": (
+            "No local ClinPGx snapshot is installed in this deployment, so source='download' "
+            "(and auto routing to it) cannot succeed and retrying will not help. Use a live "
+            "route: source='api' with filters from recovery.valid_choices or "
+            "get_server_capabilities, or get_record source='website' (e.g. haplotype star "
+            "alleles).",
+            None,
+        ),
+        "accession_in_name_filter": (
+            "This filter matches names or symbols only; a ClinPGx PA accession would silently "
+            "match nothing. Pass the name/symbol (accession-backed keys are listed per entity "
+            "as accession_filter_mapping in get_server_capabilities).",
+            None,
+        ),
+        "accession_required": (
+            "This argument takes a ClinPGx PA accession, not a name or symbol; resolve it first "
+            "(search_records, or an accession inside a returned record) and pass the PA id.",
             None,
         ),
         "unsupported_related_mode": (

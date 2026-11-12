@@ -149,7 +149,12 @@ class SourcePresenter:
         if unprofiled:
             row.update(
                 deferred_content=True,
-                recovery_action="read_original_source_structure",
+                # Retained, not missing: full mode inlines rows that fit the 12 kB row bound.
+                recovery_action=(
+                    "retry_with_response_mode_full"
+                    if response_mode != "full" and len(raw) <= 12000
+                    else "read_original_source_structure"
+                ),
                 fallback_tool="get_source_content",
                 fallback_args={
                     "content_ref": reference,

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from types import MappingProxyType
 from typing import Any, Literal, NamedTuple
@@ -12,19 +13,20 @@ RelationshipMode = Literal["connected_object", "pair"]
 
 CONNECTED_OBJECT_OPERATION = "GET /report/connectedObjects/{id}/{type}"
 PAIR_OPERATION = "GET /report/pair/{firstObjId}/{secondObjId}/{resultType}"
+# The captured OpenAPI enum also lists literatureAnnotation, vip and vipVariant, but the live
+# route rejects them for every pair ("invalid ObjectType enum value", probed 2026-11-12).
 PAIR_RESULT_TYPE_MAPPING: Mapping[str, str] = MappingProxyType(
     {
         "guideline_annotation": "guidelineAnnotation",
         "label": "label",
-        "literature_annotation": "literatureAnnotation",
         "multilink_annotation": "multilinkAnnotation",
         "pathway": "pathway",
         "summary_annotation": "summaryAnnotation",
         "variant_annotation": "variantAnnotation",
-        "vip": "vip",
-        "vip_variant": "vipVariant",
     }
 )
+# Installed-snapshot joins (source='download'); see DatasetRepository.related.
+DOWNLOAD_RESULT_TYPES = ("allele", "evidence", "literature", "relationship")
 RELATIONSHIP_OBJECT_TYPES = frozenset({"Gene", "Chemical", "Disease", "Variant"})
 
 
@@ -123,6 +125,7 @@ def relationship_recovery_choices() -> dict[str, list[str]]:
     """Return defensive closed choices for invalid mode recovery."""
     return {
         "connected_object_result_type": ["relationship"],
+        "download_result_type": list(DOWNLOAD_RESULT_TYPES),
         "mode": ["connected_object", "pair"],
         "pair_result_type": list(PAIR_RESULT_TYPE_MAPPING),
     }
@@ -185,11 +188,47 @@ def relationship_next_commands(value: Any, result_type: str) -> list[dict[str, A
     return None
 
 
+_PA_ID = re.compile(r"PA[0-9]{1,32}")
+
+
+def pair_guideline_commands(
+    record_id: str, other_id: str | None, result_type: str, types: tuple[str, str]
+) -> list[dict[str, Any]]:
+    """The live pair report can omit CPIC/DPWG; point at the complete accession search."""
+    if (
+        result_type != "guideline_annotation"
+        or other_id is None
+        or not (_PA_ID.fullmatch(record_id) and _PA_ID.fullmatch(other_id))
+    ):
+        return []
+    if types == ("Chemical", "Gene"):
+        record_id, other_id = other_id, record_id
+    elif types != ("Gene", "Chemical"):
+        return []
+    return [
+        {
+            "tool": "search_records",
+            "arguments": {
+                "entity_type": "guideline_annotation",
+                "filters": {"gene": record_id, "chemical": other_id},
+                "source": "api",
+            },
+            "description": "Complete gene+drug guideline list; the pair report can omit some.",
+        }
+    ]
+
+
 def relationship_capabilities_payload() -> dict[str, Any]:
     """Publish bounded relationship grammar and syntax-only examples."""
     return {
         "identifier_workflow": (
             "Resolve gene and chemical names with search_records, then reuse returned IDs."
+        ),
+        "gene_chemical_guideline_workflow": (
+            "Use search_records(entity_type='guideline_annotation', filters={'gene': gene PA "
+            "accession, 'chemical': chemical PA accession}, source='api'). The live pair "
+            "guidelineAnnotation report omitted CPIC and DPWG for CYP2C19/clopidogrel when "
+            "probed 2026-11-12, so an empty or short pair result is not proof of absence."
         ),
         "guideline_url_workflow": (
             "Guideline annotations from pair reports have publisher URLs and web representations "
@@ -227,12 +266,14 @@ def relationship_capabilities_payload() -> dict[str, Any]:
 
 
 __all__ = [
+    "DOWNLOAD_RESULT_TYPES",
     "PAIR_RESULT_TYPE_MAPPING",
     "RELATIONSHIP_OBJECT_TYPES",
     "RelationshipRoute",
     "connected_object_arguments",
     "guideline_website_recommendation",
     "pair_arguments",
+    "pair_guideline_commands",
     "relationship_capabilities_payload",
     "relationship_next_commands",
     "relationship_recovery_choices",

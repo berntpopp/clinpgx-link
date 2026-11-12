@@ -179,7 +179,7 @@ def create_mcp(
             Field(description="Response detail mode; full expands shared API-row defaults."),
         ] = "compact",
     ) -> ToolResult:
-        """Discover tools and source limits; non-full modes use api_contract_defaults, while full expands every API row."""
+        """ClinPGx calling contract and server capabilities: valid search filter keys and values per entity_type, source routing (api/website/download), relationship modes and result types, response_mode rules, numeric detail ids. Call when unsure how to ask or when an error names it; non-full modes use api_contract_defaults, full expands every API row."""
         names = [tool.name for tool in await server.list_tools()]
         now = datetime.now(UTC).isoformat()
         source = SourceInfo(
@@ -204,6 +204,12 @@ def create_mcp(
                 "search_contracts": search_contracts,
                 "relationship_contract": relationship_capabilities_payload(),
                 "detail_identifier_contracts": detail_identifier_capabilities(api_filter_choices),
+                "response_mode_contract": (
+                    "minimal|compact|standard project verified fields per family; rows of "
+                    "families without a verified profile are deferred_content (retrieved, "
+                    "withheld). full inlines rows up to 12 kB; larger rows stay readable "
+                    "through get_source_content."
+                ),
             },
             source=source,
         )
@@ -248,7 +254,7 @@ def create_mcp(
             ),
         ] = "compact",
     ) -> ToolResult:
-        """Read retained source content in digest-bound, progressing chunks."""
+        """Read retained ClinPGx source content (a deferred_content row's fallback_args, or any content_ref) by JSON pointer in digest-bound, progressing chunks."""
         began = time.monotonic()
         stored: StoredContent | None = None
         try:

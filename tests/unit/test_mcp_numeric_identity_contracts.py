@@ -310,6 +310,46 @@ async def test_summary_annotation_profile_is_active_and_invalid_id_falls_back(tm
 
 
 @pytest.mark.asyncio
+async def test_live_shaped_summary_annotation_rows_are_profiled_not_deferred(tmp_path):
+    # Live /data/summaryAnnotation rows carry allelePhenotypes as a list (captured 2026-11-12).
+    row = {
+        "id": 1043858794,
+        "accessionId": "PA166134797",
+        "name": "CYP2C19*1, CYP2C19*2; clopidogrel (level 1A Metabolism/PK)",
+        "levelOfEvidence": {"term": "1A"},
+        "location": {"genes": [{"symbol": "CYP2C19"}]},
+        "relatedChemicals": [{"id": "PA449053", "name": "clopidogrel"}],
+        "allelePhenotypes": [{"allele": "*2", "phenotype": "decreased activation"}],
+    }
+
+    def handle(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"status": "success", "data": [row]})
+
+    store, upstream, service = _api(tmp_path, handle)
+    try:
+        async with Client(create_mcp(content_store=store, api_service=service)) as client:
+            for mode in ("compact", "standard"):
+                result = await client.call_tool(
+                    "search_records",
+                    {
+                        "entity_type": "summary_annotation",
+                        "filters": {"chemical": "clopidogrel"},
+                        "source": "api",
+                        "response_mode": mode,
+                    },
+                )
+                (shaped,) = result.structured_content["results"]
+                assert shaped["source_profile"] == "summary_annotation"
+                assert "deferred_content" not in shaped
+                data = json.loads(shaped["data"]["text"])
+                assert data["name"] == row["name"]
+                assert data["accessionId"] == "PA166134797"
+                assert data["levelOfEvidence"] == {"term": "1A"}
+    finally:
+        await upstream.close()
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("entity_type", ["literature", "summary_annotation", "variant_annotation"])
 async def test_numeric_detail_route_rejects_accession_with_closed_nonreflecting_guidance(
     tmp_path, entity_type

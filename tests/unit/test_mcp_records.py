@@ -983,6 +983,7 @@ async def test_recovery_hides_malicious_identifiers_exception_payloads_and_filte
                 "chemical",
                 "gene",
                 "id",
+                "level_of_evidence",
                 "name",
                 "resource_id",
                 "source",
@@ -1162,5 +1163,83 @@ async def test_get_record_website_guideline_annotation_profiled_in_compact_mode(
                 data_val["publisher_url"]
                 == "https://cpicpgx.org/guidelines/guideline-for-clopidogrel-and-cyp2c19/"
             )
+    finally:
+        store.close()
+
+
+@pytest.mark.asyncio
+async def test_get_record_website_haplotype_projects_star_allele_definition(tmp_path):
+    # Live /site/haplotype payload nests the star allele under data.allele (captured 2026-11-12).
+    variant = {"objCls": "Variant", "id": "PA166154053", "symbol": "rs4244285", "locations": []}
+    payload = {
+        "allele": {
+            "objCls": "StarAllele",
+            "id": "PA165980635",
+            "symbol": "CYP2C19*2",
+            "name": "*2",
+            "hgvs": "NG_008384.3:g.24179G>A",
+            "functionTerm": {"term": "No function", "resource": "Allele Function"},
+            "alleles": [{"id": 1, "allele": "A", "variant": variant}],
+        },
+        "alleleFunctionSource": "CPIC",
+        "isCpic": True,
+        "description": {"html": "<p>" + "x" * 20000 + "</p>"},
+    }
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/v1/site/haplotype/PA165980635"
+        return httpx.Response(200, json={"status": "success", "data": payload})
+
+    store = ContentStore(tmp_path / "content.sqlite")
+    upstream = ClinPGxClient(
+        Settings(_env_file=None, cache_root=tmp_path),
+        httpx.AsyncClient(transport=httpx.MockTransport(handle)),
+        store,
+    )
+    try:
+        async with Client(_server(store, website=WebsiteClient(upstream))) as client:
+            res = await client.call_tool(
+                "get_record",
+                {"entity_type": "haplotype", "record_id": "PA165980635", "source": "website"},
+            )
+            result = res.structured_content["result"]
+            assert result["source_profile"] == "haplotype"
+            assert result.get("deferred_content") is not True
+            data = json.loads(result["data"]["text"])
+            assert data["id"] == "PA165980635"
+            assert data["symbol"] == "CYP2C19*2"
+            assert data["function"] == "No function"
+            assert data["alleleFunctionSource"] == "CPIC"
+            assert data["defining_variants"] == [{"variant": "rs4244285", "allele": "A"}]
+    finally:
+        store.close()
+
+
+@pytest.mark.asyncio
+async def test_website_detail_rejects_symbol_record_id_before_upstream(tmp_path):
+    calls: list[httpx.Request] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        return httpx.Response(500)
+
+    store = ContentStore(tmp_path / "content.sqlite")
+    upstream = ClinPGxClient(
+        Settings(_env_file=None, cache_root=tmp_path),
+        httpx.AsyncClient(transport=httpx.MockTransport(handle)),
+        store,
+    )
+    try:
+        async with Client(_server(store, website=WebsiteClient(upstream))) as client:
+            res = await client.call_tool(
+                "get_record",
+                {"entity_type": "haplotype", "record_id": "CYP2C19*2", "source": "website"},
+                raise_on_error=False,
+            )
+            payload = res.structured_content
+            assert payload["field"] == "record_id"
+            assert payload["subtype"] == "accession_required"
+            assert "CYP2C19*2" not in json.dumps(payload)
+            assert calls == []
     finally:
         store.close()

@@ -205,3 +205,21 @@ def test_pointer_fences_count_toward_whole_page_budget(source_store):
     )
     assert 0 < len(result["results"]) < 100
     assert result["_meta"]["pagination"]["has_more"] is True
+
+
+def test_unprofiled_rows_name_full_mode_as_recovery_only_when_it_would_inline(source_store):
+    from clinpgx_link.mcp.shaping import SourcePresenter
+
+    original = response(source_store, [{"objCls": "Thing"}, {"objCls": "Big", "x": "y" * 13000}])
+    original.details["source_pointer"] = "/data"
+    presenter = SourcePresenter(source_store)
+    small, big = presenter.present(
+        original, selectors={}, response_mode="compact", profile="identity"
+    ).structured_content["results"]
+    assert small["record_profile_status"] == "unprofiled"
+    assert small["recovery_action"] == "retry_with_response_mode_full"
+    assert big["recovery_action"] == "read_original_source_structure"
+    full = presenter.present(
+        original, selectors={}, response_mode="full", profile="identity"
+    ).structured_content["results"]
+    assert json.loads(full[0]["data"]["text"]) == {"objCls": "Thing"}

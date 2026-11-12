@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-11-12
+
+### Fixed
+
+- Silent false negative: a ClinPGx `PA` accession passed to a name-mapped filter (e.g. `summary_annotation` `chemical=PA449053` -> `relatedChemicals.name`) returned `success: true` with zero rows. Accessions now route to the captured accession field (`relatedChemicals.accessionId`, `relatedGenes.accessionId`, `accessionId`) where one exists, and are otherwise rejected with `accession_in_name_filter`; names sent to accession-only fields are rejected with `accession_required` (#1, #3).
+- `summary_annotation` rows were all `deferred_content` in every non-`full` mode because the profile typed `allelePhenotypes` as an object; live rows carry a list. Compact rows now also carry the annotation `name` and its `PA` `accessionId` (#1, #3).
+- `get_related_records.result_type` no longer advertises `literature_annotation`, `vip` and `vip_variant`: the live pair report rejects them for every pair even though the captured OpenAPI enum lists them (#1, #3).
+- `dataset_unavailable` (no local snapshot) is no longer `retryable: true`, explains the live alternatives, and an `auto` search that falls through to the missing snapshot names the entity's API filters (#1, #3).
+- `get_record(entity_type="haplotype", source="website")` returns the star-allele definition (symbol, function, function source, defining rsIDs) instead of a deferred envelope; website detail routes reject non-`PA` record ids up front (#1, #3).
+
+### Added
+
+- `search_records` `chemical` accepts `name` as an alias; `guideline_annotation` accepts `gene`/`chemical` PA accessions (returns all four CYP2C19/clopidogrel guidelines where the pair report currently returns two); `summary_annotation` accepts `level_of_evidence` (`1A`..`4`, upstream `levelOfEvidence.term`) (#1, #2, #3).
+- A `guideline_annotation` pair result now leads its `next_commands` with the complete accession search, because the live pair report currently omits CPIC/DPWG for CYP2C19/clopidogrel (#1).
+- Self-describing contract: per-entity filter keys in the `filters` schema, the relationship mode table in `result_type`, `response_mode` deferral semantics, `accession_filter_mapping` / `response_mode_contract` / `gene_chemical_guideline_workflow` in capabilities, and search-friendly descriptions for `get_server_capabilities` and `get_source_content`. Unprofiled rows that `full` would inline carry `recovery_action: retry_with_response_mode_full` (#3).
+
 ## [0.1.6] - 2026-11-11
 
 ### Security

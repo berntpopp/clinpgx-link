@@ -318,10 +318,9 @@ async def test_declared_source_value_accepts_case_insensitive_spelling(tmp_path)
     ("entity_type", "filters", "choices"),
     [
         ("gene", {"name": "CYP2C19"}, ["gene", "id"]),
-        ("chemical", {"name": "clopidogrel"}, ["chemical", "id"]),
+        ("chemical", {"gene": "CYP2C19"}, ["chemical", "id", "name"]),
         ("variant", {"name": "rs4244285"}, ["variant"]),
-        ("guideline_annotation", {"gene": "CYP2C19", "chemical": "clopidogrel"}, ["source"]),
-        ("guideline_annotation", {"gene": "TPMT"}, ["source"]),
+        ("guideline_annotation", {"variant": "rs4244285"}, ["chemical", "gene", "source"]),
     ],
 )
 async def test_known_api_filter_mismatches_have_fixed_nonexecuting_recovery(
@@ -378,12 +377,15 @@ async def test_guideline_name_filter_recovery_publishes_resolution_pair_workflow
             assert [step["tool"] for step in workflow] == [
                 "search_records",
                 "search_records",
-                "get_related_records",
+                "search_records",
             ]
             assert workflow[0]["arguments_template"]["filters"] == {"gene": "{gene}"}
             assert workflow[1]["arguments_template"]["filters"] == {"chemical": "{chemical}"}
-            assert workflow[2]["arguments_template"]["record_id"] == "{returned_gene_id}"
-            assert workflow[2]["arguments_template"]["other_id"] == "{returned_chemical_id}"
+            # The live pair report can omit CPIC/DPWG; the accession search returns all four.
+            assert workflow[2]["arguments_template"]["filters"] == {
+                "gene": "{returned_gene_id}",
+                "chemical": "{returned_chemical_id}",
+            }
             assert "PA124" not in json.dumps(workflow)
             assert "PA449053" not in json.dumps(workflow)
     finally:
@@ -400,8 +402,13 @@ async def test_auto_reports_api_filter_mismatch_when_no_local_membership_exists(
                 {"entity_type": "guideline_annotation", "filters": {"gene": "TPMT"}},
                 raise_on_error=False,
             )
-            assert rejected.structured_content["subtype"] == "unsupported_api_filters"
-            assert rejected.structured_content["recovery"]["valid_choices"]["filters"] == ["source"]
+            # guideline_annotation gene/chemical filters are accession-only upstream.
+            assert rejected.structured_content["subtype"] == "accession_required"
+            assert rejected.structured_content["recovery"]["valid_choices"]["filters"] == [
+                "chemical",
+                "gene",
+                "source",
+            ]
     finally:
         store.close()
 
@@ -507,3 +514,126 @@ async def test_record_tool_schema_budget_remains_bounded(tmp_path):
         assert (sum(map(len, encoded)) + 3) // 4 <= 10_000
     finally:
         store.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("entity_type", "filters", "path", "params"),
+    [
+        (
+            "summary_annotation",
+            {"chemical": "PA449053"},
+            "/v1/data/summaryAnnotation",
+            {"relatedChemicals.accessionId": "PA449053"},
+        ),
+        ("chemical", {"chemical": "PA449053"}, "/v1/data/chemical", {"accessionId": "PA449053"}),
+        ("chemical", {"name": "clopidogrel"}, "/v1/data/chemical", {"name": "clopidogrel"}),
+        ("gene", {"gene": "PA124"}, "/v1/data/gene", {"accessionId": "PA124"}),
+        (
+            "label",
+            {"gene": "PA124", "chemical": "clopidogrel"},
+            "/v1/data/label",
+            {"relatedGenes.accessionId": "PA124", "relatedChemicals.name": "clopidogrel"},
+        ),
+        (
+            "guideline_annotation",
+            {"gene": "PA124", "chemical": "PA449053"},
+            "/v1/data/guidelineAnnotation",
+            {"relatedGenes.accessionId": "PA124", "relatedChemicals.accessionId": "PA449053"},
+        ),
+        (
+            "summary_annotation",
+            {"chemical": "clopidogrel", "level_of_evidence": "1a"},
+            "/v1/data/summaryAnnotation",
+            {"relatedChemicals.name": "clopidogrel", "levelOfEvidence.term": "1A"},
+        ),
+    ],
+)
+async def test_accessions_route_to_accession_fields_not_name_fields(
+    tmp_path, entity_type, filters, path, params
+):
+    calls: list[httpx.Request] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        return httpx.Response(200, json={"status": "success", "data": []})
+
+    store, upstream, service = _api(tmp_path, handle)
+    try:
+        async with Client(create_mcp(content_store=store, api_service=service)) as client:
+            result = await client.call_tool(
+                "search_records", {"entity_type": entity_type, "filters": filters}
+            )
+            assert result.structured_content["success"] is True
+            assert calls[0].url.path == path
+            assert dict(calls[0].url.params) == {**params, "view": "base"}
+    finally:
+        await upstream.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("entity_type", "filters", "subtype"),
+    [
+        # Name/symbol-only upstream fields would silently match nothing for an accession.
+        ("summary_annotation", {"gene": "PA124"}, "accession_in_name_filter"),
+        ("variant", {"variant": "PA166154156"}, "accession_in_name_filter"),
+        ("variant_annotation", {"variant": "PA166154156"}, "accession_in_name_filter"),
+        # Accession-only upstream fields would silently match nothing for a name.
+        ("guideline_annotation", {"chemical": "clopidogrel"}, "accession_required"),
+        ("chemical", {"id": "clopidogrel"}, "accession_required"),
+        ("summary_annotation", {"level_of_evidence": "5"}, "unsupported_api_filter_value"),
+    ],
+)
+async def test_identifier_form_mismatch_is_rejected_not_silently_empty(
+    tmp_path, entity_type, filters, subtype
+):
+    calls: list[httpx.Request] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        return httpx.Response(200, json={"status": "success", "data": []})
+
+    store, upstream, service = _api(tmp_path, handle)
+    try:
+        async with Client(create_mcp(content_store=store, api_service=service)) as client:
+            rejected = await client.call_tool(
+                "search_records",
+                {"entity_type": entity_type, "filters": filters, "source": "api"},
+                raise_on_error=False,
+            )
+            payload = rejected.structured_content
+            assert rejected.is_error
+            assert payload["error_code"] == "invalid_input"
+            assert payload["subtype"] == subtype
+            assert payload["field"] == "filters"
+            assert payload["recovery"]["valid_choices"]["filters"]
+            assert calls == []
+    finally:
+        await upstream.close()
+
+
+@pytest.mark.asyncio
+async def test_auto_without_snapshot_is_not_retryable_and_names_api_filters(tmp_path):
+    store = ContentStore(tmp_path / "content.sqlite")
+    try:
+        async with Client(create_mcp(content_store=store)) as client:
+            rejected = await client.call_tool(
+                "search_records",
+                {"entity_type": "gene", "filters": {"name": "cytochrome"}},
+                raise_on_error=False,
+            )
+            payload = rejected.structured_content
+            assert payload["subtype"] == "dataset_unavailable"
+            assert payload["retryable"] is False
+            assert "source='api'" in payload["message"]
+            assert "retrying will not help" in payload["message"]
+            assert payload["recovery"]["valid_choices"]["filters"] == ["gene", "id"]
+    finally:
+        store.close()
+
+
+def test_filter_description_publishes_per_entity_api_keys():
+    description = search_contracts.FILTER_DESCRIPTION
+    for entity, contract in search_contracts.API_SEARCH_CONTRACTS.items():
+        assert f"{entity}: {'|'.join(contract.filters)}" in description

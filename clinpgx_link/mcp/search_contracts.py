@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from copy import deepcopy
 from dataclasses import dataclass
@@ -29,6 +30,8 @@ class SearchContract:
     filter_mapping: tuple[tuple[str, str], ...]
     example_filters: tuple[tuple[str, str], ...]
     filter_values: tuple[tuple[str, tuple[str, ...]], ...] = ()
+    # Upstream field a ClinPGx PA accession is routed to instead of the name/symbol field.
+    accession_mapping: tuple[tuple[str, str], ...] = ()
     semantics: str = "All supplied canonical exact filters are combined with AND semantics."
 
     @property
@@ -40,6 +43,9 @@ class SearchContract:
 
     def value_choices(self) -> dict[str, tuple[str, ...]]:
         return dict(self.filter_values)
+
+    def accession_fields(self) -> dict[str, str]:
+        return dict(self.accession_mapping)
 
     def example(self) -> dict[str, Any]:
         return {
@@ -66,13 +72,15 @@ _CONTRACT_ROWS = (
         "GET /data/gene",
         (("id", "accessionId"), ("gene", "symbol")),
         (("gene", "CYP2C19"),),
+        accession_mapping=(("gene", "accessionId"),),
     ),
     SearchContract(
         "chemical",
         "api",
         "GET /data/chemical",
-        (("id", "accessionId"), ("chemical", "name")),
+        (("id", "accessionId"), ("chemical", "name"), ("name", "name")),
         (("chemical", "clopidogrel"),),
+        accession_mapping=(("chemical", "accessionId"), ("name", "accessionId")),
     ),
     SearchContract(
         "disease",
@@ -99,7 +107,11 @@ _CONTRACT_ROWS = (
         "guideline_annotation",
         "api",
         "GET /data/guidelineAnnotation",
-        (("source", "source"),),
+        (
+            ("source", "source"),
+            ("gene", "relatedGenes.accessionId"),
+            ("chemical", "relatedChemicals.accessionId"),
+        ),
         (("source", "CPIC"),),
         (("source", ("cpic", "dpwg", "pro")),),
     ),
@@ -114,6 +126,10 @@ _CONTRACT_ROWS = (
         ),
         (("gene", "DPYD"), ("chemical", "fluorouracil")),
         (("source", ("ema", "fda", "hcsc", "pmda")),),
+        accession_mapping=(
+            ("gene", "relatedGenes.accessionId"),
+            ("chemical", "relatedChemicals.accessionId"),
+        ),
     ),
     SearchContract(
         "summary_annotation",
@@ -125,8 +141,11 @@ _CONTRACT_ROWS = (
             ("gene", "location.genes.symbol"),
             ("chemical", "relatedChemicals.name"),
             ("variant", "location.fingerprint"),
+            ("level_of_evidence", "levelOfEvidence.term"),
         ),
         (("gene", "CYP2C19"), ("chemical", "clopidogrel")),
+        (("level_of_evidence", ("1A", "1B", "2A", "2B", "3", "4")),),
+        accession_mapping=(("chemical", "relatedChemicals.accessionId"),),
     ),
     SearchContract(
         "variant_annotation",
@@ -159,10 +178,40 @@ DOWNLOAD_SEMANTICS = (
     "not a claim of row ownership or identity. Query tokens and filters are combined with AND."
 )
 FILTER_DESCRIPTION = (
-    "ANDed canonical filters (" + ", ".join(CANONICAL_FILTERS) + "); API choices vary by entity."
+    "ANDed exact filters; keys depend on entity_type. API keys: "
+    + "; ".join(f"{c.entity_type}: {'|'.join(c.filters)}" for c in _CONTRACT_ROWS)
+    + ". A PA accession is accepted by gene/chemical/name on gene, chemical and label and by "
+    "chemical on summary_annotation; guideline_annotation gene/chemical take PA accessions "
+    "only; other name/symbol keys reject PA values. level_of_evidence: 1A|1B|2A|2B|3|4. "
+    "Download keys: " + "|".join(DOWNLOAD_FILTERS) + "."
 )
 _API_CONTRACT_DEFAULT_FIELDS = ("source", "semantics", "example_purpose")
 _API_CONTRACT_DEFAULTS_SCOPE = "Every API row unless that row overrides the field."
+
+
+_ACCESSION = re.compile(r"PA[0-9]+")
+_NAME_FIELDS = frozenset({"name", "symbol", "fingerprint"})
+
+
+def _route_value_form(canonical: str, upstream: str, value: str, contract: SearchContract) -> str:
+    """Pick the upstream field that can match this value form, never a silently empty one."""
+    is_accession = _ACCESSION.fullmatch(value) is not None
+    if is_accession and canonical in contract.accession_fields():
+        return contract.accession_fields()[canonical]
+    leaf = upstream.rsplit(".", 1)[-1]
+    if is_accession and leaf in _NAME_FIELDS:
+        raise InvalidInputError(
+            "This filter matches names or symbols, not ClinPGx PA accessions.",
+            field="filters",
+            subtype="accession_in_name_filter",
+        )
+    if not is_accession and leaf == "accessionId":
+        raise InvalidInputError(
+            "This filter requires a ClinPGx PA accession.",
+            field="filters",
+            subtype="accession_required",
+        )
+    return upstream
 
 
 def api_contract(entity_type: str) -> SearchContract | None:
@@ -182,14 +231,17 @@ def api_filters(entity_type: str, filters: dict[str, str]) -> dict[str, str] | N
         upstream = mapping[canonical]
         allowed_values = value_choices.get(canonical)
         if allowed_values is not None:
-            normalized = value.lower()
-            if normalized not in allowed_values:
+            # Send the declared spelling: upstream enum matching is case-sensitive.
+            normalized = {item.lower(): item for item in allowed_values}.get(value.lower())
+            if normalized is None:
                 raise InvalidInputError(
                     "The filter value is outside the entity API contract.",
                     field="filters",
                     subtype="unsupported_api_filter_value",
                 )
             value = normalized
+        else:
+            upstream = _route_value_form(canonical, upstream, value, contract)
         previous = translated.get(upstream)
         if previous is not None and previous != value:
             raise InvalidInputError(
@@ -270,6 +322,7 @@ def capabilities_payload() -> dict[str, Any]:
                 "filters": list(contract.filters),
                 "filter_mapping": contract.translation(),
                 "filter_values": api_filter_value_choices(entity),
+                "accession_filter_mapping": contract.accession_fields(),
                 "semantics": contract.semantics,
                 "example": contract.example(),
                 "example_purpose": "Request syntax and route binding; not evidence of a match.",
