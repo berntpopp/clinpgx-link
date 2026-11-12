@@ -88,3 +88,16 @@ async def test_diagnostics_reports_pinned_snapshot_without_database_path(tmp_pat
     finally:
         repository.close()
         store.close()
+
+
+@pytest.mark.asyncio
+async def test_diagnostics_does_not_advertise_dead_response_mode(tmp_path):
+    store = ContentStore(tmp_path / "cache.sqlite")
+    try:
+        async with Client(create_mcp(content_store=store)) as client:
+            tool = next(t for t in await client.list_tools() if t.name == "get_diagnostics")
+            assert set(tool.input_schema["properties"]) == {"probe_upstream"}
+            call = await client.call_tool("get_diagnostics", {})
+            assert "response_mode" not in call.structured_content["result"]
+    finally:
+        store.close()
