@@ -7,7 +7,7 @@ import json
 import re
 from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any
 
 from fastmcp import FastMCP
 from fastmcp.tools.base import ToolResult
@@ -68,10 +68,6 @@ def register_diagnostics(
         probe_upstream: Annotated[
             bool, Field(description="Request fixed gene evidence; cached hits are identified.")
         ] = False,
-        response_mode: Annotated[
-            Literal["minimal", "compact", "standard", "full"],
-            Field(description="Response detail mode."),
-        ] = "compact",
     ) -> ToolResult:
         """Inspect source configuration and pinned data without revealing local paths or secrets."""
         try:
@@ -105,7 +101,6 @@ def register_diagnostics(
                 ),
                 "upstream_probe": probe,
                 "implementation_status": "in_progress",
-                "response_mode": response_mode,
                 "admission": admission.snapshot() if admission is not None else None,
             }
             raw = json.dumps(result, sort_keys=True, separators=(",", ":")).encode()

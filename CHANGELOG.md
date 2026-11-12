@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-11-12
+
+### Fixed
+
+- `get_diagnostics` no longer advertises `response_mode`: it only echoed the value and changed nothing, so the schema promised behaviour that did not exist. It is zero-mode like the rest of the fleet; `probe_upstream` is unchanged (router#158).
+
 ## [0.1.7] - 2026-11-12
 
 ### Fixed
