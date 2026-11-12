@@ -101,7 +101,7 @@ async def test_every_null_default_is_accepted_by_its_advertised_schema(server):
         tools = await client.list_tools()
     checked, broken = 0, []
     for tool in tools:
-        schema = tool.inputSchema
+        schema = tool.input_schema
         for name, prop in schema.get("properties", {}).items():
             if "default" in prop and prop["default"] is None:
                 checked += 1
