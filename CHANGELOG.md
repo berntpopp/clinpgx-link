@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `data-release.yml` publishes behind a dedicated `data-release` environment (owner review, `main` branch only) instead of `release`, so the `release` environment again admits only `v*.*.*` tags, as the fleet control audit requires.
+
 ## [0.1.12] - 2026-11-12
 
 ### Fixed
