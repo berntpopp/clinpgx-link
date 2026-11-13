@@ -2,7 +2,8 @@ name: Data release
 
 # Builds the ClinPGx core data bundle from the official archives with the in-repo
 # reproducible builder (`clinpgx-link data build`) and publishes the four assets as an
-# immutable, attested GitHub release. Publication waits on the `release` environment.
+# immutable, attested GitHub release. Publication waits on the `data-release` environment
+# (owner review, `main` only), so the `release` environment stays restricted to `v*.*.*` tags.
 # The owner's distribution authorization is read from release/data-authorization.json,
 # so a new authorization lands through a reviewed pull request before any dispatch.
 
@@ -81,7 +82,7 @@ jobs:
     if: github.ref == 'refs/heads/main' && needs.build.outputs.exists == 'false'
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    environment: release
+    environment: data-release
     permissions:
       contents: write
       id-token: write
