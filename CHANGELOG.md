@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- CI: re-pin the reusable container CI/release workflows to genefoundry-router v0.10.17 (`2cd86e3`), picking up the release recovery-path (v0.10.14), validate-config evidence-predicate (v0.10.16), and recovery attestation / GHCR tag-race / partial-rerun fixes (v0.10.17).
 - `data-release.yml` publishes behind a dedicated `data-release` environment (owner review, `main` branch only) instead of `release`, so the `release` environment again admits only `v*.*.*` tags, as the fleet control audit requires.
 
 ## [0.1.12] - 2026-11-12
