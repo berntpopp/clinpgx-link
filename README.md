@@ -94,7 +94,7 @@ would double-prefix to `clinpgx_clinpgx_…`, so do not add one.
 
 Required citation:
 
-> Whirl-Carrillo M, et al. Pharmacogenomics Knowledge for Personalized Medicine: 2021 Update. Clin Pharmacol Ther. 2021;110(4):883-891. doi:10.1002/cpt.2356
+> Whirl-Carrillo M, et al. An Evidence-Based Framework for Evaluating Pharmacogenomics Knowledge for Personalized Medicine. Clin Pharmacol Ther. 2021;110(3):563-572. doi:10.1002/cpt.2350
 
 More: [data.md](docs/data.md).
 
