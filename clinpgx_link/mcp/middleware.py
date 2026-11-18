@@ -13,6 +13,8 @@ from fastmcp.server.middleware import CallNext, Middleware, MiddlewareContext
 from fastmcp.tools.base import ToolResult
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import ValidationError as JSONSchemaValidationError
+from mcp.shared.exceptions import MCPError
+from mcp_types import METHOD_NOT_FOUND
 from pydantic import ValidationError
 
 from clinpgx_link.exceptions import (
@@ -139,3 +141,17 @@ class BoundaryGuard(Middleware):
             return error_result(exc)
         except Exception:
             return error_result(ClinPGxError("Boundary execution failed."))
+
+
+def install_method_not_found_guard(server: FastMCP) -> None:
+    """Strip the unknown method name SDK 2 echoes in METHOD_NOT_FOUND ``data`` (both eras)."""
+
+    async def _strip_method_not_found_data(ctx: Any, call_next: Any) -> Any:
+        try:
+            return await call_next(ctx)
+        except MCPError as exc:
+            if exc.error.code == METHOD_NOT_FOUND and exc.error.data is not None:
+                raise MCPError(code=METHOD_NOT_FOUND, message="Method not found") from None
+            raise
+
+    server._mcp_server.middleware.insert(0, _strip_method_not_found_data)

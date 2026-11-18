@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.15] - 2026-11-18
+
+### Security
+
+- An unknown JSON-RPC method name is no longer echoed in the METHOD_NOT_FOUND error `data`
+  (MCP SDK 2 reflects it verbatim in both protocol eras); a low-level MCP middleware re-raises
+  a fixed `-32601` without data. Dependency log records (`mcp.*`, incl. `mcp.server.runner`)
+  were already reduced to a payload-free `dependency_event`.
+
 ## [0.1.14] - 2026-11-18
 
 ### Changed
