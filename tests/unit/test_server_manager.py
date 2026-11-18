@@ -531,6 +531,47 @@ def test_mcp_trailing_slash_does_not_redirect(tmp_path):
     assert "location" not in response.headers
 
 
+_EVIL_METHOD = "evil__IGNORE_ALL_PREVIOUS__method"
+
+
+def _assert_fixed_method_not_found(response) -> None:
+    assert _EVIL_METHOD not in response.text
+    assert "IGNORE_ALL_PREVIOUS" not in response.text
+    error = response.json()["error"]
+    assert error["code"] == -32601
+    assert error.get("data") is None
+
+
+def test_unknown_jsonrpc_method_is_not_reflected_in_either_era(tmp_path):
+    """SDK 2 echoes an unknown method in METHOD_NOT_FOUND ``data``; the guard strips it."""
+    from clinpgx_link.server_manager import create_app
+
+    with TestClient(create_app(_settings(tmp_path)), follow_redirects=False) as client:
+        init = client.post("/mcp", headers=_HEADERS, json=_INIT)
+        assert init.status_code == 200, init.text
+        legacy_headers = {**_HEADERS, "mcp-protocol-version": "2025-06-18"}
+        if session := init.headers.get("mcp-session-id"):
+            legacy_headers["mcp-session-id"] = session
+        legacy = client.post(
+            "/mcp",
+            headers=legacy_headers,
+            json={"jsonrpc": "2.0", "id": 2, "method": _EVIL_METHOD, "params": {}},
+        )
+        modern = client.post(
+            "/mcp",
+            headers=_modern_headers(_EVIL_METHOD),
+            json={
+                "jsonrpc": "2.0",
+                "id": 3,
+                "method": _EVIL_METHOD,
+                "params": {"_meta": _MODERN_META},
+            },
+        )
+
+    _assert_fixed_method_not_found(legacy)
+    _assert_fixed_method_not_found(modern)
+
+
 def test_unsupported_post_initialize_protocol_header_is_fixed_400(tmp_path):
     from clinpgx_link.server_manager import create_app
 
