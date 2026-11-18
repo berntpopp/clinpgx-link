@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.14] - 2026-11-18
+
+### Changed
+
+- Upgrade FastMCP 3.4 → 4.2.2 and MCP SDK 1.x → 2.x (raise floors to `fastmcp>=4.2.2`, `mcp>=2.3.0`; this repo already ran 4.1.8 / 2.3.0); supports the 2026-07-28 sessionless protocol era alongside the legacy handshake.
+
 ## [0.1.13] - 2026-11-13
 
 ### Changed
