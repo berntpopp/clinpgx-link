@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.18] - 2026-11-19
+
+### Fixed
+
+- `dependency_event` log lines now keep bounded diagnostics taken before the payload is
+  erased: `logger`, `method` and `status_code` (uvicorn access, httpx), and `exception_type` (#54).
+- Every MCP tool failure logs `request_failed` with `error_code` and `exception_type`
+  (closed vocabularies, never caller values) (#54).
+
 ## [0.1.17] - 2026-11-19
 
 ### Changed

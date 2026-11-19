@@ -32,6 +32,7 @@ _SAFE_EVENT_FIELDS = frozenset(
         "event",
         "exception_type",
         "log_level",
+        "logger",
         "method",
         "operation",
         "record_count",
@@ -120,6 +121,9 @@ _STATUSES = frozenset(
 _RELEASE_TAG = re.compile(r"data-clinpgx-(?:core|extended)-[0-9a-f]{16}\Z")
 _SNAPSHOT_ID = re.compile(r"sha256:[0-9a-f]{64}\Z")
 _TIMESTAMP = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z\Z")
+_LOGGER_NAME = re.compile(r"[a-z][a-z0-9_.]{0,63}\Z")
+# Dependency loggers whose positional args are (method, ..., status_code, ...) by contract.
+_ACCESS_LOGGERS = frozenset({"httpx", "httpx2", "uvicorn.access"})
 _VERSION = re.compile(r"\d+\.\d+\.\d+(?:[+-][0-9A-Za-z.-]+)?\Z")
 _DROP = object()
 _DEPENDENCY_LOGGER_ROOTS = (
@@ -201,6 +205,8 @@ def _safe_value(key: str, value: object) -> object:
         return value if value == _SERVICE_NAME else _DROP
     if key == "timestamp":
         return value if isinstance(value, str) and _TIMESTAMP.fullmatch(value) else _DROP
+    if key == "logger":
+        return value if isinstance(value, str) and _LOGGER_NAME.fullmatch(value) else _DROP
     if key == "version":
         return value if isinstance(value, str) and _VERSION.fullmatch(value) else _DROP
     if key == "cache_hit":
@@ -264,7 +270,7 @@ class _PayloadFreeStdlibFormatter(logging.Formatter):
         level = record.levelname.lower()
         if level not in _LOG_LEVELS:
             level = "info"
-        event: dict[str, str] = {
+        event: dict[str, object] = {
             "event": "dependency_event",
             "log_level": level,
             "service": _SERVICE_NAME,
@@ -276,10 +282,30 @@ class _PayloadFreeStdlibFormatter(logging.Formatter):
         )
         if request_id is not None:
             event["request_id"] = request_id
+        for key, value in getattr(record, "dependency_fields", {}).items():
+            safe = _safe_value(key, value)
+            if safe is not _DROP:
+                event[key] = safe
         if self._log_format == "json":
             return json.dumps(event, sort_keys=True, separators=(",", ":"))
         fields = " ".join(f"{key}={value}" for key, value in sorted(event.items()))
         return fields
+
+
+def _dependency_fields(record: logging.LogRecord) -> dict[str, object]:
+    """Bounded diagnostics taken before the payload is erased (issue #54)."""
+    fields: dict[str, object] = {"logger": record.name}
+    if record.name in _ACCESS_LOGGERS and isinstance(record.args, tuple):
+        for arg in record.args:
+            if isinstance(arg, str) and arg in _METHODS:
+                fields.setdefault("method", arg)
+            elif type(arg) is int:
+                fields.setdefault("status_code", arg)
+    exc_info = record.exc_info
+    if isinstance(exc_info, tuple) and isinstance(exc_info[0], type):
+        name = exc_info[0].__name__
+        fields["exception_type"] = name if name in _EXCEPTION_TYPES else "other_exception"
+    return fields
 
 
 def _payload_free_record_factory(*args: Any, **kwargs: Any) -> logging.LogRecord:
@@ -289,6 +315,7 @@ def _payload_free_record_factory(*args: Any, **kwargs: Any) -> logging.LogRecord
         record.name == root or record.name.startswith(root + ".")
         for root in _DEPENDENCY_LOGGER_ROOTS
     ):
+        record.dependency_fields = _dependency_fields(record)
         record.msg = "dependency_event"
         record.args = ()
         record.exc_info = None
