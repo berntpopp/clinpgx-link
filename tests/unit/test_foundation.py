@@ -525,3 +525,55 @@ def test_coverage_accounts_for_every_operation_and_download_without_claiming_imp
     }
     assert {entry["family"] for entry in coverage["website_families"]} == required_families
     assert coverage["website_operation_registry"] == "api/website_operations.json"
+
+
+def test_dependency_events_keep_safe_diagnostic_fields() -> None:
+    """Issue #54: dependency lines carry logger/method/status/exception type, never payload."""
+    import logging
+
+    from clinpgx_link.logging_config import configure_logging
+
+    sentinel = "hostile-query-never-log"
+    stream = StringIO()
+    configure_logging(level="INFO", log_format="json", stream=stream)
+    logging.getLogger("uvicorn.access").info(
+        '%s - "%s %s HTTP/%s" %d', "10.0.0.1:5", "POST", f"/mcp?q={sentinel}", "1.1", 503
+    )
+    logging.getLogger("httpx").info(
+        'HTTP Request: %s %s "%s %d %s"', "GET", f"https://x/?q={sentinel}", "HTTP/1.1", 429, "Too"
+    )
+    try:
+        raise TimeoutError(sentinel)
+    except TimeoutError:
+        logging.getLogger("fastmcp.server").exception("tool failed %s", sentinel)
+
+    rendered = stream.getvalue()
+    assert sentinel not in rendered
+    access, upstream, failure = (json.loads(line) for line in rendered.splitlines()[-3:])
+    assert access["logger"] == "uvicorn.access"
+    assert (access["method"], access["status_code"]) == ("POST", 503)
+    assert (upstream["logger"], upstream["method"], upstream["status_code"]) == (
+        "httpx",
+        "GET",
+        429,
+    )
+    assert failure["logger"] == "fastmcp.server"
+    assert failure["exception_type"] == "other_exception"
+    assert failure["log_level"] == "error"
+
+
+def test_tool_error_result_logs_closed_vocabulary_cause() -> None:
+    """Issue #54: a tool failure leaves a diagnosable line, without caller values."""
+    from clinpgx_link.exceptions import UpstreamUnavailableError
+    from clinpgx_link.logging_config import configure_logging
+    from clinpgx_link.mcp.envelope import error_result
+
+    stream = StringIO()
+    configure_logging(level="INFO", log_format="json", stream=stream)
+    error_result(UpstreamUnavailableError("hostile-query-never-log"))
+
+    event = json.loads(stream.getvalue().splitlines()[-1])
+    assert event["event"] == "request_failed"
+    assert event["error_code"] == "upstream_unavailable"
+    assert event["exception_type"] == "UpstreamUnavailableError"
+    assert "hostile-query-never-log" not in stream.getvalue()

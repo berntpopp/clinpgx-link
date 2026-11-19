@@ -18,6 +18,7 @@ from clinpgx_link.exceptions import (
     ClinPGxError,
     ResponseTooLargeError,
 )
+from clinpgx_link.logging_config import get_server_logger
 from clinpgx_link.mcp.recovery import RecoveryPlan, recovery_payload
 from clinpgx_link.mcp.search_contracts import api_filter_choices
 from clinpgx_link.mcp.untrusted_content import UntrustedText, enforce_limits, fence_text
@@ -161,6 +162,14 @@ def error_result(
 ) -> ToolResult:
     """Do not reflect exception text, foreign exception names or caller values."""
     code = error.error_code if error.error_code in _MESSAGES else "internal"
+    # Every tool failure funnels here; log the closed-vocabulary cause (issue #54).
+    get_server_logger().warning(
+        "request_failed",
+        status="failed",
+        source="mcp",
+        error_code=code,
+        exception_type=type(error).__name__,
+    )
     result: dict[str, Any] = {
         "success": False,
         "error_code": code,
