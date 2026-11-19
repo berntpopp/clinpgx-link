@@ -84,6 +84,7 @@ async def test_record_tool_definitions_describe_every_argument_within_budget(tmp
                 <= 4800
             )
         assert "membership" in tools["search_records"].description
+        assert "Not drug-drug interactions." in tools["search_records"].description
         related = tools["get_related_records"].parameters["properties"]
         assert related["result_type"]["examples"] == ["relationship"]
         assert "connected-object" in related["other_type"]["description"]
