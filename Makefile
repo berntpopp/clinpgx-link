@@ -31,7 +31,7 @@ test:
 	uv run pytest
 
 test-fast:
-	uv run pytest tests/unit -m "not slow and not integration" -q
+	uv run pytest tests/unit tests/conformance -m "not slow and not integration" -q
 
 test-foundation:
 	uv run pytest tests/unit/test_foundation.py -q
