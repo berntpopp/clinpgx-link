@@ -103,7 +103,7 @@ def register_dataset_record_tools(
             ),
         ] = None,
     ) -> ToolResult:
-        """Search indexed rows within an installed snapshot dataset. Rows include member_sha256."""
+        """Search rows of an installed ClinPGx/PharmGKB snapshot dataset (e.g. clinical annotations, drug labels, CPIC alleles, guidelines); returns matching rows with record_id and member_sha256."""
         began = time.monotonic()
         try:
             selected_field_names = validate_include_fields(include_fields)

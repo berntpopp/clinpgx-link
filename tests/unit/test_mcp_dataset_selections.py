@@ -242,6 +242,8 @@ async def test_search_field_selection_is_ordered_and_bound_into_cursor(tmp_path)
                 "/fields/Symbol",
             ]
             assert "fields" not in payload["results"][0]
+            # Contract truth: the search_dataset description promises these on every row.
+            assert {"record_id", "member_sha256"} <= payload["results"][0].keys()
             assert payload["_meta"]["pagination"]["total_count"] == 2
             cursor = payload["_meta"]["pagination"]["next_cursor"]
 

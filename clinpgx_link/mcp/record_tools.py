@@ -313,7 +313,7 @@ def register_record_tools(
         pointers: PointersArg = None,
         response_mode: ModeArg = "compact",
     ) -> ToolResult:
-        """Get one exact ClinPGx entity without changing source. source='website' serves guideline URLs and haplotype star-allele definitions (function, defining rsIDs); numeric-id families (summary/variant annotation, literature) take the decimal id from search."""
+        """Get one ClinPGx record by exact ID (gene, drug, variant, haplotype, drug label, guideline, or summary/variant annotation) without changing source. source='website' serves guideline URLs and haplotype star-allele definitions (function, defining rsIDs); numeric-id families (summary/variant annotation, literature) take the decimal id from search."""
         began = time.monotonic()
         response: SourceResponse | None = None
         recovery: recovery_help.RecoveryPlan | None = None
@@ -504,7 +504,7 @@ def register_record_tools(
         response_mode: ModeArg = "compact",
         shape: ShapeArg = None,
     ) -> ToolResult:
-        """Records linked to known ClinPGx IDs: gene+drug guideline, label, summary or variant annotations (pair mode, other_id), or all objects connected to one ID (relationship). See result_type for modes. For gene+drug guidelines prefer search_records(entity_type='guideline_annotation', filters={gene, chemical: PA accessions}); the live pair report can omit CPIC/DPWG. Guideline URLs: get_record(source='website')."""
+        """Get records linked to known ClinPGx IDs: gene+drug guideline, label, summary or variant annotations (pair mode, other_id), or all objects connected to one ID (relationship). See result_type for modes. For gene+drug guidelines prefer search_records(entity_type='guideline_annotation', filters={gene, chemical: PA accessions}); the live pair report can omit CPIC/DPWG. Guideline URLs: get_record(source='website')."""
         began = time.monotonic()
         response: SourceResponse | None = None
         recovery: recovery_help.RecoveryPlan | None = None

@@ -294,7 +294,7 @@ wheels = [
 
 [[package]]
 name = "clinpgx-link"
-version = "0.1.15"
+version = "0.1.16"
 source = { editable = "." }
 dependencies = [
     { name = "asgi-correlation-id" },
