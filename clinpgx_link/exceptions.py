@@ -53,6 +53,7 @@ PUBLIC_ERROR_SUBTYPES: frozenset[str] = frozenset(
         "manifest_invalid",
         "membership_profile_mismatch",
         "missing_criteria",
+        "multiple_star_alleles",
         "numeric_detail_id_required",
         "operation_unavailable",
         "pointer_selection_invalid",

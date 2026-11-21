@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.20] - 2026-11-21
+
+### Fixed
+
+- Allele star-allele queries match the allele case-insensitively (`TPMT*3A` finds the source's
+  `*3a`) and still exactly (`*1` never matches `*10`). A diplotype (`*1/*10`) matches in either
+  order, and extra words are matched as text (#57).
+- An allele query naming several star alleles (`*1 *10`) returns `invalid_input`
+  (`multiple_star_alleles`) with one ready `search_records` call per allele in `next_commands`.
+
 ## [0.1.19] - 2026-11-21
 
 ### Fixed

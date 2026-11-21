@@ -520,6 +520,8 @@ _STAR_ALLELES = (
     b"900000001\t*10\tCYP2D6 *10 is assigned decreased function.\tDecreased function\n"
     b"900000002\t*1\tCYP2D6 *1 is assigned normal function.\tNormal function\n"
     b"900000003\t*10\tCYP2C9 *10 is assigned uncertain function.\tUncertain function\n"
+    b"900000004\t*3a\tTPMT *3a is assigned no function.\tNo function\n"
+    b"900000005\t*1/*10\tCYP2D6 *1/*10 is an intermediate diplotype.\tDiplotype\n"
 )
 
 
@@ -531,6 +533,11 @@ _STAR_ALLELES = (
         ("CYP2D6*1", ["Normal function"]),
         ("*10", ["Decreased function", "Uncertain function"]),
         ("TPMT*10", []),
+        ("TPMT*3A", ["No function"]),
+        ("cyp2d6*10", ["Decreased function"]),
+        ("CYP2D6*1/*10", ["Diplotype"]),
+        ("*10/*1", ["Diplotype"]),
+        ("CYP2D6*10 decreased", ["Decreased function"]),
     ],
 )
 def test_allele_query_reads_star_allele_name_literally(
@@ -541,6 +548,18 @@ def test_allele_query_reads_star_allele_name_literally(
     found = repository.search_entities("allele", query=query)
 
     assert [row["fields"]["Allele Function"] for row in found.value] == expected
+
+
+def test_allele_query_with_several_star_alleles_names_each_allele(tmp_path: Path) -> None:
+    from clinpgx_link.data.star_alleles import StarAlleleQueryError
+
+    repository, _ = _repository(tmp_path, alleles=_STAR_ALLELES)
+    with pytest.raises(StarAlleleQueryError) as failure:
+        repository.search_entities("allele", query="CYP2D6*1 CYP2D6*10 clopidogrel")
+
+    assert failure.value.field == "query"
+    assert failure.value.subtype == "multiple_star_alleles"
+    assert failure.value.alleles == ("CYP2D6*1", "CYP2D6*10")
 
 
 def test_non_allele_entity_query_still_rejects_ascii_star(tmp_path: Path) -> None:

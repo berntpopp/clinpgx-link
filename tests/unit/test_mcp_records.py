@@ -1244,3 +1244,33 @@ async def test_website_detail_rejects_symbol_record_id_before_upstream(tmp_path)
             assert calls == []
     finally:
         store.close()
+
+
+@pytest.mark.asyncio
+async def test_several_star_alleles_return_one_ready_search_per_allele(tmp_path):
+    from tests.unit.test_repository import _STAR_ALLELES
+
+    repository, _ = _repository(tmp_path, alleles=_STAR_ALLELES)
+    store = ContentStore(tmp_path / "content.sqlite")
+    try:
+        async with Client(_server(store, repository=repository)) as client:
+            rejected = await client.call_tool(
+                "search_records",
+                {"entity_type": "allele", "query": "*1 *10"},
+                raise_on_error=False,
+            )
+            commands = rejected.structured_content["_meta"]["next_commands"]
+            followed = [
+                await client.call_tool("search_records", command["arguments"])
+                for command in commands
+            ]
+    finally:
+        repository.close()
+        store.close()
+
+    assert rejected.structured_content["subtype"] == "multiple_star_alleles"
+    assert [command["arguments"]["query"] for command in commands] == ["*1", "*10"]
+    assert [item.structured_content["_meta"]["pagination"]["total_count"] for item in followed] == [
+        1,
+        2,
+    ]
