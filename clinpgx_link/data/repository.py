@@ -24,7 +24,6 @@ from clinpgx_link.data.search_diagnostics import (
     validate_canonical_filters,
     validate_filter_values,
 )
-from clinpgx_link.data.star_alleles import split_star_allele
 from clinpgx_link.exceptions import (
     DataValidationError,
     InvalidInputError,
@@ -33,6 +32,7 @@ from clinpgx_link.exceptions import (
     UpstreamUnavailableError,
 )
 from clinpgx_link.models import SourceInfo, SourceResponse
+from clinpgx_link.star_alleles import split_star_allele
 
 _ENTITY_TYPES = frozenset(
     {"allele", "annotation_id", "chemical", "disease", "gene", "literature", "variant"}

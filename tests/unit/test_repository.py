@@ -551,7 +551,7 @@ def test_allele_query_reads_star_allele_name_literally(
 
 
 def test_allele_query_with_several_star_alleles_names_each_allele(tmp_path: Path) -> None:
-    from clinpgx_link.data.star_alleles import StarAlleleQueryError
+    from clinpgx_link.star_alleles import StarAlleleQueryError
 
     repository, _ = _repository(tmp_path, alleles=_STAR_ALLELES)
     with pytest.raises(StarAlleleQueryError) as failure:

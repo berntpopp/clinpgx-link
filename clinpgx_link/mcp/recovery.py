@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from typing import Any, Literal, cast
 
 from clinpgx_link.data.dataset_filter_contracts import is_known_dataset_filter_contract
-from clinpgx_link.data.star_alleles import STAR_TOKEN, StarAlleleQueryError
 from clinpgx_link.exceptions import ClinPGxError, InvalidInputError
 from clinpgx_link.identity_contracts import numeric_identity_contract
 from clinpgx_link.mcp.relationship_contracts import (
@@ -25,6 +24,7 @@ from clinpgx_link.mcp.search_contracts import (
     supports_accession_shortcut,
     supports_api_search,
 )
+from clinpgx_link.star_alleles import STAR_TOKEN, StarAlleleQueryError
 
 RecoveryKind = Literal[
     "discover_numeric_detail_id",
