@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.19] - 2026-11-21
+
+### Fixed
+
+- `search_records(entity_type='allele')` reads a star-allele name in `query` (`CYP2D6*10`,
+  `TPMT *3A`, `*10`) as that exact allele (optional gene part matched as text) instead of
+  rejecting it as `wildcard_query_unsupported`. Other entity types and `search_dataset`
+  still reject `*` (#57).
+
 ## [0.1.18] - 2026-11-19
 
 ### Fixed
