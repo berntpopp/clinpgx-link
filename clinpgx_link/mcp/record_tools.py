@@ -292,7 +292,7 @@ def register_record_tools(
             return error_result(
                 exc,
                 content_ref=response.details.get("content_ref") if response else None,
-                recovery=recovery,
+                recovery=recovery or recovery_help.star_allele_plan(exc),
             )
         except Exception:
             return error_result(ClinPGxError("Entity search failed."))

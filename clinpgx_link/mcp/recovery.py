@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import Any, Literal, cast
 
 from clinpgx_link.data.dataset_filter_contracts import is_known_dataset_filter_contract
-from clinpgx_link.exceptions import InvalidInputError
+from clinpgx_link.exceptions import ClinPGxError, InvalidInputError
 from clinpgx_link.identity_contracts import numeric_identity_contract
 from clinpgx_link.mcp.relationship_contracts import (
     RELATIONSHIP_OBJECT_TYPES,
@@ -24,6 +24,7 @@ from clinpgx_link.mcp.search_contracts import (
     supports_accession_shortcut,
     supports_api_search,
 )
+from clinpgx_link.star_alleles import STAR_TOKEN, StarAlleleQueryError
 
 RecoveryKind = Literal[
     "discover_numeric_detail_id",
@@ -38,6 +39,7 @@ RecoveryKind = Literal[
     "use_exact_gene_or_name_filter",
     "restart_dataset_search",
     "inspect_dataset_filters",
+    "search_each_star_allele",
 ]
 _KINDS = frozenset(
     {
@@ -53,6 +55,7 @@ _KINDS = frozenset(
         "use_exact_gene_or_name_filter",
         "restart_dataset_search",
         "inspect_dataset_filters",
+        "search_each_star_allele",
     }
 )
 
@@ -151,6 +154,7 @@ class RecoveryPlan:
     other_type: str | None = None
     dataset_id: str | None = None
     filters: tuple[str, ...] | None = None
+    alleles: tuple[str, ...] | None = None
 
     def __post_init__(self) -> None:
         if self.kind not in _KINDS:
@@ -186,6 +190,7 @@ class RecoveryPlan:
             "use_exact_gene_or_name_filter": (),
             "restart_dataset_search": (),
             "inspect_dataset_filters": (self.dataset_id, self.filters),
+            "search_each_star_allele": (self.alleles,),
         }
         if any(value is None for value in required[self.kind]):
             raise ValueError("recovery context is incomplete")
@@ -193,6 +198,10 @@ class RecoveryPlan:
             self.dataset_id, self.filters
         ):
             raise ValueError("dataset recovery context is invalid")
+        if self.alleles is not None and not (
+            len(self.alleles) <= 8 and all(STAR_TOKEN.fullmatch(item) for item in self.alleles)
+        ):
+            raise ValueError("unsafe recovery allele")
         if self.kind == "variant_symbol_requires_search" and (
             self.entity_type != "variant"
             or self.source != "api"
@@ -279,6 +288,12 @@ def numeric_detail_plan(entity_type: str, source: str, view: str) -> RecoveryPla
     return RecoveryPlan(
         "discover_numeric_detail_id", entity_type=entity_type, source=source, view=view
     )
+
+
+def star_allele_plan(error: ClinPGxError) -> RecoveryPlan | None:
+    if not isinstance(error, StarAlleleQueryError) or len(error.alleles) > 8:
+        return None
+    return RecoveryPlan("search_each_star_allele", alleles=error.alleles)
 
 
 def unsupported_search_plan(entity_type: str, source: str, view: str) -> RecoveryPlan:
@@ -395,6 +410,15 @@ def recovery_payload(plan: RecoveryPlan) -> dict[str, Any]:
         choices["filters"] = ["gene", "name"]
         choices["match"] = ["exact"]
         commands.append(_command("get_server_capabilities", {}))
+    elif plan.kind == "search_each_star_allele":
+        limitation = (
+            "One query matches one star allele or diplotype exactly. Search each allele "
+            "separately; other query words were left out of these commands."
+        )
+        commands.extend(
+            _command("search_records", {"entity_type": "allele", "query": allele})
+            for allele in plan.alleles or ()
+        )
     elif plan.kind == "restart_dataset_search":
         limitation = (
             "A cursor is bound to its original selectors and snapshot, expires, and cannot "
@@ -579,6 +603,7 @@ __all__ = [
     "require_website_accession",
     "safe_identifier",
     "search_contract_plan",
+    "star_allele_plan",
     "supports_api_search",
     "unsupported_api_filters_plan",
     "unsupported_detail_plan",
