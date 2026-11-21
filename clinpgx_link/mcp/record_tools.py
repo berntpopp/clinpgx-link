@@ -193,7 +193,7 @@ def register_record_tools(
         response_mode: ModeArg = "compact",
         shape: ShapeArg = None,
     ) -> ToolResult:
-        """Find pharmacogenomic gene-drug (PharmGKB/ClinPGx) records (genes, drugs (chemical), variants, alleles/haplotypes, clinical (summary)/variant annotations, guidelines, labels) by exact live filters or installed dataset memberships; returns PA accessions for get_record/get_related_records. Not drug-drug interactions. Filter keys are per entity_type (see filters); summary_annotation accepts level_of_evidence. Star alleles: get_record(entity_type='haplotype', source='website')."""
+        """Find pharmacogenomic gene-drug (PharmGKB/ClinPGx) records (genes, drugs (chemical), variants, alleles/haplotypes, clinical (summary)/variant annotations, guidelines, labels) by exact live filters or installed dataset memberships; returns PA accessions for get_record/get_related_records. Not drug-drug interactions. Filter keys are per entity_type (see filters); summary_annotation accepts level_of_evidence. Star alleles: query='CYP2D6*10' (allele) or get_record(entity_type='haplotype', source='website')."""
         began = time.monotonic()
         response: SourceResponse | None = None
         recovery: recovery_help.RecoveryPlan | None = None

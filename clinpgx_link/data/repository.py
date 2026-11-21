@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import json
+import re
 import sqlite3
 import threading
 from pathlib import Path
@@ -33,6 +34,8 @@ from clinpgx_link.exceptions import (
 )
 from clinpgx_link.models import SourceInfo, SourceResponse
 
+# A star-allele name: optional gene, then one designation (CYP2D6*10, TPMT *3A, *2x2).
+_STAR_ALLELE = re.compile(r"\s*(?:(\w[\w-]*)\s*)?(\*[^\s*/]+)\s*")
 _ENTITY_TYPES = frozenset(
     {"allele", "annotation_id", "chemical", "disease", "gene", "literature", "variant"}
 )
@@ -423,6 +426,15 @@ class DatasetRepository(
                 "WHERE entity.kind=?)"
             ]
             parameters = [entity_type]
+        star = _STAR_ALLELE.fullmatch(query or "") if entity_type == "allele" else None
+        if star is not None:
+            # The designation is an exact allele value; only the gene part goes to FTS.
+            query = star[1]
+            clauses.append(
+                "EXISTS (SELECT 1 FROM membership a WHERE a.record_pk=r.record_pk "
+                "AND a.kind='allele' AND a.value=?)"
+            )
+            parameters.append(star[2])
         values, total = self._query_records(
             clauses=clauses,
             parameters=parameters,

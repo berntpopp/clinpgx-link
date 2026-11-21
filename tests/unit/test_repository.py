@@ -55,7 +55,7 @@ def _archive(path: Path, members: dict[str, bytes]) -> None:
     path.write_bytes(output.getvalue())
 
 
-def _repository(tmp_path: Path, *, include_pathways: bool = False):
+def _repository(tmp_path: Path, *, include_pathways: bool = False, alleles: bytes | None = None):
     from clinpgx_link.data.catalog import SourceInput
     from clinpgx_link.data.repository import DatasetRepository
     from clinpgx_link.ingest.builder import build_snapshot
@@ -66,7 +66,8 @@ def _repository(tmp_path: Path, *, include_pathways: bool = False):
         "genes.zip": {"genes.tsv": (FIXTURES / "genes.tsv").read_bytes()},
         "summaryAnnotations.zip": {
             "summary_annotations.tsv": (FIXTURES / "summary_annotations.tsv").read_bytes(),
-            "summary_ann_alleles.tsv": (FIXTURES / "summary_ann_alleles.tsv").read_bytes(),
+            "summary_ann_alleles.tsv": alleles
+            or (FIXTURES / "summary_ann_alleles.tsv").read_bytes(),
             "summary_ann_evidence.tsv": (FIXTURES / "summary_ann_evidence.tsv").read_bytes(),
         },
         "guidelineAnnotations.json.zip": {
@@ -512,6 +513,44 @@ def test_literal_fts_rejects_ascii_star_with_fixed_exact_filter_guidance(
     assert failure.value.field == "query"
     assert failure.value.subtype == "wildcard_query_unsupported"
     assert failure.value.hint == "Omit query and use an exact gene or name filter."
+
+
+_STAR_ALLELES = (
+    b"Summary Annotation ID\tGenotype/Allele\tAnnotation Text\tAllele Function\n"
+    b"900000001\t*10\tCYP2D6 *10 is assigned decreased function.\tDecreased function\n"
+    b"900000002\t*1\tCYP2D6 *1 is assigned normal function.\tNormal function\n"
+    b"900000003\t*10\tCYP2C9 *10 is assigned uncertain function.\tUncertain function\n"
+)
+
+
+@pytest.mark.parametrize(
+    ("query", "expected"),
+    [
+        ("CYP2D6*10", ["Decreased function"]),
+        ("CYP2D6 *10", ["Decreased function"]),
+        ("CYP2D6*1", ["Normal function"]),
+        ("*10", ["Decreased function", "Uncertain function"]),
+        ("TPMT*10", []),
+    ],
+)
+def test_allele_query_reads_star_allele_name_literally(
+    tmp_path: Path, query: str, expected: list[str]
+) -> None:
+    """Issue #57: a star-allele name is an exact allele, not a wildcard or loose tokens."""
+    repository, _ = _repository(tmp_path, alleles=_STAR_ALLELES)
+    found = repository.search_entities("allele", query=query)
+
+    assert [row["fields"]["Allele Function"] for row in found.value] == expected
+
+
+def test_non_allele_entity_query_still_rejects_ascii_star(tmp_path: Path) -> None:
+    from clinpgx_link.exceptions import InvalidInputError
+
+    repository, _ = _repository(tmp_path)
+    with pytest.raises(InvalidInputError) as failure:
+        repository.search_entities("gene", query="CYP2C19*2")
+
+    assert failure.value.subtype == "wildcard_query_unsupported"
 
 
 @pytest.mark.parametrize(
