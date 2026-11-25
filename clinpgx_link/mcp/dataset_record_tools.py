@@ -92,7 +92,11 @@ def register_dataset_record_tools(
         ] = "compact",
         include_fields: Annotated[
             list[str] | None,
-            Field(description="Ordered profiled source fields to return.", max_length=16),
+            Field(
+                description="Ordered profiled source fields to return.",
+                max_length=16,
+                examples=[["Symbol", "Name"]],
+            ),
         ] = None,
         parent_fields: Annotated[
             list[Literal["gene", "version"]] | None,
@@ -100,6 +104,7 @@ def register_dataset_record_tools(
                 description="Ordered enclosing PharmCAT parent fields: gene and/or version.",
                 min_length=1,
                 max_length=2,
+                examples=[["gene", "version"]],
             ),
         ] = None,
     ) -> ToolResult:
@@ -273,14 +278,22 @@ def register_dataset_record_tools(
         ] = "",
         pointers: Annotated[
             list[str] | None,
-            Field(description="Ordered scalar RFC 6901 pointers.", max_length=12),
+            Field(
+                description="Ordered scalar RFC 6901 pointers.",
+                max_length=12,
+                examples=[["/fields/Symbol", "/fields/Name"]],
+            ),
         ] = None,
         response_mode: Annotated[
             ResponseMode, Field(description="Response detail mode.")
         ] = "compact",
         include_fields: Annotated[
             list[str] | None,
-            Field(description="Ordered profiled source fields to return.", max_length=16),
+            Field(
+                description="Ordered profiled source fields to return.",
+                max_length=16,
+                examples=[["Symbol", "Name"]],
+            ),
         ] = None,
         parent_fields: Annotated[
             list[Literal["gene", "version"]] | None,
@@ -288,6 +301,7 @@ def register_dataset_record_tools(
                 description="Ordered enclosing PharmCAT parent fields: gene and/or version.",
                 min_length=1,
                 max_length=2,
+                examples=[["gene", "version"]],
             ),
         ] = None,
     ) -> ToolResult:

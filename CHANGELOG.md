@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.21] - 2026-11-26
+
+### Changed
+
+- Every array-typed tool argument carries an `examples` value showing the list form
+  (`pointers`, `include_fields`, `parent_fields`; Tool-Schema Documentation Standard S3) (#62).
+- `search_records` and `get_related_records` argument descriptions are tightened so each tool
+  definition fits the 1,200-token per-tool budget (Tool-Surface Budget Standard B1). No argument,
+  enum or behaviour changed (#62).
+
 ## [0.1.20] - 2026-11-21
 
 ### Fixed
