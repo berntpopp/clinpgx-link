@@ -123,7 +123,11 @@ def register_data_tools(
         ] = "",
         pointers: Annotated[
             list[str] | None,
-            Field(max_length=12, description="Ordered scalar RFC 6901 pointers for JSON data."),
+            Field(
+                max_length=12,
+                description="Ordered scalar RFC 6901 pointers for JSON data.",
+                examples=[["/symbol", "/name"]],
+            ),
         ] = None,
         limit: Annotated[int, Field(ge=1, le=100, description="Maximum returned rows.")] = 20,
         offset: Annotated[
@@ -203,7 +207,11 @@ def register_data_tools(
         ] = "",
         pointers: Annotated[
             list[str] | None,
-            Field(max_length=12, description="Ordered scalar RFC 6901 pointers for JSON data."),
+            Field(
+                max_length=12,
+                description="Ordered scalar RFC 6901 pointers for JSON data.",
+                examples=[["/gene/id", "/gene/symbol"]],
+            ),
         ] = None,
         limit: Annotated[int, Field(ge=1, le=100, description="Maximum returned rows.")] = 20,
         offset: Annotated[

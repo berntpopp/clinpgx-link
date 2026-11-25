@@ -62,7 +62,7 @@ from clinpgx_link.services.api import ApiService
 
 SearchEntityArg = Annotated[
     SearchEntity,
-    Field(description="Entity family to search in the selected source.", examples=["gene"]),
+    Field(description="Entity family to search.", examples=["gene"]),
 ]
 DetailEntityArg = Annotated[
     DetailEntity,
@@ -72,11 +72,11 @@ ResultTypeArg = Annotated[
     ResultType,
     Field(
         description=(
-            "Mode is chosen by arguments. API connected-object (omit other_id): relationship, "
-            "lists objects of other_type linked to record_id. API pair (other_id required): "
+            "API connected-object mode (no other_id): relationship lists other_type objects "
+            "linked to record_id. API pair mode (other_id set): "
             + "|".join(PAIR_RESULT_TYPE_MAPPING)
-            + ", records linking both IDs (e.g. gene PA124 + chemical PA449053). "
-            "source='download' (installed snapshot only): " + "|".join(DOWNLOAD_RESULT_TYPES) + "."
+            + ", records linking both IDs. "
+            "source='download': " + "|".join(DOWNLOAD_RESULT_TYPES) + "."
         ),
         examples=["relationship"],
     ),
@@ -87,8 +87,8 @@ RecordIdArg = Annotated[
         min_length=1,
         max_length=512,
         description=(
-            "Exact ClinPGx identifier or returned local record_id; numeric-detail families "
-            "reuse the decimal id returned by search_records."
+            "ClinPGx ID or returned local record_id; numeric-detail families use the decimal id "
+            "from search_records."
         ),
         examples=["PA124"],
     ),
@@ -105,21 +105,17 @@ FilterArg = Annotated[
     dict[str, str] | None,
     Field(
         description=FILTER_DESCRIPTION,
-        examples=[{"chemical": "clopidogrel"}, {"gene": "CYP2C19", "chemical": "PA449053"}],
+        examples=[{"gene": "CYP2C19", "chemical": "PA449053"}],
     ),
 ]
-LimitArg = Annotated[
-    int, Field(ge=1, le=100, description="Maximum rows returned on this page.", examples=[20])
-]
-OffsetArg = Annotated[
-    int, Field(ge=0, description="Zero-based offset; cannot accompany cursor.", examples=[0])
-]
+LimitArg = Annotated[int, Field(ge=1, le=100, description="Max rows per page.", examples=[20])]
+OffsetArg = Annotated[int, Field(ge=0, description="Zero-based; not with cursor.", examples=[0])]
 CursorArg = Annotated[
     str | None,
     Field(
         max_length=2048,
-        description="Opaque continuation returned for the same selectors and source identity.",
-        examples=["authenticated-continuation"],
+        description="Opaque continuation; same selectors and source only.",
+        examples=["opaque-continuation"],
     ),
 ]
 PointerArg = Annotated[
@@ -142,18 +138,16 @@ ModeArg = Annotated[
     ResponseMode,
     Field(
         description=(
-            "Detail tier; never changes source identity. minimal|compact|standard project "
-            "verified fields per family. Rows of families without a verified profile return "
-            "deferred_content=true (retrieved but withheld, not missing); "
-            "recovery_action=retry_with_response_mode_full means full inlines them, otherwise "
-            "read them with get_source_content."
+            "Detail tier; same source identity. minimal|compact|standard project verified "
+            "fields per family. deferred_content=true rows are withheld, not missing: follow "
+            "their recovery_action."
         ),
         examples=["compact"],
     ),
 ]
 ViewArg = Annotated[
     View,
-    Field(description="ClinPGx upstream projection for live API reads.", examples=["base"]),
+    Field(description="Upstream projection for API reads.", examples=["base"]),
 ]
 _ANNOTATIONS = {
     "readOnlyHint": True,
@@ -182,7 +176,7 @@ def register_record_tools(
         source: Annotated[
             Literal["auto", "api", "download"],
             Field(
-                description="Source policy: auto routes exact filters to API and broad queries locally.",
+                description="auto: exact filters go to the API, text queries local.",
                 examples=["auto"],
             ),
         ] = "auto",
@@ -193,7 +187,7 @@ def register_record_tools(
         response_mode: ModeArg = "compact",
         shape: ShapeArg = None,
     ) -> ToolResult:
-        """Find pharmacogenomic gene-drug (PharmGKB/ClinPGx) records (genes, drugs (chemical), variants, alleles/haplotypes, clinical (summary)/variant annotations, guidelines, labels) by exact live filters or installed dataset memberships; returns PA accessions for get_record/get_related_records. Not drug-drug interactions. Filter keys are per entity_type (see filters); summary_annotation accepts level_of_evidence. Star alleles: query='CYP2D6*10' (allele) or get_record(entity_type='haplotype', source='website')."""
+        """Find pharmacogenomic gene-drug (PharmGKB/ClinPGx) records (genes, drugs (chemical), variants, alleles/haplotypes, clinical (summary)/variant annotations, guidelines, labels) by exact live filters or installed dataset memberships; returns PA accessions for get_record/get_related_records. Not drug-drug interactions. Star alleles: query='CYP2D6*10' (allele) or get_record(entity_type='haplotype', source='website')."""
         began = time.monotonic()
         response: SourceResponse | None = None
         recovery: recovery_help.RecoveryPlan | None = None
@@ -458,17 +452,14 @@ def register_record_tools(
             str | None,
             Field(
                 max_length=512,
-                description="Second exact ClinPGx ID; when supplied, selects live API pair mode.",
+                description="Second exact ClinPGx ID; selects live API pair mode.",
                 examples=["PA449053"],
             ),
         ] = None,
         entity_type: Annotated[
             ObjectType,
             Field(
-                description=(
-                    "Object class owning record_id; documentation-only and cursor-bound, not "
-                    "sent upstream as a pair filter."
-                ),
+                description="Object class of record_id; documentation-only.",
                 examples=["Gene"],
             ),
         ] = "Gene",
@@ -476,8 +467,8 @@ def register_record_tools(
             ObjectType,
             Field(
                 description=(
-                    "Target connected-object type sent upstream without other_id; documentation-only "
-                    "and cursor-bound in pair mode, not an upstream pair filter."
+                    "Target connected-object type, sent upstream without other_id; "
+                    "documentation-only in pair mode."
                 ),
                 examples=["Chemical"],
             ),
@@ -492,8 +483,8 @@ def register_record_tools(
             View,
             Field(
                 description=(
-                    "API pair upstream projection; not sent upstream in connected-object mode, "
-                    "but remains cursor-bound."
+                    "API pair upstream projection; not sent upstream in connected-object mode "
+                    "but cursor-bound."
                 ),
                 examples=["base"],
             ),
@@ -504,7 +495,7 @@ def register_record_tools(
         response_mode: ModeArg = "compact",
         shape: ShapeArg = None,
     ) -> ToolResult:
-        """Get records linked to known ClinPGx IDs: gene+drug guideline, label, summary or variant annotations (pair mode, other_id), or all objects connected to one ID (relationship). See result_type for modes. For gene+drug guidelines prefer search_records(entity_type='guideline_annotation', filters={gene, chemical: PA accessions}); the live pair report can omit CPIC/DPWG. Guideline URLs: get_record(source='website')."""
+        """Get records linked to known ClinPGx IDs: gene+drug guideline, label, summary or variant annotations (pair mode, other_id), or all objects connected to one ID (relationship). For gene+drug guidelines prefer search_records(entity_type='guideline_annotation', filters={gene, chemical: PA accessions}); the live pair report can omit CPIC/DPWG. Guideline URLs: get_record(source='website')."""
         began = time.monotonic()
         response: SourceResponse | None = None
         recovery: recovery_help.RecoveryPlan | None = None

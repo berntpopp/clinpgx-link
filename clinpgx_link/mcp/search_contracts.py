@@ -164,8 +164,8 @@ LOCAL_SEARCH_ENTITIES = frozenset(
 )
 QUERY_UNSUPPORTED_ENTITIES = frozenset(API_SEARCH_CONTRACTS) - LOCAL_SEARCH_ENTITIES
 QUERY_DESCRIPTION = (
-    "Literal AND-token local text query; unavailable for API searches. Rejected "
-    f"(invalid_input) for {', '.join(sorted(QUERY_UNSUPPORTED_ENTITIES))}: use filters."
+    "Local literal AND-token text query; invalid_input for "
+    f"{', '.join(sorted(QUERY_UNSUPPORTED_ENTITIES))}: use filters."
 )
 DOWNLOAD_FILTERS = tuple(sorted(CANONICAL_FILTER_PRIORITY))
 CANONICAL_FILTERS = tuple(
@@ -183,11 +183,11 @@ DOWNLOAD_SEMANTICS = (
     "not a claim of row ownership or identity. Query tokens and filters are combined with AND."
 )
 FILTER_DESCRIPTION = (
-    "ANDed exact filters; keys depend on entity_type. API keys: "
+    "ANDed exact filters. API keys by entity_type: "
     + "; ".join(f"{c.entity_type}: {'|'.join(c.filters)}" for c in _CONTRACT_ROWS)
-    + ". A PA accession is accepted by gene/chemical/name on gene, chemical and label and by "
-    "chemical on summary_annotation; guideline_annotation gene/chemical take PA accessions "
-    "only; other name/symbol keys reject PA values. level_of_evidence: 1A|1B|2A|2B|3|4. "
+    + ". PA accessions: accepted by gene/chemical/name on gene, chemical, label and by "
+    "chemical on summary_annotation; required by guideline_annotation gene/chemical; rejected "
+    "by other name/symbol keys. level_of_evidence: 1A|1B|2A|2B|3|4. "
     "Download keys: " + "|".join(DOWNLOAD_FILTERS) + "."
 )
 _API_CONTRACT_DEFAULT_FIELDS = ("source", "semantics", "example_purpose")

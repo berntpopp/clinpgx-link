@@ -92,12 +92,11 @@ ShapeArg = Annotated[
     Shape | None,
     Field(
         description=(
-            "Opt-in, API only: shapes the whole row list fetched with filters, not just this "
-            "page. filter: AND across keys, OR within; dicts match term/name, lists any item; "
-            "case-insensitive. sort: stable, missing last. fields: projection. facet: "
-            "counts. See _meta.shaping."
+            "API only: shapes all fetched rows, not one page. filter: AND across keys, "
+            "OR within; dicts match term/name, lists any item; case-insensitive. sort: stable, "
+            "missing last. fields: projection. facet: counts; see _meta.shaping."
         ),
-        examples=[{"filter": {"levelOfEvidence": ["1A"]}, "sort": "score", "order": "desc"}],
+        examples=[{"filter": {"levelOfEvidence": ["1A"]}, "sort": "score"}],
     ),
 ]
 

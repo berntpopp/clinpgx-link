@@ -147,3 +147,17 @@ async def test_every_tool_description_leads_with_what_it_returns(server):
     assert tools
     assert [t.name for t in tools if not _lead_states_return(t.description)] == []
     assert not _lead_states_return("Use known IDs for live reports or joins.")
+
+
+@pytest.mark.asyncio
+async def test_every_array_property_carries_an_example(server):
+    """S3: without an example a model cannot tell a list from a scalar."""
+    async with Client(server) as client:
+        tools = await client.list_tools()
+    missing = [
+        f"{tool.name}.{name}"
+        for tool in tools
+        for name, prop in tool.inputSchema.get("properties", {}).items()
+        if '"type": "array"' in json.dumps(prop) and not prop.get("examples")
+    ]
+    assert missing == []
