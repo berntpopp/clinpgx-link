@@ -22,6 +22,7 @@
    "offset": 0,
    "returned": 4,
    "total": 4,
+   "total_count": 4,
    "total_scope": "retained_response",
    "upstream_completeness": "unknown"
   },
