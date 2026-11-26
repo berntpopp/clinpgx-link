@@ -21,6 +21,15 @@ Nothing enforced them. This does.
   3. THE ERROR AN LLM CANNOT ACT ON. A missing argument answered with `not_found` /
      "The requested tool is not available" — telling the model the tool does not exist.
 
+It also gates the provenance core rule of Response-Envelope v1.2: every successful control call
+must carry non-empty `_meta.source`, `_meta.data_version` and `_meta.retrieved_at`. The OpenAI
+deep-research compatibility tools `search` and `fetch` are exempt: their shape is OpenAI's.
+
+The payload is read where the envelope puts it: at the top level, or inside `result`/`results`.
+
+Advisory (WARN, never affects the verdict): a `resolve_*` miss should be a `not_found` carrying
+`_meta.next_commands` (Response-Envelope Standard v1 §2a).
+
 The probes are derived from the server's OWN advertised schema. There is no per-repo config file
 to write, and none to forget: every declared enum is probed, so a tool is gated the day it ships.
 That is deliberate. A hand-maintained list of probes is the same bug one level up — whoever
@@ -68,8 +77,16 @@ BOGUS_ARG = "__gf_conformance_no_such_arg__"
 # these is skipped, never passed — an unreachable upstream must not silently buy a green tick.
 INCONCLUSIVE = {"upstream_unavailable", "rate_limited", "internal"}
 
+# Required in `_meta` of every successful result (Response-Envelope Standard v1.2, core rule).
+PROVENANCE = ("source", "data_version", "retrieved_at")
+
 # Tools that orient a client rather than query data (Tool-Naming Standard ops/meta carve-out).
 META_TOOLS = ("capabilit", "health", "diagnost", "warmup", "help", "quickstart")
+
+# OpenAI deep-research compatibility tools. Their result is OpenAI's fixed document shape
+# (`{results: [{id, title, url}]}`, `{id, title, text, url, metadata}`), so they are exempt from
+# the envelope frame and the provenance rule (Response-Envelope Standard v1.2, "Exemptions").
+COMPAT_TOOLS = ("search", "fetch")
 
 # Free-text inputs, where a nonsense value returning zero rows is HONEST, not a defect. The
 # silent-empty probe below cannot distinguish "a filter over a closed vocabulary" from "a search
@@ -100,6 +117,7 @@ class Report:
     failed: list[str] = field(default_factory=list)
     ungated: list[str] = field(default_factory=list)
     skipped: list[str] = field(default_factory=list)
+    warned: list[str] = field(default_factory=list)
 
     def check(self, label: str, ok: bool, detail: str = "") -> bool:
         if ok:
@@ -122,6 +140,10 @@ class Report:
     def skip(self, label: str, why: str) -> None:
         """Genuinely inconclusive — an unreachable upstream. Does not count against conformance."""
         self.skipped.append(f"{label} — {why}")
+
+    def warn(self, label: str, why: str) -> None:
+        """Advisory only (e.g. Response-Envelope §2a). Never counts against conformance."""
+        self.warned.append(f"{label} — {why}")
 
     @property
     def conformant(self) -> bool:
@@ -152,11 +174,21 @@ class Probe:
         text = resp.text.strip()
         if "text/event-stream" in resp.headers.get("content-type", ""):
             frames = [ln[5:].strip() for ln in text.splitlines() if ln.startswith("data:")]
-            text = frames[-1] if frames else "{}"
-        message = json.loads(text or "{}")
+            text = frames[-1] if frames else ""
+        try:
+            message = json.loads(text)
+        except (ValueError, json.JSONDecodeError) as exc:
+            raise httpx.DecodingError("Invalid JSON-RPC response object") from exc
+        if not isinstance(message, dict):
+            raise httpx.DecodingError("Invalid JSON-RPC response object")
         if "error" in message:
+            if not isinstance(message["error"], dict):
+                raise httpx.DecodingError("Invalid JSON-RPC response object")
             raise ProtocolError(message["error"])
-        return dict(message.get("result") or {})
+        result = message.get("result")
+        if not isinstance(result, dict):
+            raise httpx.DecodingError("Invalid JSON-RPC response object")
+        return result
 
     def initialize(self) -> dict[str, Any]:
         result = self._rpc(
@@ -208,7 +240,7 @@ def envelope(result: dict[str, Any]) -> dict[str, Any]:
         if block.get("type") == "text":
             try:
                 parsed = json.loads(block.get("text") or "")
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 continue
             if isinstance(parsed, dict):
                 return parsed
@@ -243,6 +275,15 @@ def rows(env: dict[str, Any]) -> list[Any] | None:
     #    the largest actual collection, not let an empty sidecar mask non-empty rows.
     best = _grouped_collection(env)
 
+    # Response-Envelope v1 §1 names the payload `results` (a list) or `result` (an object). A
+    # backend that moved its flat payload under `result` (`result.variants` beside
+    # `result.total`) still returns a collection: counted lists are read there as at the top
+    # level. A GROUPED collection is read at the top level only, where `result` itself can be
+    # the dict of lists (mondo, orphanet and hpo `map_cross_ontology`). One level down it cannot
+    # be told from a record's sub-object: spliceailookup's `result.consequence.aberrations` read
+    # as one row that `response_mode=minimal` then "destroyed" — a false accusation.
+    frames = _frames(env)
+
     # 2. Otherwise, a top-level list of objects — but a bare list is ambiguous. A COLLECTION
     #    declares how many things it holds (Response-Envelope v1: "Always populate
     #    _meta.pagination: total_count, has_more"); a RECORD does not. Without this count guard the
@@ -253,14 +294,26 @@ def rows(env: dict[str, Any]) -> list[Any] | None:
     if count_of(env) is None:
         return best
 
-    for key, value in env.items():
-        if key.startswith("_") or not isinstance(value, list):
-            continue
-        if value and not isinstance(value[0], dict):
-            continue
-        if best is None or len(value) > len(best):
-            best = value
+    for frame in frames:
+        for key, value in frame.items():
+            if key.startswith("_") or not isinstance(value, list):
+                continue
+            if not all(isinstance(item, dict) for item in value):
+                continue
+            if best is None or len(value) > len(best):
+                best = value
     return best
+
+
+def _frames(env: dict[str, Any]) -> list[dict[str, Any]]:
+    """The envelope and, when the payload is an object under `result`, that object too."""
+    inner = env.get("result")
+    return [env, inner] if isinstance(inner, dict) else [env]
+
+
+def _count_sources(env: dict[str, Any]) -> list[dict[str, Any]]:
+    """Where a count may sit, most authoritative first: `_meta.pagination`, envelope, `result`."""
+    return [(env.get("_meta") or {}).get("pagination") or {}, *_frames(env)]
 
 
 def _grouped_collection(env: dict[str, Any]) -> list[Any] | None:
@@ -277,6 +330,8 @@ def _grouped_collection(env: dict[str, Any]) -> list[Any] | None:
         if value and not all(isinstance(branch, list) for branch in value.values()):
             continue
         flat = [item for branch in value.values() if isinstance(branch, list) for item in branch]
+        if not all(isinstance(item, dict) for item in flat):
+            continue
         if best is None or len(flat) > len(best):
             best = flat
     return best
@@ -284,8 +339,7 @@ def _grouped_collection(env: dict[str, Any]) -> list[Any] | None:
 
 def count_of(env: dict[str, Any]) -> int | None:
     """How many records this response says it is carrying. Absent on a single-record tool."""
-    pagination = (env.get("_meta") or {}).get("pagination") or {}
-    for source in (pagination, env):
+    for source in _count_sources(env):
         for key in ("total_count", "total", "count", "returned", "found_count"):
             value = source.get(key)
             if isinstance(value, int):
@@ -294,8 +348,7 @@ def count_of(env: dict[str, Any]) -> int | None:
 
 
 def total_of(env: dict[str, Any]) -> int | None:
-    pagination = (env.get("_meta") or {}).get("pagination") or {}
-    for source in (pagination, env):
+    for source in _count_sources(env):
         for key in ("total_count", "total"):
             value = source.get(key)
             if isinstance(value, int):
@@ -304,8 +357,7 @@ def total_of(env: dict[str, Any]) -> int | None:
 
 
 def more_flag(env: dict[str, Any]) -> bool | None:
-    pagination = (env.get("_meta") or {}).get("pagination") or {}
-    for source in (pagination, env):
+    for source in _count_sources(env):
         for key in ("has_more", "truncated"):
             value = source.get(key)
             if isinstance(value, bool):
@@ -313,8 +365,10 @@ def more_flag(env: dict[str, Any]) -> bool | None:
     return None
 
 
-def is_error_envelope(env: dict[str, Any]) -> bool:
-    return env.get("success") is False or bool(env.get("error_code"))
+def is_error_result(result: dict[str, Any], env: dict[str, Any]) -> bool:
+    return (
+        result.get("isError") is True or env.get("success") is False or bool(env.get("error_code"))
+    )
 
 
 def properties(tool: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -405,6 +459,11 @@ def _record_error_frame(
         result.get("isError") is True,
         f"success={env.get('success')!r} error_code={code!r} but isError={result.get('isError')!r}",
     )
+    rep.check(
+        f"{tool}: tool error includes a fleet error envelope",
+        env.get("success") is False or bool(env.get("error_code")),
+        "MCP rejection lacks the fleet error envelope",
+    )
     if code is not None:
         rep.check(
             f"{tool}: error_code is in the closed enum",
@@ -435,7 +494,7 @@ def check_argument_error(rep: Report, probe: Probe, tool: dict[str, Any]) -> Non
         return
 
     env = envelope(result)
-    if not is_error_envelope(env):
+    if not is_error_result(result, env):
         rep.check(label + " is rejected", False, "the server ACCEPTED an unknown argument")
         return
 
@@ -492,7 +551,7 @@ def check_declared_enums(
             continue
 
         env = envelope(result)
-        if is_error_envelope(env):
+        if is_error_result(result, env):
             _record_error_frame(rep, name, result, env)
             rep.check(
                 f"{label} → invalid_input",
@@ -542,7 +601,7 @@ def check_silent_empty_filter(
             continue
 
         env = envelope(result)
-        if is_error_envelope(env):
+        if is_error_result(result, env):
             _record_error_frame(rep, name, result, env)
             rep.passed.append(f"{label} → rejected ({env.get('error_code')})")
             continue
@@ -619,7 +678,8 @@ def check_total_is_not_the_page_size(
         except ProtocolError:
             return
         env = envelope(result)
-        if is_error_envelope(env):
+        if is_error_result(result, env):
+            _record_error_frame(rep, name, result, env)
             return
         totals[limit] = total_of(env)
 
@@ -635,8 +695,66 @@ def check_total_is_not_the_page_size(
     )
 
 
+def check_provenance(rep: Report, tool: str, env: dict[str, Any]) -> None:
+    """Response-Envelope Standard v1.2 (core rule): a successful result names where its data
+    came from, which release, and when it was fetched upstream."""
+    meta = env.get("_meta")
+    meta = meta if isinstance(meta, dict) else {}
+    missing = [k for k in PROVENANCE if not (isinstance(meta.get(k), str) and meta[k].strip())]
+    rep.check(
+        f"{tool}: success carries _meta.{{{', '.join(PROVENANCE)}}}",
+        not missing,
+        f"missing or empty: {', '.join(missing)} (Response-Envelope Standard v1.2)",
+    )
+
+
+def check_resolver_miss(
+    rep: Report, probe: Probe, tool: dict[str, Any], base: dict[str, Any]
+) -> None:
+    """WARN unless a `resolve_*` miss is a `not_found` with `_meta.next_commands` (Envelope §2a)."""
+    name = tool["name"]
+    if "resolve" not in name or "batch" in name:
+        return
+    props = properties(tool)
+    key = next(
+        (
+            k
+            for k in base
+            if is_stringy(props.get(k) or {})
+            and not takes_array(props.get(k) or {})
+            and enum_of(props.get(k) or {}) is None
+        ),
+        None,
+    )
+    if key is None:
+        return
+    label = f"{name}: a resolver miss is an honest not_found with next_commands"
+    try:
+        result = probe.call(name, {**base, key: SENTINEL})
+    except ProtocolError, httpx.HTTPError:
+        return  # a rejected value or a flaky upstream says nothing about a miss; advisory only
+    env = envelope(result)
+    if not is_error_result(result, env):
+        rep.warn(label, f"a miss on {key!r} answered success, not not_found")
+    elif env.get("error_code") == "not_found":
+        if (env.get("_meta") or {}).get("next_commands"):
+            rep.passed.append(label)
+        else:
+            rep.warn(label, "the not_found carries no _meta.next_commands")
+
+
+def _substantive_payload(res: dict[str, Any], env: dict[str, Any]) -> Any:
+    if env:
+        return {k: v for k, v in env.items() if k not in ("_meta", "meta", "response_mode")}
+    return res
+
+
 def check_response_modes(
-    rep: Report, probe: Probe, tool: dict[str, Any], base: dict[str, Any], control: list[Any]
+    rep: Report,
+    probe: Probe,
+    tool: dict[str, Any],
+    base: dict[str, Any],
+    control: list[Any] | None = None,
 ) -> None:
     """`response_mode` narrows a payload; it MUST NOT destroy it.
 
@@ -646,23 +764,54 @@ def check_response_modes(
     response_mode=minimal discards the entire gene list and still returns success:true.
     """
     name = tool["name"]
-    modes = enum_of(properties(tool).get("response_mode") or {}) or []
+    rm_prop = properties(tool).get("response_mode")
+    if rm_prop is None:
+        return
+    modes = enum_of(rm_prop) or ["compact", "full"]
+    mode_payloads: dict[str, tuple[dict[str, Any], dict[str, Any]]] = {}
     for mode in modes:
         label = f"{name}: response_mode={mode!r} preserves the payload"
         try:
             result = probe.call(name, {**base, "response_mode": mode})
-        except ProtocolError:
+        except ProtocolError as exc:
+            rep.check(
+                f"{name}: response_mode={mode!r} is accepted",
+                False,
+                f"JSON-RPC {exc.error.get('code')}",
+            )
             continue
         env = envelope(result)
-        if is_error_envelope(env):
+        if is_error_result(result, env):
             _record_error_frame(rep, name, result, env)
+            code = env.get("error_code")
+            if code in INCONCLUSIVE:
+                rep.skip(f"{name}: response_mode={mode!r}", f"upstream inconclusive ({code})")
+            else:
+                rep.check(
+                    f"{name}: response_mode={mode!r} is accepted",
+                    False,
+                    f"advertised response_mode={mode!r} was rejected with {code!r}",
+                )
             continue
+        mode_payloads[mode] = (result, env)
         found = rows(env)
+        if control is not None:
+            rep.check(
+                label,
+                bool(found),
+                f"the default call returned {len(control)} records; response_mode={mode!r} returned "
+                f"{0 if found is None else len(found)} with success={env.get('success')!r}",
+            )
+
+    if "compact" in mode_payloads and "full" in mode_payloads:
+        c_res, c_env = mode_payloads["compact"]
+        f_res, f_env = mode_payloads["full"]
+        is_identical = _substantive_payload(c_res, c_env) == _substantive_payload(f_res, f_env)
         rep.check(
-            label,
-            bool(found),
-            f"the default call returned {len(control)} records; response_mode={mode!r} returned "
-            f"{0 if found is None else len(found)} with success={env.get('success')!r}",
+            f"{name}: response_mode='compact' and 'full' differ",
+            not is_identical,
+            f"{name} returned identical payloads for response_mode='compact' and 'full'; "
+            "response_mode is ignored",
         )
 
 
@@ -696,6 +845,10 @@ def run_probe(base_url: str, *, expected_name: str, timeout: float = 60.0) -> Re
         check_argument_error(rep, probe, tool)
 
         if any(marker in name for marker in META_TOOLS):
+            props = properties(tool)
+            required = set((tool.get("inputSchema") or {}).get("required") or [])
+            if "response_mode" in props and required <= {"response_mode"}:
+                check_response_modes(rep, probe, tool, {})
             continue
 
         base = valid_args(tool)
@@ -715,7 +868,7 @@ def run_probe(base_url: str, *, expected_name: str, timeout: float = 60.0) -> Re
             continue
 
         control_env = envelope(control_result)
-        if is_error_envelope(control_env):
+        if is_error_result(control_result, control_env):
             code = control_env.get("error_code")
             _record_error_frame(rep, name, control_result, control_env)
             if code in INCONCLUSIVE:
@@ -746,7 +899,10 @@ def run_probe(base_url: str, *, expected_name: str, timeout: float = 60.0) -> Re
                 )
             continue
 
+        if name not in COMPAT_TOOLS:
+            check_provenance(rep, name, control_env)
         check_declared_enums(rep, probe, tool, base)
+        check_resolver_miss(rep, probe, tool, base)
 
         control = rows(control_env)
         if control:
@@ -787,6 +943,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  SKIP  {line}")
     for line in rep.ungated:
         print(f"  UNGATED  {line}")
+    for line in rep.warned:
+        print(f"  WARN  {line}")
     for line in rep.failed:
         print(f"  FAIL  {line}")
 

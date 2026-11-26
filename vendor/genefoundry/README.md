@@ -2,7 +2,7 @@
 
 `data-release-manifest.schema.json` is copied without modification from
 `berntpopp/genefoundry-router`, commit
-`6568a0ad7d68925440aba550a2a678282ea5bb6b` (peeled `v0.8.7`), path
+`eefbb6136e458d3c2673e71e21daddac3aa32828` (peeled `v0.14.12`), path
 `genefoundry_router/data/data-release-manifest.schema.json`.
 The upstream MIT license is retained alongside it.
 

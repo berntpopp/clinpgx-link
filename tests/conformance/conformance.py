@@ -23,6 +23,7 @@ import httpx
 
 SUPPORTED_PROTOCOL = "2025-06-18"
 UNSUPPORTED_PROTOCOL = "1999-01-01"
+FOREIGN_ORIGIN = "https://origin-probe.invalid"  # RFC 2606: can never be an allowed origin
 
 _INIT = {
     "jsonrpc": "2.0",
@@ -58,29 +59,80 @@ class Report:
         return not self.failed
 
 
-def _jsonrpc(resp: httpx.Response) -> dict[str, Any]:
+def _parse_body(resp: httpx.Response) -> dict[str, Any]:
     """Return the JSON-RPC payload, tolerating an SSE-framed body."""
-    if "text/event-stream" in resp.headers.get("content-type", ""):
-        for line in resp.text.splitlines():
-            if line.startswith("data:"):
-                parsed: dict[str, Any] = json.loads(line[5:].strip())
-                return parsed
-        return {}
     try:
-        result: dict[str, Any] = resp.json()
-        return result
-    except json.JSONDecodeError:
+        if "text/event-stream" in resp.headers.get("content-type", ""):
+            raw = next(
+                (line[5:].strip() for line in resp.text.splitlines() if line.startswith("data:")),
+                "{}",
+            )
+            parsed = json.loads(raw)
+        else:
+            parsed = resp.json()
+    except ValueError:  # json.JSONDecodeError is a ValueError subclass
         return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+_jsonrpc = _parse_body
+
+
+def check_sse_rejected(
+    client: httpx.Client,
+    base: str,
+    rep: Report,
+    *,
+    token: str | None = None,
+    headers: dict[str, str] | None = None,
+) -> bool:
+    """Verify GET /mcp does not 307 using streaming to avoid hanging on persistent SSE."""
+    req_headers = dict(headers or {})
+    req_headers["Accept"] = "text/event-stream"
+    if token and "Authorization" not in req_headers:
+        req_headers["Authorization"] = f"Bearer {token}"
+    with client.stream("GET", f"{base}/mcp", headers=req_headers) as get:
+        return rep.check("GET /mcp does not 307", get.status_code != 307, f"got {get.status_code}")
+
+
+def check_origin(
+    client: httpx.Client,
+    base: str,
+    rep: Report,
+    *,
+    headers: dict[str, str],
+    allowed_origin: str | None = None,
+) -> None:
+    """Origin validation (Transport Standard §2.5): a foreign Origin is refused with 403;
+    an allowed one, when the caller names it, is served."""
+    foreign = client.post(f"{base}/mcp", json=_INIT, headers={**headers, "Origin": FOREIGN_ORIGIN})
+    rep.check("foreign Origin → 403", foreign.status_code == 403, f"got {foreign.status_code}")
+    if allowed_origin:
+        ok = client.post(f"{base}/mcp", json=_INIT, headers={**headers, "Origin": allowed_origin})
+        rep.check(
+            f"allowed Origin {allowed_origin!r} → 200",
+            ok.status_code == 200,
+            f"got {ok.status_code}",
+        )
 
 
 def run_probe(
-    base_url: str, *, expected_name: str, tier: str, require_auth: bool = False
+    base_url: str,
+    *,
+    expected_name: str,
+    tier: str,
+    require_auth: bool = False,
+    service_token: str | None = None,
+    allowed_origin: str | None = None,
 ) -> Report:
     base = base_url.rstrip("/")
     rep = Report(base, expected_name, tier)
     is_router = expected_name == "genefoundry"
+    headers = dict(_HEADERS)
+    if service_token and not require_auth:
+        headers["Authorization"] = f"Bearer {service_token}"
     with httpx.Client(timeout=30.0, follow_redirects=False) as client:
-        init = client.post(f"{base}/mcp", json=_INIT, headers=_HEADERS)
+        init = client.post(f"{base}/mcp", json=_INIT, headers=headers)
 
         if require_auth:
             rep.check(
@@ -101,7 +153,10 @@ def run_probe(
             init.status_code != 307,
             f"got {init.status_code} Location={init.headers.get('location')!r}",
         )
-        rep.check("POST /mcp → 200", init.status_code == 200, f"got {init.status_code}")
+        # httpx sends no Origin header, so this is also the "request without Origin" case.
+        rep.check(
+            "POST /mcp without Origin → 200", init.status_code == 200, f"got {init.status_code}"
+        )
         rep.check(
             "init Content-Type is application/json",
             init.headers.get("content-type", "").startswith("application/json"),
@@ -114,18 +169,26 @@ def run_probe(
                 "session id assigned",
             )
 
-        result = _jsonrpc(init).get("result", {})
-        name = result.get("serverInfo", {}).get("name")
+        init_json = _jsonrpc(init)
+        result = init_json.get("result") if isinstance(init_json, dict) else None
+        info = result.get("serverInfo") if isinstance(result, dict) else None
+        name = info.get("name") if isinstance(info, dict) else None
         rep.check(f"serverInfo.name == {expected_name!r}", name == expected_name, f"got {name!r}")
 
-        tl = client.post(f"{base}/mcp", json=_TOOLS_LIST, headers=_HEADERS)
-        tools = _jsonrpc(tl).get("result", {}).get("tools", [])
-        rep.check("tools/list returns ≥ 1 tool", len(tools) >= 1, f"{len(tools)} tools")
+        tl = client.post(f"{base}/mcp", json=_TOOLS_LIST, headers=headers)
+        tl_json = _jsonrpc(tl)
+        tl_result = tl_json.get("result") if isinstance(tl_json, dict) else None
+        tools = tl_result.get("tools") if isinstance(tl_result, dict) else None
+        rep.check(
+            "tools/list returns ≥ 1 tool",
+            isinstance(tools, list) and bool(tools),
+            f"{len(tools) if isinstance(tools, list) else 0} tools",
+        )
 
         bad = client.post(
             f"{base}/mcp",
             json=_TOOLS_LIST,
-            headers={**_HEADERS, "MCP-Protocol-Version": UNSUPPORTED_PROTOCOL},
+            headers={**headers, "MCP-Protocol-Version": UNSUPPORTED_PROTOCOL},
         )
         rep.check(
             "unsupported MCP-Protocol-Version → 400 (post-init)",
@@ -133,8 +196,11 @@ def run_probe(
             f"got {bad.status_code}",
         )
 
-        get = client.get(f"{base}/mcp", headers={"Accept": "text/event-stream"})
-        rep.check("GET /mcp does not 307", get.status_code != 307, f"got {get.status_code}")
+        check_sse_rejected(client, base, rep, token=service_token, headers=headers)
+        # A 403 proves Origin validation only if the same request without Origin is served;
+        # an edge that refuses every request must not earn the pass.
+        if init.status_code == 200:
+            check_origin(client, base, rep, headers=headers, allowed_origin=allowed_origin)
 
         health = client.get(f"{base}/health")
         rep.check("GET /health → 200", health.status_code == 200, f"got {health.status_code}")
@@ -152,6 +218,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--name", required=True, help="expected serverInfo.name")
     parser.add_argument("--tier", choices=["stateless", "stateful"], default="stateless")
     parser.add_argument("--require-auth", action="store_true")
+    parser.add_argument("--token", "--service-token", dest="service_token", default=None)
+    parser.add_argument("--allowed-origin", default=None, help="an Origin the server must accept")
     args = parser.parse_args(argv)
     try:
         rep = run_probe(
@@ -159,6 +227,8 @@ def main(argv: list[str] | None = None) -> int:
             expected_name=args.name,
             tier=args.tier,
             require_auth=args.require_auth,
+            service_token=args.service_token,
+            allowed_origin=args.allowed_origin,
         )
     except httpx.HTTPError as exc:
         print(f"TRANSPORT ERROR: {exc}", file=sys.stderr)

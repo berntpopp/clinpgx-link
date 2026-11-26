@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.23] - 2026-11-26
+
+### Fixed
+
+- `get_api_schema` results carry `_meta.data_version`: `registry-` plus the first 12 hex digits
+  of the vendored operation registry's sha256, so the value changes exactly when the registry
+  does. `_meta.retrieved_at` of a server-generated result is UTC with `Z`, like a data result.
+
+### Removed
+
+- `get_api_schema` no longer accepts `response_mode`. The argument was ignored: every mode
+  returned the same payload. The result no longer echoes it.
+
+### Changed
+
+- Tests: the fleet conformance probes are re-vendored from genefoundry-router v0.14.12.
+
 ## [0.1.22] - 2026-11-26
 
 ### Added
