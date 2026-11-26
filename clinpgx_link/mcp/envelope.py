@@ -53,14 +53,14 @@ def _provenance(source: SourceInfo) -> dict[str, Any]:
     A result the server generated itself (capabilities, diagnostics, the vendored
     operation registry) carries no upstream data and keeps its own label.
     """
-    if source.data_source == "server":
-        return {"source": source.source, "retrieved_at": source.retrieved_at}
     retrieved_at = source.retrieved_at
     try:
         moment = datetime.fromisoformat(retrieved_at).astimezone(UTC)
         retrieved_at = moment.isoformat().replace("+00:00", "Z")
     except ValueError:  # keep an unreadable recorded stamp as recorded
         pass
+    if source.data_source == "server":
+        return {"source": source.source, "retrieved_at": retrieved_at}
     return {
         "source": _UPSTREAMS.get(source.source, "clinpgx"),
         "source_label": source.source,
@@ -107,8 +107,12 @@ def success_result(
     search_diagnostics: dict[str, Any] | None = None,
     next_commands: list[dict[str, Any]] | None = None,
     shaping: dict[str, Any] | None = None,
+    data_version: str | None = None,
 ) -> ToolResult:
-    """Build provenance without confusing source time with the time of a cache hit."""
+    """Build provenance without confusing source time with the time of a cache hit.
+
+    `data_version` is for a server-generated result that has a version of its own.
+    """
     request_id = REQUEST_ID.get() or str(uuid.uuid4())
     page_snapshot = pagination.get("snapshot_id") if pagination is not None else None
     if snapshot_id is None:
@@ -144,6 +148,7 @@ def success_result(
                     {"timing_unavailable_reason": "no_boundary_timer"} if elapsed_ms is None else {}
                 ),
                 **_provenance(source),
+                **({"data_version": data_version} if data_version else {}),
                 "source_url": source.url,
                 "data_source": source.data_source,
                 "retrieval_time_kind": source.retrieval_time_kind,

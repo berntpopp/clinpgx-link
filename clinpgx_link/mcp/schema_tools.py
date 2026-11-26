@@ -52,6 +52,8 @@ def register_schema_tool(server: FastMCP, store: ContentStore) -> None:
             entry["fallback_operation"] = "GET /site/vip/{id}"
     encoded = json.dumps(entries, sort_keys=True, separators=(",", ":")).encode()
     identity = hashlib.sha256(encoded).hexdigest()
+    # The vendored registry has no upstream version; its content hash is its version.
+    data_version = f"registry-{identity[:12]}"
     retrieved_at = datetime.now(UTC).isoformat()
     codec = CursorCodec()
 
@@ -91,10 +93,6 @@ def register_schema_tool(server: FastMCP, store: ContentStore) -> None:
         cursor: Annotated[
             str | None, Field(max_length=2048, description="Previous page cursor.")
         ] = None,
-        response_mode: Annotated[
-            Literal["minimal", "compact", "standard", "full"],
-            Field(description="Detail mode; schemas remain reachable."),
-        ] = "compact",
     ) -> ToolResult:
         """Discover exact allowlisted contracts; inventory-only routes are not callable."""
         try:
@@ -125,13 +123,12 @@ def register_schema_tool(server: FastMCP, store: ContentStore) -> None:
                     byte_count=len(raw),
                     derived=True,
                     representation="normalized_vendored_schema",
-                    response_mode=response_mode,
                 )
                 if len(raw) <= 12000:
                     result["schema"] = fence_text(raw.decode(), source=provenance, record_id=ref)
                 else:
                     result["schema"] = {"deferred_content": True, "content_ref": ref, "pointer": ""}
-                return success_result(result, source=provenance)
+                return success_result(result, source=provenance, data_version=data_version)
             if start > len(selected):
                 raise InvalidInputError("Offset exceeds registry size.", field="offset")
             page = selected[start : start + limit]
@@ -144,6 +141,7 @@ def register_schema_tool(server: FastMCP, store: ContentStore) -> None:
             return success_result(
                 [{key: value for key, value in item.items() if key != "schema"} for item in page],
                 source=source(identity),
+                data_version=data_version,
                 collection=True,
                 pagination={
                     "offset": start,
