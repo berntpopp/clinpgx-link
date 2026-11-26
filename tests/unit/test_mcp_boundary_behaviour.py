@@ -206,6 +206,7 @@ async def test_overload_timing_measures_preflight_and_admission(tmp_path):
 
 
 @pytest.mark.asyncio
+@pytest.mark.synthetic_envelope  # a hand-built oversize payload, not a tool's envelope
 async def test_boundary_timing_growth_preserves_bounded_error_envelope():
     from fastmcp import FastMCP
 

@@ -5,6 +5,7 @@
   "content_ref": "<content_ref>",
   "coverage": "unknown",
   "data_source": "api",
+  "data_version": "live",
   "elapsed_ms": 0,
   "next_commands": [
    {
@@ -30,7 +31,8 @@
   "retrieval_time_kind": "unknown",
   "retrieval_time_scope": "source_recorded",
   "retrieved_at": "<retrieved_at>",
-  "source": "ClinPGx REST API",
+  "source": "clinpgx",
+  "source_label": "ClinPGx REST API",
   "source_scope": "response",
   "source_sha256": "6ef672207b164a9cdffb42e02e7c8c62fcb5166c8330299982018b18be03a5c9",
   "source_url": "https://api.clinpgx.org/v1/data/summaryAnnotation?relatedChemicals.accessionId=PA449053&view=base",

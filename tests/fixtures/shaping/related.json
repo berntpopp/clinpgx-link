@@ -5,6 +5,7 @@
   "content_ref": "<content_ref>",
   "coverage": "unknown",
   "data_source": "api",
+  "data_version": "live",
   "elapsed_ms": 0,
   "next_commands": [
    {
@@ -30,7 +31,8 @@
   "retrieval_time_kind": "unknown",
   "retrieval_time_scope": "source_recorded",
   "retrieved_at": "<retrieved_at>",
-  "source": "ClinPGx REST API",
+  "source": "clinpgx",
+  "source_label": "ClinPGx REST API",
   "source_scope": "response",
   "source_sha256": "b457cd53e1861f906b69a612b96fa5281db6e630f7da770c26d54acff4cfd48b",
   "source_url": "https://api.clinpgx.org/v1/report/connectedObjects/PA124/Chemical",
