@@ -365,6 +365,15 @@ def profiled_row(
             trusted_field_names=trusted,
             force_defer_fields=force_defer_fields,
         )
+        deferred = result.get("fields")
+        if (
+            response_mode == "full"
+            and isinstance(deferred, dict)
+            and deferred.get("deferred_content")
+        ):
+            # Unprofiled fields stay deferred in every mode; full adds the retained row's digest.
+            raw = finite_json_bytes(row)
+            deferred.update(sha256=hashlib.sha256(raw).hexdigest(), length=len(raw), unit="bytes")
         if profile is None:
             result["record_profile_status"] = "unprofiled"
         elif profile.get("status") != "active":

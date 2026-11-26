@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.26] - 2026-11-26
+
+### Fixed
+
+- `search_records` and `get_record` now honour `response_mode` for unprofiled local rows (GTS-REC-BEH-02): their fields stay deferred in every mode, and `response_mode='full'` adds the retained row's `sha256`, `length` and `unit` to the deferred `fields` descriptor, so compact is smaller than full while each row keeps its `record_id` and `member`.
+
 ## [0.1.25] - 2026-11-26
 
 ### Added
