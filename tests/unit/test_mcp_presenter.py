@@ -83,6 +83,7 @@ def test_wide_pages_shrink_to_wire_budget_without_dropping_rows(source_store):
     assert 0 < count < 20
     assert len(envelope["results"]) == count
     assert envelope["_meta"]["pagination"]["total"] == 20
+    assert envelope["_meta"]["pagination"]["total_count"] == 20
     retained, offset, _ = presenter.resume(envelope["_meta"]["pagination"]["next_cursor"], {})
     assert offset == count
     assert len(retained.value) == 20

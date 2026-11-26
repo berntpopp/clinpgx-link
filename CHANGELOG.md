@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.25] - 2026-11-26
+
+### Added
+
+- `get_api_schema`, `get_website_data` and `get_related_records`: `_meta.pagination` carries
+  `total_count` (Response-Envelope Standard v1 §5) next to the existing `total`, which is
+  unchanged. The other paged tools already reported it.
+
 ## [0.1.24] - 2026-11-26
 
 ### Fixed

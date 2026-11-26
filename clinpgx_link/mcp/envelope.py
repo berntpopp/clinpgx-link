@@ -114,6 +114,9 @@ def success_result(
     `data_version` is for a server-generated result that has a version of its own.
     """
     request_id = REQUEST_ID.get() or str(uuid.uuid4())
+    if pagination is not None and "total" in pagination:
+        # Response-Envelope v1 section 5 names the count `total_count`; `total` stays as before.
+        pagination = {"total_count": pagination["total"], **pagination}
     page_snapshot = pagination.get("snapshot_id") if pagination is not None else None
     if snapshot_id is None:
         snapshot_id = page_snapshot

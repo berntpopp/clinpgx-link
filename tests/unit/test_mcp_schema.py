@@ -34,6 +34,7 @@ async def test_all_registry_operations_are_discoverable_once_over_pages(server):
             ids.extend(row["operation"] for row in envelope["results"])
             page = envelope["_meta"]["pagination"]
             assert page["total"] == 110
+            assert page["total_count"] == 110
             cursor = page["next_cursor"]
             if not cursor:
                 break
