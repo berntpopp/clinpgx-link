@@ -54,7 +54,7 @@ def register_schema_tool(server: FastMCP, store: ContentStore) -> None:
     identity = hashlib.sha256(encoded).hexdigest()
     # The vendored registry has no upstream version; its content hash is its version.
     data_version = f"registry-{identity[:12]}"
-    retrieved_at = datetime.now(UTC).isoformat()
+    retrieved_at = datetime.now(UTC).isoformat().replace("+00:00", "Z")
     codec = CursorCodec()
 
     def source(digest: str) -> SourceInfo:
