@@ -1276,3 +1276,39 @@ async def test_several_star_alleles_return_one_ready_search_per_allele(tmp_path)
         1,
         2,
     ]
+
+
+@pytest.mark.asyncio
+async def test_search_response_mode_full_differs_from_compact_on_unprofiled_rows(
+    tmp_path, monkeypatch
+):
+    """GTS-REC-BEH-02: unprofiled local rows must not ignore response_mode."""
+    repository, _ = _repository(tmp_path)
+    store = ContentStore(tmp_path / "content.sqlite")
+    monkeypatch.setattr(repository, "record_profile", lambda *args, **kwargs: None)
+    try:
+        async with Client(_server(store, repository=repository)) as client:
+            arguments = {"entity_type": "gene", "query": "CYP2C19"}
+            compact, full = [
+                (
+                    await client.call_tool("search_records", {**arguments, "response_mode": mode})
+                ).structured_content
+                for mode in ("compact", "full")
+            ]
+    finally:
+        repository.close()
+        store.close()
+
+    compact_rows, full_rows = compact["results"], full["results"]
+    assert compact_rows and len(compact_rows) == len(full_rows)
+    assert len(json.dumps(compact_rows)) < len(json.dumps(full_rows))
+    for small, large in zip(compact_rows, full_rows, strict=True):
+        assert small["record_profile_status"] == "unprofiled"
+        assert small["record_id"] == large["record_id"]
+        assert small["member"]["text"] == large["member"]["text"] == "genes.tsv"
+        assert small["fields"]["deferred_content"] is True
+        assert "sha256" not in small["fields"]
+        assert large["fields"]["deferred_content"] is True
+        assert len(large["fields"]["sha256"]) == 64
+        assert large["fields"]["length"] > 0
+        assert large["fields"]["unit"] == "bytes"
