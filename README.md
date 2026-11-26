@@ -87,7 +87,7 @@ would double-prefix to `clinpgx_clinpgx_…`, so do not add one.
 |---|---|
 | **Source** | [ClinPGx](https://clinpgx.org/) and CPIC REST APIs (`https://api.clinpgx.org/v1`, `https://api.cpicpgx.org/v1`), website routes, and S3 bulk downloads (`https://s3.pgkb.org`). Public, no authentication required |
 | **Datasets** | 120 captured catalog entries across genes, drugs, guidelines, variants, and annotations indexed in an immutable SQLite repository with retained archive and member bytes |
-| **Provenance** | Every tool carries measured `_meta` timing (`_meta.elapsed_ms` at `_meta.timing_scope="tool_boundary"`), source URLs, SHA-256 digests, and snapshot identities. Source text is strictly fenced as untrusted data ([data.md](docs/data.md)) |
+| **Provenance** | Every tool carries measured `_meta` timing (`_meta.elapsed_ms` at `_meta.timing_scope="tool_boundary"`), source URLs, SHA-256 digests, snapshot identities, and the Response-Envelope v1.2 provenance (`_meta.source`, `_meta.data_version`, `_meta.retrieved_at`). Source text is strictly fenced as untrusted data ([data.md](docs/data.md)) |
 | **Refresh** | Calls proxy the live API or local SQLite snapshot behind a wall-clock TTL content cache; freshness tracks upstream releases |
 | **Rate limit** | Outbound token bucket (2 req/s) with active admission pool (16 concurrent calls) to prevent overwhelming upstream servers |
 | **Data licence** | Public ClinPGx and CPIC source data. Research use only |

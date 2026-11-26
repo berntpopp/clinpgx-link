@@ -6,6 +6,7 @@ import json
 import re
 import uuid
 from contextvars import ContextVar
+from datetime import UTC, datetime
 from typing import Any, cast
 
 from fastmcp.tools.base import ToolResult
@@ -40,6 +41,33 @@ _SELECTION_FAILURES = {
     "pointer_syntax_invalid": frozenset({"malformed_rfc6901_pointer", "pointer_not_string"}),
     "scalar_selection_required": frozenset({"container_selected"}),
 }
+
+
+#: Upstreams other than ClinPGx itself, by the domain's source label.
+_UPSTREAMS = {"CPIC API": "cpic"}
+
+
+def _provenance(source: SourceInfo) -> dict[str, Any]:
+    """Response-Envelope v1.2: short upstream name, data release and UTC fetch time.
+
+    A result the server generated itself (capabilities, diagnostics, the vendored
+    operation registry) carries no upstream data and keeps its own label.
+    """
+    if source.data_source == "server":
+        return {"source": source.source, "retrieved_at": source.retrieved_at}
+    retrieved_at = source.retrieved_at
+    try:
+        moment = datetime.fromisoformat(retrieved_at).astimezone(UTC)
+        retrieved_at = moment.isoformat().replace("+00:00", "Z")
+    except ValueError:  # keep an unreadable recorded stamp as recorded
+        pass
+    return {
+        "source": _UPSTREAMS.get(source.source, "clinpgx"),
+        "source_label": source.source,
+        # An installed snapshot names its immutable data release; a live read has none.
+        "data_version": source.release_tag or "live",
+        "retrieved_at": retrieved_at,
+    }
 
 
 def wire_result(payload: dict[str, Any], *, is_error: bool = False) -> ToolResult:
@@ -115,10 +143,9 @@ def success_result(
                 **(
                     {"timing_unavailable_reason": "no_boundary_timer"} if elapsed_ms is None else {}
                 ),
-                "source": source.source,
+                **_provenance(source),
                 "source_url": source.url,
                 "data_source": source.data_source,
-                "retrieved_at": source.retrieved_at,
                 "retrieval_time_kind": source.retrieval_time_kind,
                 "acquired_at": source.acquired_at,
                 "admitted_at": source.admitted_at,

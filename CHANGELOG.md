@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.22] - 2026-11-26
+
+### Added
+
+- Response-Envelope v1.2 provenance (#64): every successful data result carries
+  `_meta.data_version`: the immutable data release tag for a result served from the installed
+  snapshot (same value as `_meta.release_tag`, which stays), and `live` for a live API or
+  website read. `get_server_capabilities`, `get_diagnostics` and `get_api_schema` are outside
+  the rule.
+- `_meta.source_label` carries the descriptive source label that `_meta.source` used to hold.
+- Tests: the envelope JSON Schema (genefoundry-envelope v1.2.0, sha256-pinned) is vendored and
+  every envelope the unit suite builds is validated against it.
+
+### Changed
+
+- `_meta.source` of a data result is now the short upstream name: `clinpgx`, or `cpic` for a
+  result from the CPIC API. It was a descriptive label such as `ClinPGx local snapshot`.
+- `_meta.retrieved_at` of a data result is always UTC with `Z`; a recorded time with another
+  offset is converted.
+
 ## [0.1.21] - 2026-11-26
 
 ### Changed

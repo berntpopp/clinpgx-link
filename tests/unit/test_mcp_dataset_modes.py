@@ -337,7 +337,8 @@ async def test_projected_page_metadata_ref_retains_complete_unprojected_descript
         for call in (profile_call, reason_call, off_page_call):
             payload = call.structured_content
             assert json.loads(call.content[0].text) == payload
-            assert payload["_meta"]["source"] == "ClinPGx local snapshot metadata"
+            assert payload["_meta"]["source"] == "clinpgx"
+            assert payload["_meta"]["source_label"] == "ClinPGx local snapshot metadata"
             assert payload["_meta"]["source_url"] == (
                 "clinpgx://dataset-metadata/data/summaryAnnotations.zip"
             )

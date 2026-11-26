@@ -704,7 +704,9 @@ async def test_api_connected_objects_pages_exact_route_without_refetch(tmp_path)
             first_payload = first.structured_content
             assert json.loads(first_payload["results"][0]["data"]["text"]) == connected[0]
             assert first_payload["results"][0]["source_pointer"]["text"] == "/0"
-            assert first_payload["_meta"]["source"] == "ClinPGx REST API"
+            assert first_payload["_meta"]["source"] == "clinpgx"
+            assert first_payload["_meta"]["source_label"] == "ClinPGx REST API"
+            assert first_payload["_meta"]["data_version"] == "live"
             assert first_payload["_meta"]["source_url"].endswith(
                 "/v1/report/connectedObjects/PA124/Chemical"
             )

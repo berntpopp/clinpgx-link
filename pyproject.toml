@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "clinpgx-link"
-version = "0.1.21"
+version = "0.1.22"
 description = "A research-only MCP server for public ClinPGx data and source evidence."
 authors = [{ name = "Bernt Popp" }]
 license = { text = "MIT" }
@@ -109,6 +109,7 @@ addopts = ["--strict-markers", "-ra", "--import-mode=importlib"]
 markers = [
     "integration: live/source integration tests excluded from the ordinary unit path",
     "slow: slow tests excluded from the fast path",
+    "synthetic_envelope: the test hands wire_result a hand-built payload (no schema check)",
 ]
 
 [tool.coverage.run]
