@@ -8,7 +8,8 @@ when one does not conform.
 Three things are left out, as the standard allows:
 
 - results the server generates itself (capabilities, diagnostics, the vendored
-  operation registry: ``_meta.data_source == "server"``) carry no upstream data;
+  operation registry: ``_meta.data_source == "server"``) carry no upstream data; only
+  their ``retrieved_at`` stamps are checked (UTC with ``Z``, like every stamp anywhere);
 - a test marked ``synthetic_envelope`` hands ``wire_result`` a payload it built itself;
 - ``_meta.elapsed_ms`` is set by the boundary middleware after ``wire_result``, so an
   envelope built without the middleware is validated with the timer filled in.
@@ -17,6 +18,7 @@ Three things are left out, as the standard allows:
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -30,13 +32,33 @@ _SCHEMA = Path(__file__).parent / "conformance" / "envelope-v1.2.schema.json"
 ENVELOPE_VALIDATOR = Draft202012Validator(json.loads(_SCHEMA.read_text(encoding="utf-8")))
 
 
+_UTC_Z = re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?Z")
+
+
+def _stamps(value: Any) -> Iterator[str]:
+    """Every `retrieved_at` string anywhere in a payload."""
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if key == "retrieved_at" and isinstance(item, str):
+                yield item
+            yield from _stamps(item)
+    elif isinstance(value, list):
+        for item in value:
+            yield from _stamps(item)
+
+
 def envelope_violations(payload: dict[str, Any]) -> list[str]:
     """Schema violations of one envelope, as the boundary middleware would emit it."""
+    not_utc = [
+        f"retrieved_at {stamp!r} is not RFC 3339 UTC with Z"
+        for stamp in _stamps(payload)
+        if not _UTC_Z.fullmatch(stamp)
+    ]
     meta = payload.get("_meta")
     if not isinstance(meta, dict) or meta.get("data_source") == "server":
-        return []
+        return not_utc
     timed = {**payload, "_meta": {**meta, "elapsed_ms": meta.get("elapsed_ms") or 0.0}}
-    return [
+    return not_utc + [
         f"{'/'.join(map(str, error.absolute_path))}: {error.message}"
         for error in ENVELOPE_VALIDATOR.iter_errors(timed)
     ]

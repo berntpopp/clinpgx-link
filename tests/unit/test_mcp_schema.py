@@ -9,6 +9,7 @@ from fastmcp import Client
 
 from clinpgx_link.content.store import ContentStore
 from clinpgx_link.mcp.facade import create_mcp
+from tests.conftest import ENVELOPE_VALIDATOR
 
 
 @pytest.fixture
@@ -169,6 +170,8 @@ async def test_schema_results_carry_provenance_and_no_ignored_response_mode(serv
         tool = next(t for t in await client.list_tools() if t.name == "get_api_schema")
         assert "response_mode" not in tool.inputSchema["properties"]
         for args in ({"limit": 1}, {"operation": "GET /data/gene/{id}"}):
-            meta = (await client.call_tool("get_api_schema", args)).structured_content["_meta"]
+            payload = (await client.call_tool("get_api_schema", args)).structured_content
+            assert list(ENVELOPE_VALIDATOR.iter_errors(payload)) == []
+            meta = payload["_meta"]
             assert re.fullmatch(r"registry-[0-9a-f]{12}", meta["data_version"])
             assert meta["source"] and meta["retrieved_at"].endswith("Z")

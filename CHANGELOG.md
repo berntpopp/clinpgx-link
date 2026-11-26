@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.24] - 2026-11-26
+
+### Fixed
+
+- `get_api_schema`: the `retrieved_at` inside the fenced schema text's `provenance` is UTC with
+  `Z` (it ended in `+00:00`). With v0.1.23 (`_meta.data_version`, `_meta.retrieved_at`) the
+  result now validates against the Response-Envelope v1.2 schema (#67).
+- Tests: every `retrieved_at` anywhere in every envelope the unit suite builds must be RFC 3339
+  UTC with `Z`, and `get_api_schema` results are validated against the vendored schema.
+
 ## [0.1.23] - 2026-11-26
 
 ### Fixed
